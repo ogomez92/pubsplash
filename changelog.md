@@ -4,6 +4,14 @@
 
 ### Additions
 
+### Fixes
+
+### Changes
+
+## 1.0.0
+
+### Additions
+
 - **New source type: Media Player.** It plays a folder of music into the mixer, including everything in the folder's subfolders. MP3, M4A, MP4, AAC, FLAC, OGG, WAV, AIFF, CAF, MKA and MP1/MP2 files are played; anything else in the folder is ignored.
 
 - The folder can be played shuffled or in filename order. Shuffled plays every file once before any of them repeats, reshuffles when it runs out, and never starts a new round with the track that just finished.
