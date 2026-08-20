@@ -29,10 +29,10 @@ pub fn build(app: &Rc<App>, panel: &Panel) -> (ListBox, ListBox) {
     super::native_acc::install(&scenes_list, "Scenes");
     super::help::tag(&scenes_list, "tab.scenes.sceneList", "Scenes list");
     let scenes_buttons = BoxSizer::builder(Orientation::Horizontal).build();
-    let scene_up = Button::builder(panel).with_label("Move &up").build();
-    let scene_down = Button::builder(panel).with_label("Move &down").build();
-    let scene_add = Button::builder(panel).with_label("Add &scene").build();
-    let scene_rename = Button::builder(panel).with_label("&Rename scene").build();
+    let scene_up = Button::builder(panel).with_label("Move up").build();
+    let scene_down = Button::builder(panel).with_label("Move down").build();
+    let scene_add = Button::builder(panel).with_label("Add scene").build();
+    let scene_rename = Button::builder(panel).with_label("Rename scene").build();
     super::help::tag(&scene_up, "tab.scenes.sceneUp", "Move scene up button");
     super::help::tag(
         &scene_down,
@@ -67,10 +67,10 @@ pub fn build(app: &Rc<App>, panel: &Panel) -> (ListBox, ListBox) {
     let sources_buttons = BoxSizer::builder(Orientation::Horizontal).build();
     let source_add = Button::builder(panel).with_label("&Add source").build();
     let source_edit = Button::builder(panel).with_label("&Edit").build();
-    let source_sends = Button::builder(panel).with_label("Se&nds...").build();
-    let source_remove = Button::builder(panel).with_label("Re&move source").build();
-    let source_up = Button::builder(panel).with_label("Move u&p").build();
-    let source_down = Button::builder(panel).with_label("Move do&wn").build();
+    let source_sends = Button::builder(panel).with_label("&Sends...").build();
+    let source_remove = Button::builder(panel).with_label("Remove source").build();
+    let source_up = Button::builder(panel).with_label("Move up").build();
+    let source_down = Button::builder(panel).with_label("Move down").build();
     super::help::tag(&source_add, "tab.scenes.sourceAdd", "Add source button");
     super::help::tag(&source_edit, "tab.scenes.sourceEdit", "Edit source button");
     super::help::tag(
@@ -477,7 +477,7 @@ fn add_source(app: &Rc<App>) {
     }
     let kind = match dialog.get_selection() {
         0 => SourceKindConfig::Microphone { device_id: None },
-        1 => SourceKindConfig::DesktopAudio,
+        1 => SourceKindConfig::DesktopAudio { device_id: None },
         2 => SourceKindConfig::Application {
             process_name: String::new(),
         },
@@ -544,14 +544,8 @@ fn edit_source(app: &Rc<App>, list: &ListBox) {
         SourceKindConfig::Application { process_name } => {
             edit_application(app, scene_index, index, process_name)
         }
-        SourceKindConfig::DesktopAudio => {
-            app.widgets(|w| {
-                super::show_info(
-                    &w.frame,
-                    "Desktop Audio",
-                    "Desktop Audio captures all system sound and has no settings.",
-                )
-            });
+        SourceKindConfig::DesktopAudio { device_id } => {
+            edit_desktop_audio(app, scene_index, index, device_id)
         }
         SourceKindConfig::SoundEvents(settings) => {
             edit_sound_events(app, scene_index, index, settings)
@@ -628,6 +622,137 @@ fn edit_microphone(
             SourceKindConfig::Microphone { device_id },
         );
     }
+}
+
+/// Which output device a Desktop Audio source captures.
+///
+/// Hand-built rather than a `SingleChoiceDialog` because the confirm handler
+/// has to be able to *refuse* and leave the dialog open, which is exactly what
+/// [`super::ok_button`]'s private `ID_CONFIRM` exists for: under `ID_OK`, wx's
+/// own handler would close the dialog behind a handler that returned without
+/// closing it.
+///
+/// The refusal is the user-facing half of the rule spelled out in
+/// [`crate::audio::device::effective_output_device_id`]. Windows' process
+/// loopback — the "all output devices" row, and the only form that can exclude
+/// Pubsplash's own audio — takes no endpoint id, so pinning a device means
+/// endpoint loopback, which captures everything on it. Aimed at the device
+/// Pubsplash plays out of, that is Pubsplash's own speech, sound cues and
+/// monitoring going back out to the listeners.
+fn edit_desktop_audio(
+    app: &Rc<App>,
+    scene_index: usize,
+    source_index: usize,
+    current: Option<String>,
+) {
+    let Some(frame) = app.widgets(|w| w.frame) else {
+        return;
+    };
+    let devices = crate::audio::device::render_devices();
+
+    let dialog = Dialog::builder(&frame, "Desktop Audio source")
+        .with_style(DialogStyle::DefaultDialogStyle)
+        .with_size(460, 220)
+        .build();
+    let panel = Panel::builder(&dialog).build();
+    let sizer = BoxSizer::builder(Orientation::Vertical).build();
+
+    const CAPTURE_FROM: &str = "Capture from";
+    let label = StaticText::builder(&panel).with_label(CAPTURE_FROM).build();
+    let choice = Choice::builder(&panel).build();
+    super::set_accessible_name(&choice, CAPTURE_FROM);
+    super::help::tag(
+        &choice,
+        "dialog.desktopAudioSource.device",
+        "Capture from combo box",
+    );
+    // Row 0 is the default and what every Desktop Audio source did before this
+    // dialog existed: every endpoint at once, with Pubsplash's own process tree
+    // excluded.
+    choice.append("All output devices (Pubsplash excluded)");
+    for device in &devices {
+        choice.append(&device.name);
+    }
+    let preselect = current
+        .as_deref()
+        .and_then(|id| devices.iter().position(|d| d.id == id).map(|i| i + 1))
+        .unwrap_or(0);
+    choice.set_selection(preselect as u32);
+
+    let buttons = BoxSizer::builder(Orientation::Horizontal).build();
+    let ok = super::ok_button(&panel, "OK");
+    // `ID_CANCEL` is what wx maps Escape to; without it Escape does nothing.
+    let cancel = Button::builder(&panel)
+        .with_id(ID_CANCEL)
+        .with_label("Cancel")
+        .build();
+    buttons.add(&ok, 0, SizerFlag::All, 4);
+    buttons.add(&cancel, 0, SizerFlag::All, 4);
+
+    sizer.add(&label, 0, SizerFlag::All, 4);
+    sizer.add(&choice, 0, SizerFlag::Expand | SizerFlag::All, 4);
+    sizer.add_sizer(&buttons, 0, SizerFlag::AlignRight, 0);
+    panel.set_sizer(sizer, true);
+    let dialog_sizer = BoxSizer::builder(Orientation::Vertical).build();
+    dialog_sizer.add(&panel, 1, SizerFlag::Expand, 0);
+    dialog.set_sizer(dialog_sizer, true);
+
+    // The chosen id, or `None` for the all-endpoints row. Read in both the
+    // confirm handler (to refuse) and after the modal (to save), so it is one
+    // closure rather than the same index arithmetic written twice.
+    let chosen = {
+        let devices = devices.clone();
+        move || -> Option<crate::audio::device::DeviceInfo> {
+            let selection = choice.get_selection()? as usize;
+            selection
+                .checked_sub(1)
+                .and_then(|i| devices.get(i))
+                .cloned()
+        }
+    };
+
+    {
+        let chosen = chosen.clone();
+        ok.on_click(move |_| {
+            if let Some(device) = chosen()
+                && crate::audio::device::effective_output_device_id().as_deref()
+                    == Some(device.id.as_str())
+            {
+                // Deliberately no `end_modal`: the user stays on the picker
+                // with their choice still selected, which is the whole reason
+                // this is not a `SingleChoiceDialog`.
+                show_error(
+                    &dialog,
+                    "Desktop Audio",
+                    &format!(
+                        "{} is Pubsplash's own output device. Capturing it would feed \
+                         Pubsplash's audio — speech, sound cues and monitoring — back into \
+                         the stream.\n\nChoose a different device, pick \"All output devices \
+                         (Pubsplash excluded)\", or change the output device in \
+                         Preferences > Audio.",
+                        device.name
+                    ),
+                );
+                return;
+            }
+            dialog.end_modal(ID_OK);
+        });
+    }
+    {
+        cancel.on_click(move |_| dialog.end_modal(ID_CANCEL));
+    }
+
+    if dialog.show_modal() == ID_OK {
+        set_source_kind(
+            app,
+            scene_index,
+            source_index,
+            SourceKindConfig::DesktopAudio {
+                device_id: chosen().map(|d| d.id),
+            },
+        );
+    }
+    dialog.destroy();
 }
 
 fn edit_application(app: &Rc<App>, scene_index: usize, source_index: usize, current: String) {
@@ -786,12 +911,12 @@ fn edit_tts(app: &Rc<App>, scene_index: usize, source_index: usize, current: Tts
     );
     output_check.set_value(current.output_to_stream);
 
-    let preview = Button::builder(&panel).with_label("&Preview voice").build();
+    let preview = Button::builder(&panel).with_label("Preview voice").build();
     super::set_accessible_name(&preview, "Preview voice");
     super::help::tag(&preview, "dialog.ttsSource.preview", "Preview voice button");
 
     let reset = Button::builder(&panel)
-        .with_label("&Reset this engine to defaults")
+        .with_label("Reset this engine to defaults")
         .build();
     super::set_accessible_name(&reset, "Reset this engine to defaults");
     super::help::tag(

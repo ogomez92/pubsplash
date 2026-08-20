@@ -285,7 +285,8 @@ pub struct SiteConfig {
     pub email: String,
     /// Audiopub login password.
     pub password: Secret,
-    /// Raw Icecast server host or address, without the port.
+    /// Raw Icecast server host or address, without the port. Used by both
+    /// Audiopub and direct Icecast services.
     pub icecast_server: String,
     pub icecast_port: u16,
     /// Raw Icecast mount point, with or without a leading slash.
@@ -319,6 +320,10 @@ impl SiteConfig {
             nickname: "Audiopub".to_string(),
             service_type: StreamingServiceType::Audiopub,
             url: MAIN_SITE_URL.to_string(),
+            // Filled in here as well as by `repair_defaults`, so a config that
+            // has never been through a load already carries the endpoint the
+            // service actually uses and the dialog has something to show.
+            icecast_server: default_audiopub_server(MAIN_SITE_URL).unwrap_or_default(),
             ..Default::default()
         }
     }
@@ -388,10 +393,59 @@ impl SiteConfig {
         if self.nickname.trim().is_empty() {
             self.nickname = self.display_name();
         }
+        // Both service types now carry an editable endpoint, and both default
+        // to port 8000. An Audiopub service additionally fills its server in
+        // from the site URL when it is blank - which is every profile written
+        // before the field existed, the built-in Audiopub service included. The
+        // field is a default, not a requirement: leave it alone and the service
+        // goes on reaching the same host it always did.
         if self.icecast_port == 0 {
             self.icecast_port = 8000;
         }
+        if self.service_type == StreamingServiceType::Audiopub
+            && self.icecast_server.trim().is_empty()
+            && let Some(server) = default_audiopub_server(&self.url)
+        {
+            self.icecast_server = server;
+        }
     }
+
+    /// The endpoint to publish to, with the Audiopub defaults applied.
+    ///
+    /// [`repair_defaults`](Self::repair_defaults) fills these fields in on
+    /// load, so they are normally already set; this covers the service the user
+    /// has just blanked in the dialog, which reaches Connect without passing
+    /// through a load.
+    pub fn icecast_endpoint(&self) -> (String, u16) {
+        let server = self.icecast_server.trim();
+        let server = if server.is_empty() && self.service_type == StreamingServiceType::Audiopub {
+            default_audiopub_server(&self.url).unwrap_or_default()
+        } else {
+            server.to_string()
+        };
+        let port = if self.icecast_port == 0 {
+            8000
+        } else {
+            self.icecast_port
+        };
+        (server, port)
+    }
+}
+
+/// Audiopub's published convention: the `live.` subdomain of the site, which is
+/// what the app derived on every connect before the host became configurable.
+///
+/// `None` only when there is no site URL to derive from, which
+/// `validate_site_url` refuses before the endpoint is ever reached.
+pub fn default_audiopub_server(site_url: &str) -> Option<String> {
+    let host = site_url
+        .trim()
+        .trim_end_matches('/')
+        .rsplit("//")
+        .next()
+        .unwrap_or_default()
+        .trim();
+    (!host.is_empty()).then(|| format!("live.{host}"))
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
@@ -598,6 +652,13 @@ pub struct AudioConfig {
     /// Whether the master volume may exceed 100 (up to 500) for make-up gain.
     pub master_boost: bool,
     pub master_muted: bool,
+    /// Which WASAPI render endpoint Pubsplash plays out of — the mixer's
+    /// monitoring tap and local sound cues alike. `None` follows whatever
+    /// Windows currently calls the default playback device.
+    ///
+    /// Applied by handing it to `audio::render::set_output_device`, which owns
+    /// the live setting; this field is only where it is remembered.
+    pub output_device_id: Option<String>,
 }
 
 impl Default for AudioConfig {
@@ -608,6 +669,7 @@ impl Default for AudioConfig {
             master_volume: 100,
             master_boost: false,
             master_muted: false,
+            output_device_id: None,
         }
     }
 }
@@ -716,7 +778,22 @@ pub enum SourceKindConfig {
     Microphone {
         device_id: Option<String>,
     },
-    DesktopAudio,
+    /// `device_id: None` captures every endpoint at once through Windows'
+    /// process loopback, excluding Pubsplash's own process tree — the only
+    /// form that can exclude anything, since the process-loopback activation
+    /// carries no endpoint id.
+    ///
+    /// `Some(id)` is *endpoint* loopback on one render device, which captures
+    /// everything on it. So a pinned endpoint may never be the one Pubsplash
+    /// plays out of; see `audio::device::effective_output_device_id`.
+    ///
+    /// A struct variant with a defaulted field rather than the unit variant it
+    /// used to be, so a settings file written before this existed
+    /// (`{"type":"desktop_audio"}`) still loads.
+    DesktopAudio {
+        #[serde(default)]
+        device_id: Option<String>,
+    },
     Application {
         process_name: String,
     },
@@ -729,7 +806,7 @@ impl SourceKindConfig {
     pub fn type_display_name(&self) -> &'static str {
         match self {
             SourceKindConfig::Microphone { .. } => "Microphone",
-            SourceKindConfig::DesktopAudio => "Desktop Audio",
+            SourceKindConfig::DesktopAudio { .. } => "Desktop Audio",
             SourceKindConfig::Application { .. } => "Application",
             SourceKindConfig::Tts(_) => "Text-to-Speech",
             SourceKindConfig::SoundEvents(_) => "Sound Events",
@@ -964,7 +1041,7 @@ pub struct SpeechConfig {
     pub google_api_key: Secret,
     /// Legacy fallback for sources without per-source provider settings.
     pub google_language_code: String,
-    /// WebSocket URL of a Star coagulator, e.g. `ws://localhost:4567`.
+    /// WebSocket URL of a Star coagulator, e.g. `ws://localhost:7774`.
     pub star_host: String,
     /// Longest message a network engine will synthesize. Chat can carry a wall
     /// of text, and the paid engines bill by the character, so messages are
@@ -996,7 +1073,7 @@ impl Default for SpeechConfig {
             aws_engine: "neural".into(),
             google_api_key: Secret::default(),
             google_language_code: "en-US".into(),
-            star_host: "ws://localhost:4567".into(),
+            star_host: "ws://localhost:7774".into(),
             max_chars: Self::DEFAULT_MAX_CHARS,
             min_request_interval_ms: Self::DEFAULT_MIN_INTERVAL_MS,
             last_engine: String::new(),
@@ -1007,6 +1084,15 @@ impl Default for SpeechConfig {
 impl SpeechConfig {
     pub const DEFAULT_MAX_CHARS: usize = 500;
     pub const DEFAULT_MIN_INTERVAL_MS: u64 = 750;
+
+    fn fix_up(&mut self) {
+        // STAR has used 7774 since its first public implementation. Pubsplash
+        // previously supplied 4567 itself, so that exact old built-in value is
+        // safe to migrate while every user-entered endpoint remains untouched.
+        if self.star_host.trim() == "ws://localhost:4567" {
+            self.star_host = "ws://localhost:7774".into();
+        }
+    }
 
     /// The effective character cap; 0 in the file means "use the default".
     pub fn max_chars(&self) -> usize {
@@ -1060,6 +1146,7 @@ pub fn load_from(path: &Path) -> Config {
             config.scenes.ensure_default_scene();
             config.fix_up_routing();
             config.fix_up_tts_profiles();
+            config.speech.fix_up();
             config.keybinds.fix_up();
             config.mastodon.fix_up();
             config
@@ -1128,6 +1215,28 @@ mod tests {
     }
 
     #[test]
+    fn the_old_builtin_star_port_is_migrated_without_touching_custom_hosts() {
+        let old_path = temp_path("old_star_port.json");
+        std::fs::write(
+            &old_path,
+            r#"{"speech":{"star_host":"ws://localhost:4567"}}"#,
+        )
+        .unwrap();
+        assert_eq!(load_from(&old_path).speech.star_host, "ws://localhost:7774");
+
+        let custom_path = temp_path("custom_star_port.json");
+        std::fs::write(
+            &custom_path,
+            r#"{"speech":{"star_host":"ws://localhost:4568"}}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            load_from(&custom_path).speech.star_host,
+            "ws://localhost:4568"
+        );
+    }
+
+    #[test]
     fn corrupt_file_is_backed_up_and_replaced() {
         let path = temp_path("corrupt.json");
         let backup = path.with_extension("json.bak");
@@ -1154,7 +1263,7 @@ mod tests {
                 name: "Desktop".into(),
                 volume: 80,
                 muted: true,
-                kind: SourceKindConfig::DesktopAudio,
+                kind: SourceKindConfig::DesktopAudio { device_id: None },
                 ..Default::default()
             }],
         });
@@ -1456,6 +1565,11 @@ mod tests {
         assert_eq!(service.nickname, "https://example.org/");
         assert_eq!(service.email, "dj@example.org");
         assert_eq!(service.password.as_str(), "secret");
+        // Written before the endpoint fields existed, so it inherits the host
+        // the app used to derive on every connect rather than a blank the user
+        // would have to fill in before the service worked again.
+        assert_eq!(service.icecast_server, "live.example.org");
+        assert_eq!(service.icecast_port, 8000);
     }
 
     #[test]
@@ -1473,6 +1587,45 @@ mod tests {
         assert_eq!(main.nickname, "Audiopub");
         assert_eq!(main.service_type, StreamingServiceType::Audiopub);
         assert_eq!(main.url, MAIN_SITE_URL);
+    }
+
+    #[test]
+    fn the_built_in_audiopub_service_keeps_working_without_an_endpoint_typed_in() {
+        let path = temp_path("main_site_endpoint.json");
+        save_to(&Config::default(), &path);
+        let loaded = load_from(&path);
+        let main = &loaded.connection.sites[0];
+        assert_eq!(main.icecast_server, "live.audiopub.site");
+        assert_eq!(main.icecast_endpoint(), ("live.audiopub.site".into(), 8000));
+    }
+
+    #[test]
+    fn a_typed_in_audiopub_endpoint_is_left_alone() {
+        let path = temp_path("audiopub_endpoint_kept.json");
+        let mut config = Config::default();
+        config.connection.sites.push(SiteConfig {
+            id: "audiopub-2".into(),
+            nickname: "Elsewhere".into(),
+            service_type: StreamingServiceType::Audiopub,
+            url: "https://example.org/".into(),
+            icecast_server: "ice.example.org".into(),
+            icecast_port: 9000,
+            ..Default::default()
+        });
+        save_to(&config, &path);
+        let loaded = load_from(&path);
+        let service = loaded.connection.site("audiopub-2").unwrap();
+        assert_eq!(service.icecast_endpoint(), ("ice.example.org".into(), 9000));
+    }
+
+    #[test]
+    fn a_site_url_with_no_host_derives_no_server() {
+        assert_eq!(default_audiopub_server(""), None);
+        assert_eq!(default_audiopub_server("   "), None);
+        assert_eq!(
+            default_audiopub_server("http://example.org"),
+            Some("live.example.org".to_string())
+        );
     }
 
     #[test]
@@ -1552,6 +1705,39 @@ mod tests {
                 .iter()
                 .any(|s| s.url == MAIN_SITE_URL)
         );
+    }
+
+    /// `DesktopAudio` was a unit variant until it gained an endpoint to
+    /// capture. Every settings file in the wild spells it `{"type":
+    /// "desktop_audio"}` with no `device_id`, and that must keep loading — and
+    /// keep meaning "every endpoint, Pubsplash excluded", which is the only
+    /// form that excludes anything.
+    #[test]
+    fn a_desktop_audio_source_saved_before_device_pinning_still_loads() {
+        let kind: SourceKindConfig = serde_json::from_str(r#"{"type":"desktop_audio"}"#).unwrap();
+        assert_eq!(kind, SourceKindConfig::DesktopAudio { device_id: None });
+    }
+
+    #[test]
+    fn a_pinned_desktop_audio_source_roundtrips() {
+        let kind = SourceKindConfig::DesktopAudio {
+            device_id: Some("{endpoint}".into()),
+        };
+        let json = serde_json::to_string(&kind).unwrap();
+        assert_eq!(
+            serde_json::from_str::<SourceKindConfig>(&json).unwrap(),
+            kind
+        );
+    }
+
+    /// A settings file written before the output picker existed carries no
+    /// `output_device_id`, and must come back following the system default
+    /// rather than failing to parse.
+    #[test]
+    fn audio_settings_without_an_output_device_follow_the_system_default() {
+        let audio: AudioConfig = serde_json::from_str(r#"{"bitrate_kbps":192}"#).unwrap();
+        assert_eq!(audio.bitrate_kbps, 192);
+        assert_eq!(audio.output_device_id, None);
     }
 
     #[test]

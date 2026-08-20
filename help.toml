@@ -145,6 +145,12 @@ file = "src/ui/connect_dialog.rs"
 message = "Type the full Audiopub service URL, starting with http or https. The main Audiopub service keeps its built-in URL."
 
 [[control]]
+id = "dialog.desktopAudioSource.device"
+label = "Capture from combo box"
+file = "src/ui/scenes.rs"
+message = """Chooses where this Desktop Audio source gets its sound from. "All output devices (Pubsplash excluded)" is the usual choice: it captures everything your computer plays, on every device at once, apart from Pubsplash's own speech, sound cues and monitoring. Picking a single output device instead captures only what is played to that one device, but it captures everything on it with nothing left out, so it cannot be the device Pubsplash itself plays out of. If you pick that one, Pubsplash will say so and leave this window open so you can choose another; you can change which device Pubsplash plays out of on the Audio tab in Preferences."""
+
+[[control]]
 id = "dialog.fxEditor.bypass"
 label = "Bypass this plugin checkbox"
 file = "src/ui/fx_editor.rs"
@@ -361,6 +367,18 @@ file = "src/ui/preferences.rs"
 message = "Type the path where you'd like your local recordings to be saved to, or use the browse button to pick a folder using a standard Windows folder picker."
 
 [[control]]
+id = "dialog.preferences.audio.outputDevice"
+label = "Output device combo box"
+file = "src/ui/audio_prefs.rs"
+message = 'Chooses which playback device Pubsplash plays out of. Everything Pubsplash plays for you goes here: sources you are monitoring, text-to-speech, and sound cues such as the startup sound. It is not what your listeners hear, and changing it does not affect your stream. "Default output device (follow system)" uses whatever Windows is currently using, so it moves when you plug in a headset; picking a device by name keeps Pubsplash on that one. If a Desktop Audio source captures the device you choose here, Pubsplash tells you and that source falls back to capturing every device, so its own audio can never end up in your stream.'
+
+[[control]]
+id = "dialog.preferences.audio.testSound"
+label = "Play a test sound button"
+file = "src/ui/audio_prefs.rs"
+message = "Plays the startup sound once out of the device selected above, so you can check you have picked the right one without starting a stream. Nothing is recorded or sent to listeners."
+
+[[control]]
 id = "dialog.preferences.general.checkNow"
 label = "Check for updates now button"
 file = "src/ui/preferences.rs"
@@ -511,6 +529,12 @@ file = "src/ui/preferences.rs"
 message = "When checked, Pubsplash plays a short sound as it launches, so you know it is loading. Only you hear this sound; it is never sent to the stream."
 
 [[control]]
+id = "dialog.preferences.sounds.previewPack"
+label = "Preview sound pack button"
+file = "src/ui/preferences.rs"
+message = "Opens a window listing every sound event Pubsplash has, so you can hear what the chosen pack plays for each one. Only you hear these; a preview never reaches the stream or a recording. This button has no ALT shortcut, because every letter of the word is already spoken for elsewhere in Preferences."
+
+[[control]]
 id = "dialog.preferences.sounds.removePack"
 label = "Remove sound pack button"
 file = "src/ui/preferences.rs"
@@ -643,34 +667,52 @@ file = "src/ui/scan_dialog.rs"
 message = "What the scan is doing right now: how many plugins are done out of how many, and the name of the one being loaded. Read-only, and it does not read itself out as it changes, so tab here whenever you want to know where the scan has got to."
 
 [[control]]
-id = "dialog.sends.add"
-label = "Add a send to a bus button"
+id = "dialog.schedule.date"
+label = "Date to go live on"
+file = "src/ui/schedule_ui.rs"
+message = "The day the stream goes live. Today to begin with, and dates in the past cannot be chosen. In advanced mode this is the day the pre-stream time falls on; if your start of stream time is earlier in the day than the pre-stream time, Pubsplash takes it as the following morning, so a broadcast can cross midnight."
+
+[[control]]
+id = "dialog.schedule.mode"
+label = "Scheduling mode selector"
+file = "src/ui/schedule_ui.rs"
+message = "Choose how the scheduled stream starts. Simple picks one time: Pubsplash connects then, using whichever scene is active. Advanced picks two: Pubsplash connects at the pre-stream time on one scene, then switches to a second scene when your content is due to begin. Advanced is worth using because Audio Pub can take half a minute or more to start serving listeners, so connecting early on a music scene means everyone arrives to a stream that is already up. Choosing Advanced adds the extra time and the two scene choices below."
+
+[[control]]
+id = "dialog.schedule.preScene"
+label = "Scene to broadcast before the content starts"
+file = "src/ui/schedule_ui.rs"
+message = "Advanced mode only. The scene Pubsplash connects on and broadcasts until your content is due. Usually a scene with nothing but music or a holding loop in it, so early listeners hear something and the stream is proven working before you are on air. Pubsplash switches to this scene just before it connects, so whatever was active is left alone until then."
+
+[[control]]
+id = "dialog.schedule.startScene"
+label = "Scene to switch to when the content starts"
+file = "src/ui/schedule_ui.rs"
+message = "Advanced mode only. The scene Pubsplash switches to at the start of stream time, normally the one with your microphone and any applications you are broadcasting. Pubsplash announces the switch when it happens. Note that switching moves keyboard focus out of the mixer, the same as switching scenes by hand does, so if you are working in the mixer at that moment you will need to tab back."
+
+[[control]]
+id = "dialog.schedule.startTime"
+label = "Time the content begins and the scene switches"
+file = "src/ui/schedule_ui.rs"
+message = "Advanced mode only. The time your actual content begins, which is when Pubsplash switches from the pre-stream scene to the start of stream scene. It must be later than the pre-stream time; if it is earlier in the day, Pubsplash takes it as the following morning so a broadcast can cross midnight. The stream is already live by then, so the switch happens even if it is running late."
+
+[[control]]
+id = "dialog.schedule.time"
+label = "Time to connect and go live"
+file = "src/ui/schedule_ui.rs"
+message = "The time Pubsplash connects to your streaming service and starts sending audio. In simple mode this is when your stream begins. In advanced mode it is called the pre-stream time, and it is when the first scene goes out, ahead of your content. It has to be in the future, and Pubsplash will not start a stream that is more than two minutes late, so a schedule missed because the computer was asleep is cancelled rather than going live to nobody."
+
+[[control]]
+id = "dialog.sends.busList"
+label = "Destinations for this source list"
 file = "src/ui/sends.rs"
-message = "Add a send to the selected bus."
+message = "Everywhere this source can be heard: master output first, then every bus. Arrow to a row and press SPACE to switch it on or off; each row says whether it is on. Master output and the buses are independent, so a source can go straight to master, through a bus, through several buses, or any combination. Keeping master output checked alongside a send is how you hear the dry signal as well as the effect: send a reverb the full signal, then lower its send level to taste. Changes take effect at once, so there is nothing to confirm."
 
 [[control]]
 id = "dialog.sends.level"
-label = "Send level slider for the selected bus"
+label = "Send level slider for one bus"
 file = "src/ui/sends.rs"
-message = "How much of the output of the effect would you like to send to the bus."
-
-[[control]]
-id = "dialog.sends.remove"
-label = "Remove selected send button"
-file = "src/ui/sends.rs"
-message = "Remove the selected send from the bus."
-
-[[control]]
-id = "dialog.sends.sendList"
-label = "Bus sends for this source list"
-file = "src/ui/sends.rs"
-message = "Use the arrow keys to select a bus to work with."
-
-[[control]]
-id = "dialog.sends.toMaster"
-label = "Send this source directly to master checkbox"
-file = "src/ui/sends.rs"
-message = "When checked, the source's output is sent to master as well as to the selected bus. This lets you, for instance, set up a reverb so that you still hear the dry signal, but can lower the send level and give the reverb effect the full wet signal."
+message = "How much of this source is sent to the bus named in the slider, from 0 to 100. There is one of these for each bus you have checked, and it appears and disappears with that bus. Master output has none: its level is the source's own volume on the mixer."
 
 [[control]]
 id = "dialog.soundEventsSource.incomingChat"
@@ -707,6 +749,18 @@ id = "dialog.soundEventsSource.toStream"
 label = "Send these sounds to the stream checkbox"
 file = "src/ui/scenes.rs"
 message = "This only controls whether your listeners hear these cues; you always hear them yourself either way. Checked by default, so the cues are mixed into the stream along with playing on your own speakers. Uncheck it to keep them to yourself: they then never reach the stream or a recording. Note that the copy you hear bypasses the mixer, so this source's volume slider only affects what your listeners hear, though muting the source silences the cues everywhere."
+
+[[control]]
+id = "dialog.soundPreview.list"
+label = "Sound event list"
+file = "src/ui/sound_preview.rs"
+message = "Every sound event Pubsplash has: the startup and shut-down cues, and the five a Sound Events source can react to. Arrow to one and press SPACE to hear what the chosen pack plays for it. SPACE on the event that is already playing stops it; SPACE after arrowing to a different one cuts the first sound off and plays the new one straight away, so you can compare two events without waiting. A pack need not have a sound for every event; if it has none for the one you picked, Pubsplash says so rather than going quiet."
+
+[[control]]
+id = "dialog.soundPreview.play"
+label = "Play or stop button"
+file = "src/ui/sound_preview.rs"
+message = "Plays the sound for the event chosen in the list. It reads Stop instead whenever pressing it would stop something, which is while the sound playing is the one the list is sitting on; it goes back to reading Play by itself once that sound ends, and also the moment you arrow to a different event, since a press would then cut the first sound off and play the new one. SPACE in the list above does the same thing without leaving it."
 
 [[control]]
 id = "dialog.streamInfo.archive"

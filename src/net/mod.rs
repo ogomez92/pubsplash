@@ -22,6 +22,8 @@ pub enum ServiceProfile {
         id: String,
         nickname: String,
         site_url: String,
+        server: String,
+        port: u16,
         email: String,
         password: Secret,
     },
@@ -89,8 +91,6 @@ pub enum ChatFeedState {
     StreamGone,
     /// The server archived this stream.
     Archived,
-    /// The server's own view of the stream, when it is not `active`.
-    ServerState { state: String },
 }
 
 /// Events from the network runtime to the UI (polled on the UI pump timer).
@@ -122,6 +122,20 @@ pub enum NetEvent {
     },
     ChatFeed(ChatFeedState),
     AudioLink(AudioLinkState),
+    /// The server's own view of this stream, verbatim (`pending`, `active`,
+    /// `disconnected`, `finished`).
+    ///
+    /// Arrives over the live-events feed but is *not* a chat fact, which is why
+    /// it is its own event: an open Icecast socket proves only that Icecast took
+    /// the source, while Audio Pub does not serve a single listener until
+    /// `sourceConnected()` has ffprobed the mount — and kills the source if that
+    /// probe fails. This is the only signal that tells the two apart.
+    ///
+    /// Every value is sent, `active` included, and the server re-sends the
+    /// current state on every live-events connect. De-duplication is the pump's
+    /// job (it holds the last value); doing it here would mean a chat reconnect
+    /// silently dropped the one event that says listeners can hear us.
+    ServerStreamState { state: String },
 }
 
 /// The network thread's end of the event channel.
@@ -195,7 +209,8 @@ enum Connection {
         /// the cookie store to outlive any one request.
         client: Arc<AudioPubClient>,
         identity: StreamIdentity,
-        site_url: String,
+        server: String,
+        port: u16,
     },
     Icecast {
         server: String,
@@ -237,34 +252,35 @@ impl ActiveStream {
     }
 }
 
-/// Derives the Icecast host from a site URL: Audiopub convention is the
-/// `live.` subdomain on port 8000 (matches audiopub.site's published
-/// connection details).
-fn icecast_host_for(site_url: &str) -> String {
-    let host = site_url
-        .trim_end_matches('/')
-        .rsplit("//")
-        .next()
-        .unwrap_or(site_url);
-    format!("live.{host}:8000")
-}
-
 fn normalize_mount(mount: &str) -> String {
-    mount.trim().trim_start_matches('/').to_string()
+    let mount = mount.trim();
+    if !mount.is_empty() && mount.chars().all(|c| c == '/') {
+        "/".to_string()
+    } else {
+        mount.trim_start_matches('/').to_string()
+    }
 }
 
 fn audiopub_target_for(
-    site_url: &str,
+    server: &str,
+    port: u16,
     identity: &StreamIdentity,
     content_type: &str,
-) -> IcecastTarget {
-    IcecastTarget {
-        host: icecast_host_for(site_url),
+) -> Result<IcecastTarget, String> {
+    let server = server.trim();
+    if server.is_empty() {
+        return Err("Enter the Audiopub Icecast server.".to_string());
+    }
+    if port == 0 {
+        return Err("Enter a valid Audiopub Icecast port.".to_string());
+    }
+    Ok(IcecastTarget {
+        host: format!("{server}:{port}"),
         mount: identity.user_id.clone(),
         username: "source".to_string(),
         password: identity.stream_key.clone(),
         content_type: content_type.to_string(),
-    }
+    })
 }
 
 fn direct_icecast_target(
@@ -375,6 +391,8 @@ async fn net_loop(mut commands: tokio_mpsc::UnboundedReceiver<NetCommand>, event
                         id,
                         nickname,
                         site_url,
+                        server,
+                        port,
                         email,
                         password,
                     } => {
@@ -387,14 +405,29 @@ async fn net_loop(mut commands: tokio_mpsc::UnboundedReceiver<NetCommand>, event
                                 continue;
                             }
                         };
+                        // The publishing host is configurable here as well now,
+                        // so it is checked here as well: logging in proves the
+                        // *site* is reachable and says nothing about the Icecast
+                        // host beside it, which is not dialled until Start
+                        // streaming. Same lookup, same reason, as the direct
+                        // Icecast arm below.
+                        let host = format!("{server}:{port}");
+                        if let Err(message) = resolve_icecast_host(&host).await {
+                            let _ = events.send(NetEvent::ConnectFailed { message });
+                            continue;
+                        }
                         match client.login(&email, password.as_str()).await {
                             Ok(()) => match client.stream_identity().await {
                                 Ok(identity) => {
                                     let display_name = nickname;
+                                    log::info!(
+                                        "Audiopub service {display_name:?} publishes to {host}"
+                                    );
                                     connection = Some(Connection::Audiopub {
                                         client: Arc::new(client),
                                         identity,
-                                        site_url,
+                                        server,
+                                        port,
                                     });
                                     let _ = events.send(NetEvent::Connected {
                                         service_id: id,
@@ -502,12 +535,11 @@ async fn net_loop(mut commands: tokio_mpsc::UnboundedReceiver<NetCommand>, event
                 )
                 .await
                 {
-                    Ok(active) => {
-                        let _ = events.send(NetEvent::StreamStarted {
-                            stream_id: active.stream_id.clone(),
-                        });
-                        stream = Some(active);
-                    }
+                    // `StreamStarted` is sent from inside `start_stream`, not
+                    // here: it resets `server_stream` to `Pending`, so it has to
+                    // reach the pump *before* the live-events feed can report a
+                    // state. See the note at that send.
+                    Ok(active) => stream = Some(active),
                     Err(message) => {
                         // The only record of a stream that never started: the
                         // modal this becomes is gone as soon as it is dismissed,
@@ -884,15 +916,16 @@ async fn read_chat_feed(
                         peak: peak.saturating_sub(1),
                     });
                 }
-                // The server sends `state` immediately on every connect, so
-                // `active` would put a line in the log on every reconnect.
-                // The others are worth saying: `disconnected` means
-                // the server has lost the source link and will finish the
-                // stream within minutes, even while our Icecast socket looks
-                // healthy.
-                Some(LiveEvent::State { state }) if state != "active" => {
-                    log::warn!("Chat feed: server reports stream state {state:?}");
-                    let _ = events.send(NetEvent::ChatFeed(ChatFeedState::ServerState { state }));
+                // Every value, `active` included. This used to filter `active`
+                // out to keep the log quiet across reconnects, which threw away
+                // the one event that says the server has accepted the source and
+                // listeners can hear us -- so the UI reported a healthy stream
+                // from the moment the Icecast socket opened, which is minutes too
+                // early when the server's ffprobe validation is slow or failing.
+                // The pump holds the last value and only acts on a change, so the
+                // repeat on every connect costs nothing.
+                Some(LiveEvent::State { state }) => {
+                    let _ = events.send(NetEvent::ServerStreamState { state });
                 }
                 Some(LiveEvent::Archived) => {
                     log::info!("Chat feed: the server archived this stream");
@@ -906,7 +939,7 @@ async fn read_chat_feed(
                 // list relies on (`chat::append_new_messages` maps list indices
                 // onto `run.chat`); it needs a full refresh, which is its own
                 // change.
-                Some(LiveEvent::State { .. }) | Some(LiveEvent::ChatDeleted { .. }) | None => {}
+                Some(LiveEvent::ChatDeleted { .. }) | None => {}
             }
         }
     }
@@ -962,6 +995,17 @@ fn spawn_icecast_sender(
         let mut said_halfway = false;
         let mut first_failure: Option<Instant> = None;
         let mut attempt: usize = 0;
+
+        // The same rule as the reconnect drain below, for the same reason, and
+        // it belongs here too because the *first* connection is preceded by a
+        // wait as well: `start_streaming` sends `StartEncoding` before
+        // `StartStream`, so the engine has been filling this channel throughout
+        // `create_stream` and the Icecast handshake. Sending that backlog would
+        // open the broadcast with audio that is already seconds old, and it
+        // lands in Icecast's burst buffer -- which is precisely what the first
+        // listener is handed as their starting point, so the whole stream would
+        // begin that far behind live and stay there.
+        while audio.try_recv().is_ok() {}
 
         loop {
             let mut error = match pump_audio(&mut conn, &mut audio).await {
@@ -1062,22 +1106,55 @@ async fn start_stream(
         Connection::Audiopub {
             client,
             identity,
-            site_url,
+            server,
+            port,
             ..
         } => {
+            // Timed because the start sequence is the one place a user cannot
+            // see what is taking the time, and the two halves fail differently:
+            // a slow `create_stream` is the site, a slow handshake is Icecast.
+            // Together with the time-to-accepted the UI logs once the server
+            // says `active`, this is what separates "the server's ffprobe was
+            // merely slow" from "the server killed the source and we
+            // reconnected" when reading a log after the fact.
+            let began = Instant::now();
             let stream_id = client
                 .create_stream(title, description, archive)
                 .await
                 .map_err(|e| e.to_string())?;
+            log::info!(
+                "Stream start: created stream {stream_id} in {} ms",
+                began.elapsed().as_millis()
+            );
 
-            let target = audiopub_target_for(site_url, identity, content_type);
+            let target = audiopub_target_for(server, *port, identity, content_type)?;
             // The first connect stays here, and inline, so a wrong stream key or
             // a banned account fails `Start streaming` at once with a reason.
             // Every *later* connect happens inside the sender task.
+            let handshake = Instant::now();
             let icecast = IcecastConnection::connect(&target)
                 .await
                 .map_err(|e| e.to_string())?;
+            log::info!(
+                "Stream start: Icecast accepted the source in {} ms ({} ms since Start)",
+                handshake.elapsed().as_millis(),
+                began.elapsed().as_millis()
+            );
             let icecast_task = spawn_icecast_sender(target, icecast, audio, events.clone());
+
+            // Announced *before* the feed exists, and this ordering is the whole
+            // point of it being here rather than in the caller. The pump's
+            // `StreamStarted` arm resets `server_stream` to `Pending`, while the
+            // feed's first act is to report the state the server already holds —
+            // so a feed that got its answer first would have it overwritten by
+            // the announcement of the stream it belongs to. The server re-sends
+            // `state` only on connect and on transition, which makes that a
+            // one-way trap: the stream would read "waiting for the server to
+            // accept" for the whole of its life. Nothing below can fail, so this
+            // is not sent for a stream that then does not start.
+            let _ = events.send(NetEvent::StreamStarted {
+                stream_id: stream_id.clone(),
+            });
 
             // The feed opens itself. Chat failing is not a reason to refuse to
             // broadcast, so unlike the Icecast connection above, a live-events
@@ -1105,8 +1182,16 @@ async fn start_stream(
                 .map_err(|e| e.to_string())?;
             let icecast_task = spawn_icecast_sender(target, icecast, audio, events.clone());
 
+            let stream_id = format!("icecast:{}", normalize_mount(mount));
+            // No feed to race here — a direct mount has none — but the two arms
+            // announce the same way so there is one answer to "where is
+            // `StreamStarted` sent".
+            let _ = events.send(NetEvent::StreamStarted {
+                stream_id: stream_id.clone(),
+            });
+
             Ok(ActiveStream {
-                stream_id: format!("icecast:{}", normalize_mount(mount)),
+                stream_id,
                 sse_task: None,
                 // Never rung: a direct Icecast mount has no chat feed at all.
                 chat_reconnect: tokio_mpsc::unbounded_channel().0,
@@ -1304,6 +1389,70 @@ mod chat_feed_tests {
         );
     }
 
+    /// `start_streaming` starts the encoder before it asks the network for
+    /// anything, so by the time this task exists the channel already holds
+    /// everything encoded during `create_stream` and the Icecast handshake.
+    /// Sending it would open the broadcast seconds behind live and *stay* there:
+    /// it lands in Icecast's burst buffer, which is exactly what the first
+    /// listener is handed as their starting point.
+    #[tokio::test(start_paused = true)]
+    async fn the_first_connection_drops_the_backlog_encoded_before_it_existed() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+
+        let (report_tx, report_rx) = tokio::sync::oneshot::channel();
+        let server = tokio::spawn(async move {
+            let (mut sock, _) = listener.accept().await.unwrap();
+            let mut buf = vec![0u8; 4096];
+            let _ = sock.read(&mut buf).await.unwrap();
+            sock.write_all(b"HTTP/1.1 100 Continue\r\n\r\n")
+                .await
+                .unwrap();
+            // Whatever arrives first is what a listener would hear first.
+            let mut first = vec![0u8; 4];
+            sock.read_exact(&mut first).await.unwrap();
+            let _ = report_tx.send(first);
+            loop {
+                if sock.read(&mut buf).await.unwrap_or(0) == 0 {
+                    std::future::pending::<()>().await;
+                }
+            }
+        });
+
+        let target = IcecastTarget {
+            host: addr.to_string(),
+            mount: "u".into(),
+            username: "source".into(),
+            password: Secret::new("key"),
+            content_type: "audio/mpeg".into(),
+        };
+        let first = IcecastConnection::connect(&target).await.unwrap();
+
+        let (event_tx, _event_rx) = crossbeam_channel::unbounded();
+        let (audio_tx, audio_rx) = tokio_mpsc::channel(200);
+        // Stale: encoded while the handshake above was still in flight.
+        for _ in 0..50 {
+            audio_tx.send(b"OLD!".to_vec()).await.unwrap();
+        }
+        let task = spawn_icecast_sender(target, first, audio_rx, EventSender(event_tx));
+
+        // Give the task its first poll, so the drain runs before anything fresh
+        // is offered — the ordering the real engine produces, where the backlog
+        // predates the connection by whole seconds.
+        tokio::task::yield_now().await;
+        tokio::time::sleep(Duration::from_millis(10)).await;
+        audio_tx.send(b"NEW!".to_vec()).await.unwrap();
+
+        let heard = report_rx.await.unwrap();
+        assert_eq!(
+            &heard, b"NEW!",
+            "listeners must start at live, not at whatever was queued before the socket opened"
+        );
+
+        task.abort();
+        server.abort();
+    }
+
     #[test]
     fn audio_backoff_climbs_then_saturates() {
         assert_eq!(audio_backoff(0), Duration::from_secs(2));
@@ -1411,25 +1560,14 @@ mod host_tests {
     use super::*;
 
     #[test]
-    fn icecast_host_derivation() {
-        assert_eq!(
-            super::icecast_host_for("https://audiopub.site/"),
-            "live.audiopub.site:8000"
-        );
-        assert_eq!(
-            super::icecast_host_for("http://example.org"),
-            "live.example.org:8000"
-        );
-    }
-
-    #[test]
-    fn audiopub_target_uses_site_identity() {
+    fn audiopub_target_uses_configured_server_and_site_identity() {
         let identity = StreamIdentity {
             user_id: "user-123".to_string(),
             stream_key: Secret::new("stream-key"),
         };
-        let target = audiopub_target_for("https://example.org/", &identity, "audio/mpeg");
-        assert_eq!(target.host, "live.example.org:8000");
+        let target =
+            audiopub_target_for("stream.example.org", 9000, &identity, "audio/mpeg").unwrap();
+        assert_eq!(target.host, "stream.example.org:9000");
         assert_eq!(target.mount, "user-123");
         assert_eq!(target.username, "source");
         assert_eq!(target.password.as_str(), "stream-key");
@@ -1496,5 +1634,18 @@ mod host_tests {
         };
         let target = direct_icecast_target(&conn, "audio/mpeg").unwrap();
         assert_eq!(target.username, "source");
+    }
+
+    #[test]
+    fn direct_icecast_target_accepts_the_root_mount() {
+        let conn = Connection::Icecast {
+            server: "radio.example.org".to_string(),
+            port: 8000,
+            mount: "/".to_string(),
+            username: "source".to_string(),
+            password: Secret::new("secret"),
+        };
+        let target = direct_icecast_target(&conn, "audio/mpeg").unwrap();
+        assert_eq!(target.mount, "/");
     }
 }

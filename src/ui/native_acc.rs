@@ -1,5 +1,6 @@
-//! Keeps wxWidgets' MSAA layer out of the way of a native list box, so a screen
-//! reader sees the plain Win32 control instead of a hybrid of two objects.
+//! Keeps wxWidgets' MSAA layer out of the way of the native controls that have
+//! MSAA children of their own — list boxes and radio boxes — so a screen reader
+//! sees the plain Win32 control instead of a hybrid of two objects.
 //!
 //! wx wraps *every* MSW control: `wxWindowMSW`'s `WM_GETOBJECT` handler calls
 //! `GetOrCreateAccessible()`, which creates a `wxWindowAccessible` when the
@@ -41,6 +42,16 @@
 //! the fix, and [`super::set_accessible_name`] cannot be: it would replace the
 //! accessible of the group window only, and the items are separate child
 //! windows that wxdragon hands out no handles for.
+//!
+//! Date and time pickers are **not** a case for this module, which is worth
+//! recording because it looks like one. A `SysDateTimePick32` seems certain to
+//! expose its fields as MSAA children, and it does not: measured against the
+//! real control, its only children are the optional none-checkbox and the
+//! drop-down button, and `accFocus` answers `CHILDID_SELF` no matter which field
+//! the caret is on. There is nothing for a passthrough to reveal, so pickers keep
+//! [`super::set_accessible_name`] like any other childless control, and
+//! [`super::picker_acc`] announces their fields itself. That module's header has
+//! the measurements.
 //!
 //! Threading: `install` and the subclass procs all run on the UI thread. They
 //! hold no state, so nothing needs uninstalling — the subclass dies with the
@@ -139,6 +150,23 @@ fn announce_caret_row(hwnd: HWND) {
 /// text in front of the list, so every call site must keep one there saying
 /// exactly this.
 pub fn install(list: &ListBox, name: &str) {
+    install_hwnd(HWND(list.get_handle()), Some(list_subclass_proc), name);
+}
+
+/// The same for a check list box, which has the same disease for the same
+/// reason.
+///
+/// A `wxCheckListBox` on MSW is a real `LISTBOX` — owner-drawn, so that wx can
+/// paint the check next to each item, but a `LISTBOX` in every other respect,
+/// including the standard proxy `CreateStdAccessibleObject` builds for it. So
+/// the same `WM_GETOBJECT` passthrough applies unchanged, and the same rule
+/// comes with it: `name` must be the text of the static control immediately
+/// before the list.
+///
+/// The check state is not something this either grants or takes away. wx's own
+/// accessible has nothing to say about it, so a reader gets it (or does not)
+/// from the standard proxy on both sides of this call.
+pub fn install_check_list(list: &CheckListBox, name: &str) {
     install_hwnd(HWND(list.get_handle()), Some(list_subclass_proc), name);
 }
 

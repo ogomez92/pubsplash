@@ -6,12 +6,14 @@ mod config;
 mod crash;
 mod data_dir;
 mod fx;
+mod instance;
 mod json_store;
 mod keybind;
 mod logging;
 mod mastodon;
 mod media;
 mod net;
+mod schedule;
 mod secret;
 mod soundpack;
 mod source_name;
@@ -25,6 +27,18 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 fn main() {
+    // First of everything, and above logging in particular: flexi_logger appends
+    // to the live log file and rotates it by size, so a copy that is about to be
+    // turned away must not open it and pull it out from under the copy that is
+    // running. The cost is that a rejection leaves no log line, only the message
+    // box. It also has to be well above `update::cleanup_leftovers` below, which
+    // deletes the staging directory an in-flight `pubsplash-update.exe` is
+    // running from. Bound to a name so the claim lives as long as `main` does.
+    let _instance = match instance::acquire() {
+        instance::Acquired::Held(guard) => guard,
+        instance::Acquired::AlreadyRunning => instance::reject_and_exit(),
+    };
+
     // Logging must come up before config so config recovery can log. The handle
     // lives in a process-global inside `logging` for the lifetime of the app,
     // since the Preferences window reaches it too; `logging::shutdown` at the
@@ -43,6 +57,10 @@ fn main() {
         );
     }
     let config = config::load();
+    // Before anything can play: the startup cue below is spawned from this
+    // function, and a monitoring thread opens the device the moment a strip
+    // asks for it. Both read this setting rather than being handed it.
+    audio::render::set_output_device(config.audio.output_device_id.clone());
     logging::set_level(&config.logging.level);
     logging::install_panic_hook();
     // The panic hook only catches Rust panics. Hosted plugins fault in C++,

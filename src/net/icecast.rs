@@ -33,10 +33,16 @@ pub const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(15);
 /// Windows' auto-tuned send buffer is typically 64 KB — so a socket that stops
 /// draining accepts ~4 s of audio before `write_all` pends at all. A write still
 /// outstanding 5 s later means roughly nine seconds of audio has not moved,
-/// which is far outside congestion jitter. It is also already past the point of
-/// user harm: the engine's outgoing channel holds ~2 s, so the mixer has been
-/// dropping audio for ~3 s and listeners have heard a gap. Detecting later buys
-/// nothing; detecting sooner would tear down a merely congested socket.
+/// which is far outside congestion jitter. Detecting later buys nothing;
+/// detecting sooner would tear down a merely congested socket.
+///
+/// This used to add that the mixer had been dropping for ~3 s by then, on the
+/// grounds that the engine's outgoing channel holds ~2 s. It does not: the
+/// channel is 200 *chunks*, and `Mp3Encoder::encode` returns nothing until LAME
+/// completes a 1152-sample frame, so a chunk is at least 24 ms and 200 of them
+/// is nearer **4.8 s**. The queue therefore only just begins dropping as this
+/// timeout fires, which is if anything the better place for it — but do not
+/// reason about either number from the 10 ms mixer block.
 pub const WRITE_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// Bounds the shutdown handshake. This one is on the app-exit path, where
@@ -116,7 +122,7 @@ pub fn split_host_port(input: &str) -> Result<(String, Option<u16>), String> {
 pub struct IcecastTarget {
     /// Host and port, e.g. `live.audiopub.site:8000`.
     pub host: String,
-    /// Mount without leading slash (the Audio Pub user id).
+    /// Mount without a leading slash, or `/` for the server root.
     pub mount: String,
     /// Source username, usually `source`.
     pub username: String,
@@ -325,8 +331,13 @@ impl IcecastConnection {
             target.username.trim()
         };
         let auth = authorization_header(username, target.password.as_str());
+        let mount_path = if target.mount == "/" {
+            "/".to_string()
+        } else {
+            format!("/{}", target.mount)
+        };
         let request = format!(
-            "PUT /{mount} HTTP/1.1\r\n\
+            "PUT {mount_path} HTTP/1.1\r\n\
              Host: {host}\r\n\
              Authorization: Basic {auth}\r\n\
              User-Agent: pubsplash/{version}\r\n\
@@ -334,7 +345,7 @@ impl IcecastConnection {
              Expect: 100-continue\r\n\
              Ice-Public: 0\r\n\
              \r\n",
-            mount = target.mount,
+            mount_path = mount_path,
             host = target.host,
             auth = auth,
             version = env!("CARGO_PKG_VERSION"),
@@ -514,6 +525,39 @@ mod tests {
         assert!(req.contains("Authorization: Basic c291cmNlOmtleQ=="));
         assert!(req.contains("Content-Type: audio/mpeg"));
         assert_eq!(audio, b"MP3!");
+    }
+
+    #[tokio::test]
+    async fn root_mount_uses_the_server_root_path() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut sock, _) = listener.accept().await.unwrap();
+            let mut buf = vec![0u8; 4096];
+            let n = sock.read(&mut buf).await.unwrap();
+            let req = String::from_utf8_lossy(&buf[..n]).to_string();
+            sock.write_all(b"HTTP/1.1 100 Continue\r\n\r\n")
+                .await
+                .unwrap();
+            req
+        });
+
+        let target = IcecastTarget {
+            host: addr.to_string(),
+            mount: "/".into(),
+            username: "source".into(),
+            password: Secret::new("key"),
+            content_type: "audio/mpeg".into(),
+        };
+        IcecastConnection::connect(&target)
+            .await
+            .unwrap()
+            .close()
+            .await;
+
+        let req = server.await.unwrap();
+        assert!(req.starts_with("PUT / HTTP/1.1\r\n"));
+        assert!(!req.starts_with("PUT //"));
     }
 
     #[tokio::test]

@@ -4,6 +4,7 @@
 
 mod api;
 mod app_picker;
+mod audio_prefs;
 mod buses;
 mod chat;
 mod connect_dialog;
@@ -23,11 +24,14 @@ mod mastodon_templates;
 mod media;
 mod native_acc;
 mod panes;
+mod picker_acc;
 mod preferences;
 mod scan_dialog;
 mod scenes;
+mod schedule_ui;
 mod sends;
 mod slider_uia;
+mod sound_preview;
 mod stream_info_dialog;
 mod update;
 mod update_dialog;
@@ -53,6 +57,7 @@ use wxdragon::prelude::*;
 // wxWidgets key codes (not exported by wxdragon).
 pub const WXK_TAB: i32 = 9;
 pub const WXK_ESCAPE: i32 = 27;
+pub const WXK_SPACE: i32 = 32;
 pub const WXK_DELETE: i32 = 127;
 pub const WXK_PAGEUP: i32 = 366;
 pub const WXK_PAGEDOWN: i32 = 367;
@@ -68,6 +73,7 @@ const ID_MENU_PREFERENCES: i32 = 2002;
 const ID_MENU_EXIT: i32 = 2003;
 const ID_MENU_STREAM_INFO: i32 = 2004;
 const ID_MENU_SOUND_PACK_MANAGER: i32 = 2005;
+const ID_MENU_SCHEDULE: i32 = 2006;
 const ID_MENU_ABOUT: i32 = 2101;
 const ID_MENU_README: i32 = 2102;
 const ID_MENU_CHANGELOG: i32 = 2103;
@@ -116,6 +122,76 @@ pub enum AudioLink {
     Ok,
     Reconnecting,
 }
+
+/// What the *server* says about the stream, as distinct from what our socket says.
+///
+/// Orthogonal to both [`StreamState`] and [`AudioLink`], for the same reason
+/// those two are orthogonal to each other. An open Icecast source connection
+/// proves only that Icecast took the source. Audio Pub does not serve a single
+/// listener until its `sourceConnected()` has opened the archive, run
+/// `ffprobe -probesize 33000` against the live mount — which has to read 33 KB
+/// of real-time audio and carries no timeout — and re-fetched the mount to check
+/// its content type. Only then does the row become `active`. If that probe
+/// fails, the server calls Icecast's `killsource` on us, which arrives here as
+/// an ordinary dropped socket and sends the reconnect ladder round again.
+///
+/// So there is a window — seconds at best, tens of seconds when the probe is
+/// struggling — in which the socket is healthy, the mixer is sending, and nobody
+/// can hear anything. This axis is the only thing that can tell the user so.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub enum ServerStream {
+    /// The row exists; the server has not accepted the source yet. Where every
+    /// Audio Pub stream starts.
+    #[default]
+    Pending,
+    /// The server probed the mount and is serving listeners.
+    Accepted,
+    /// The server has lost the source and will finish the stream within minutes.
+    Lost,
+    /// Nothing able to answer, so this axis stays silent rather than claim a
+    /// stream is unaccepted forever. Two ways in: a direct Icecast mount, which
+    /// has no live-events feed at all, and an Audio Pub stream whose feed has
+    /// gone down (see [`ServerStream::without_a_feed`]).
+    Unknown,
+}
+
+impl ServerStream {
+    /// What this axis becomes when the live-events feed is reported down.
+    ///
+    /// The feed is the *only* thing that ever advances this axis, so a feed
+    /// that stays down leaves whatever was last known standing indefinitely.
+    /// For [`ServerStream::Pending`] that is a trap rather than a stale fact:
+    /// every Audio Pub stream starts there, so a broadcast whose
+    /// `/live/{id}/events` is blocked — by a proxy, or a server that will not
+    /// serve it — would read "waiting for the server to accept the stream" for
+    /// its whole life, never announce "Streaming started" to a screen-reader
+    /// user, and log the 45-second warning, all while listeners are hearing it
+    /// perfectly well. Not knowing is the honest answer once the thing that
+    /// knows has gone.
+    ///
+    /// `Accepted` and `Lost` are left alone: they are last-known facts that a
+    /// broken feed does not refute, and neither one wedges the UI in a claim
+    /// about a stream that is fine. Nothing here needs undoing when the feed
+    /// comes back, either — the server re-sends `state` on every live-events
+    /// connect, so the truth arrives on its own and the pump acts on it as a
+    /// change.
+    fn without_a_feed(self) -> Self {
+        match self {
+            ServerStream::Pending => ServerStream::Unknown,
+            other => other,
+        }
+    }
+}
+
+/// How long a connected stream may go unaccepted before the log says so.
+///
+/// Comfortably past a healthy start — the server's ffprobe reads 33 KB of live
+/// audio, about two seconds at the default 128 kbps, plus two more listener
+/// connections around it — so this fires only when something is actually wrong.
+/// It is also past the first two rungs of `net::AUDIO_BACKOFF`, which is what a
+/// probe failure looks like from here: the server kills the source, we reconnect
+/// at t+2 and t+7, and each attempt starts the validation over.
+const NOT_ACCEPTED_WARNING: std::time::Duration = std::time::Duration::from_secs(45);
 
 /// One received chat message plus when we got it (for relative timestamps).
 pub struct ChatEntry {
@@ -241,6 +317,15 @@ pub struct Runtime {
     /// change the answer at every `StreamState::Live` match site — eight of
     /// them, across four files — and quietly break each of those.
     pub audio_link: AudioLink,
+    /// The server's own view of this stream. See [`ServerStream`]: our end of
+    /// the connection being healthy is not the same question as whether anyone
+    /// can hear it, and this is the half of the answer only the server knows.
+    pub server_stream: ServerStream,
+    /// Whether the "the server still has not accepted this stream" warning has
+    /// been logged for the current stream. One line per stream, not one a
+    /// second: the pump reaches the check every tick for as long as the wait
+    /// lasts.
+    pub warned_not_accepted: bool,
     /// The `tts::catalog::generation()` the source labels were last built from.
     /// A background voice refresh landing is the one thing that can change a
     /// label with no config edit and no process coming or going behind it, so
@@ -271,6 +356,16 @@ pub struct Runtime {
     pub next_announcement: Option<Instant>,
     /// The previous stream of this session, for the reconnect/resume rules.
     pub last_stream: Option<LastStream>,
+    /// The armed stream schedule, if any — see [`crate::schedule`].
+    ///
+    /// Session-only for the same reason [`Monitors`] is, and more so: a
+    /// persisted schedule would mean launching Pubsplash could start
+    /// broadcasting, on the strength of a choice made before the last restart
+    /// and possibly for a stream that has long since happened.
+    ///
+    /// Its deadlines are wall-clock Unix seconds rather than `Instant`s, unlike
+    /// `next_announcement` above; [`crate::schedule`] explains why.
+    pub schedule: Option<crate::schedule::Schedule>,
 }
 
 /// The last values `App::refresh_stream_ui` wrote to each control.
@@ -282,8 +377,8 @@ pub struct Runtime {
 /// now unless it actually differs.
 ///
 /// The comparison is against this cache and not a `get_label()` round-trip on
-/// purpose: wx normalises the mnemonic ampersands, so a round-trip would never
-/// compare equal and the guard would silently never fire.
+/// purpose: wx normalises label text on the way in and out, so a round-trip is
+/// not guaranteed to compare equal and the guard could silently never fire.
 #[derive(Default)]
 pub struct ShownStreamUi {
     stream_label: String,
@@ -309,22 +404,43 @@ pub struct ShownStreamUi {
     announced_recording: Option<bool>,
 }
 
-/// The four states worth announcing, since `StreamState` also carries a stream
-/// id that has nothing to do with what the user needs to hear.
+/// The states worth announcing, since `StreamState` also carries a stream id
+/// that has nothing to do with what the user needs to hear.
+///
+/// [`StreamPhase::LivePending`] is why this is not simply `StreamState`: the
+/// broadcast being connected and the broadcast being audible are two different
+/// moments, and a broadcaster who cannot see the screen needs to be told the
+/// second one, not just the first. See [`ServerStream`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum StreamPhase {
     Idle,
     Starting,
+    /// Connected, but the server has not accepted the source yet.
+    LivePending,
     Live,
     Stopping,
 }
 
 impl StreamPhase {
-    fn of(state: &StreamState) -> Self {
+    /// Deliberately blind to an armed schedule. Arming, cancelling and firing
+    /// are announced at their own call sites in `schedule_ui` instead, because
+    /// this returns `Option<&'static str>` and the one transition that genuinely
+    /// arrives unbidden — a schedule cancelling itself — has to be able to say
+    /// *why*, which a fixed string cannot. The one transition that would matter
+    /// here, firing, already speaks: it reaches `Starting`.
+    fn of(state: &StreamState, server: ServerStream) -> Self {
         match state {
             StreamState::Idle => StreamPhase::Idle,
             StreamState::Starting => StreamPhase::Starting,
-            StreamState::Live { .. } => StreamPhase::Live,
+            // `Unknown` is a direct Icecast mount, which has no live-events feed
+            // to ask and so can never reach `Accepted`. Treating it as live is
+            // the only honest answer available there, and it is also the truth:
+            // a plain Icecast mount serves listeners the moment the source
+            // connects, with no validation step in between.
+            StreamState::Live { .. } => match server {
+                ServerStream::Pending => StreamPhase::LivePending,
+                _ => StreamPhase::Live,
+            },
             StreamState::Stopping => StreamPhase::Stopping,
         }
     }
@@ -333,13 +449,19 @@ impl StreamPhase {
     fn announcement(&self, previous: StreamPhase) -> Option<&'static str> {
         match self {
             StreamPhase::Starting => Some("Connecting to the stream"),
+            StreamPhase::LivePending => Some("Connected, waiting for the server"),
             StreamPhase::Live => Some("Streaming started"),
             StreamPhase::Stopping => Some("Stopping the stream"),
             // Reaching idle from starting means the attempt failed, and
             // `NetEvent::StreamError` has already put a message box up saying
             // why — "Streaming stopped" on top of that would be noise.
+            // `LivePending` counts as having been live: the broadcast really was
+            // connected and running, whether or not the server ever got round to
+            // accepting it, so ending one still owes the user the word.
             StreamPhase::Idle => match previous {
-                StreamPhase::Live | StreamPhase::Stopping => Some("Streaming stopped"),
+                StreamPhase::Live | StreamPhase::LivePending | StreamPhase::Stopping => {
+                    Some("Streaming stopped")
+                }
                 _ => None,
             },
         }
@@ -518,6 +640,8 @@ impl Default for Runtime {
             stream: StreamState::Idle,
             stream_started: None,
             audio_link: AudioLink::Ok,
+            server_stream: ServerStream::Pending,
+            warned_not_accepted: false,
             connected_service: None,
             connecting: false,
             listeners: 0,
@@ -546,6 +670,7 @@ impl Default for Runtime {
             duck_calibration: None,
             next_announcement: None,
             last_stream: None,
+            schedule: None,
         }
     }
 }
@@ -1098,6 +1223,34 @@ fn tts_reaches_the_stream(source: &crate::config::SourceConfig) -> bool {
     }
 }
 
+/// One source's engine-side routing: whether it mixes into master, and its
+/// sends with bus names resolved to the indices the engine addresses them by.
+///
+/// The single home of the [`tts_reaches_the_stream`] gate, which drops
+/// `to_master` *and* the sends together — a bus mixes into master
+/// unconditionally, so leaving the sends would put the speech back on the
+/// stream by another route. Both `App::source_specs` and
+/// `App::sync_source_routing` go through here so the two paths cannot drift.
+fn source_routing(
+    source: &crate::config::SourceConfig,
+    bus_index: impl Fn(&str) -> Option<usize>,
+) -> (bool, Vec<crate::audio::SendSpec>) {
+    if !tts_reaches_the_stream(source) {
+        return (false, Vec::new());
+    }
+    let sends = source
+        .sends
+        .iter()
+        .filter_map(|send| {
+            Some(crate::audio::SendSpec {
+                bus_index: bus_index(&send.bus)?,
+                level: send.level,
+            })
+        })
+        .collect();
+    (source.to_master, sends)
+}
+
 /// Reads an incoming chat message through every unmuted TTS source in the
 /// active scene.
 /// The log line for a change in the live-events connection.
@@ -1128,14 +1281,32 @@ fn chat_feed_line(state: &crate::net::ChatFeedState) -> String {
              restore chat."
             .to_string(),
         ChatFeedState::Archived => "The server archived this stream.".to_string(),
-        ChatFeedState::ServerState { state } if state == "disconnected" => {
-            "The server says it has lost the audio connection. If it does not come back, \
-             the server will end this stream within a few minutes."
-                .to_string()
-        }
-        ChatFeedState::ServerState { state } => {
-            format!("The server reports this stream as {state}.")
-        }
+    }
+}
+
+/// The log line for the server's own view of the stream.
+///
+/// Same rules as [`chat_feed_line`] and [`audio_link_line`], and for the reasons
+/// their headers give: the log rather than a message box, never the chat list,
+/// and never spoken.
+///
+/// `active` is the line that matters most and the one that did not exist before:
+/// it is the first moment a listener can hear anything, and until it arrives a
+/// perfectly healthy-looking broadcast is going nowhere. See [`ServerStream`]
+/// for what the server is doing in between.
+fn server_state_line(state: &str) -> String {
+    match state {
+        "active" => "The server has accepted the stream. Listeners can hear it now.".to_string(),
+        // Kept verbatim from where this lived inside `chat_feed_line`, tests and
+        // all: `disconnected` means the server has lost the source link and will
+        // finish the stream within minutes, even while our socket looks healthy.
+        "disconnected" => "The server says it has lost the audio connection. If it does not \
+             come back, the server will end this stream within a few minutes."
+            .to_string(),
+        "pending" => "The server has the stream but has not accepted the audio yet. It checks \
+             the mount before serving anyone, so listeners hear nothing until that finishes."
+            .to_string(),
+        other => format!("The server reports this stream as {other}."),
     }
 }
 
@@ -1442,6 +1613,48 @@ impl App {
         self.send_master_levels();
     }
 
+    /// Applies `config.audio.output_device_id` to both of the paths Pubsplash
+    /// plays out of, and asks the engine to move any monitoring already in
+    /// progress onto the new device.
+    ///
+    /// Local sound cues need no telling: they open the device once per
+    /// playback and read the setting as they do.
+    ///
+    /// A pinned Desktop Audio source does need telling, because the feedback
+    /// check (`capture::would_capture_pubsplash`) is asked at open time and
+    /// nowhere else — so a source that has just started colliding with the new
+    /// output device would go on capturing it, Pubsplash's own speech and cues
+    /// included, until something else happened to respawn it. Re-sending the
+    /// sources is what re-asks the question, in both directions: a source that
+    /// had fallen back to the all-endpoints form gets its pinned endpoint back
+    /// when the collision goes away. It is gated on there being such a source
+    /// because the command restarts *every* capture thread in the scene, and
+    /// there is no reason to interrupt a microphone mid-broadcast for a setting
+    /// that cannot affect it.
+    pub fn apply_output_device(&self) {
+        let device_id = self.config.borrow().audio.output_device_id.clone();
+        crate::audio::render::set_output_device(device_id);
+        self.engine.send(EngineCommand::ReopenMonitor);
+        if self.has_pinned_desktop_audio() {
+            self.sync_engine_sources();
+        }
+    }
+
+    /// Whether the active scene holds a Desktop Audio source pinned to one
+    /// endpoint — the only kind of source the output device can collide with.
+    fn has_pinned_desktop_audio(&self) -> bool {
+        let config = self.config.borrow();
+        let Some(scene) = config.scenes.active_scene() else {
+            return false;
+        };
+        scene.sources.iter().any(|s| {
+            matches!(
+                s.kind,
+                crate::config::SourceKindConfig::DesktopAudio { device_id: Some(_) }
+            )
+        })
+    }
+
     fn send_master_levels(&self) {
         let config = self.config.borrow();
         self.engine
@@ -1464,72 +1677,119 @@ impl App {
             .sources
             .iter()
             .enumerate()
-            .map(|(index, s)| SourceSpec {
-                name: s.name.clone(),
-                volume: s.volume,
-                muted: s.muted,
-                monitor: monitors.source(index),
-                // Speech is for the broadcaster first, so a TTS strip is always
-                // played out of the local device — see `SourceSpec::local`.
-                local: matches!(&s.kind, SourceKindConfig::Tts(_)),
-                // Only a media player ducks, and only when it is asked to. The
-                // rest of the mixer is what it ducks *for*, which is why every
-                // other source is a trigger — a microphone, a game, a chat
-                // message being read out.
-                duck: match &s.kind {
-                    SourceKindConfig::MediaPlayer(media) if media.duck => {
-                        Some(crate::audio::DuckSpec {
-                            percent: media.duck_percent,
-                            threshold_db: media.duck_threshold_db,
-                        })
-                    }
-                    _ => None,
-                },
-                duck_trigger: !matches!(&s.kind, SourceKindConfig::MediaPlayer(_)),
-                to_master: s.to_master && tts_reaches_the_stream(s),
-                // Sends go too when speech is off the stream. A bus mixes into
-                // master unconditionally, so leaving them would have put the
-                // speech back on the stream by another route.
-                sends: if tts_reaches_the_stream(s) {
-                    s.sends
-                        .iter()
-                        .filter_map(|send| {
-                            Some(crate::audio::SendSpec {
-                                bus_index: bus_index(&send.bus)?,
-                                level: send.level,
+            .map(|(index, s)| {
+                let (to_master, sends) = source_routing(s, bus_index);
+                SourceSpec {
+                    name: s.name.clone(),
+                    volume: s.volume,
+                    muted: s.muted,
+                    monitor: monitors.source(index),
+                    // Speech is for the broadcaster first, so a TTS strip is
+                    // always played out of the local device — see
+                    // `SourceSpec::local`.
+                    local: matches!(&s.kind, SourceKindConfig::Tts(_)),
+                    // Only a media player ducks, and only when it is asked to.
+                    // The rest of the mixer is what it ducks *for*, which is
+                    // why every other source is a trigger — a microphone, a
+                    // game, a chat message being read out.
+                    duck: match &s.kind {
+                        SourceKindConfig::MediaPlayer(media) if media.duck => {
+                            Some(crate::audio::DuckSpec {
+                                percent: media.duck_percent,
+                                threshold_db: media.duck_threshold_db,
                             })
-                        })
-                        .collect()
-                } else {
-                    Vec::new()
-                },
-                feed: match &s.kind {
-                    SourceKindConfig::Microphone { device_id } => {
-                        FeedKind::Capture(CaptureKind::Microphone {
-                            device_id: device_id.clone(),
-                        })
-                    }
-                    SourceKindConfig::DesktopAudio => FeedKind::Capture(CaptureKind::DesktopAudio),
-                    SourceKindConfig::Application { process_name } => {
-                        match apps.get(&process_name.trim().to_ascii_lowercase()) {
-                            Some(app) => {
-                                FeedKind::Capture(CaptureKind::Application { pid: app.pid })
-                            }
-                            None => {
-                                log::warn!(
-                                    "Process {process_name:?} not running; source will be silent"
-                                );
-                                FeedKind::External
+                        }
+                        _ => None,
+                    },
+                    duck_trigger: !matches!(&s.kind, SourceKindConfig::MediaPlayer(_)),
+                    to_master,
+                    sends,
+                    feed: match &s.kind {
+                        SourceKindConfig::Microphone { device_id } => {
+                            FeedKind::Capture(CaptureKind::Microphone {
+                                device_id: device_id.clone(),
+                            })
+                        }
+                        SourceKindConfig::DesktopAudio { device_id } => {
+                            FeedKind::Capture(CaptureKind::DesktopAudio {
+                                device_id: device_id.clone(),
+                            })
+                        }
+                        SourceKindConfig::Application { process_name } => {
+                            match apps.get(&process_name.trim().to_ascii_lowercase()) {
+                                Some(app) => {
+                                    FeedKind::Capture(CaptureKind::Application { pid: app.pid })
+                                }
+                                None => {
+                                    log::warn!(
+                                        "Process {process_name:?} not running; source will be silent"
+                                    );
+                                    FeedKind::External
+                                }
                             }
                         }
-                    }
-                    SourceKindConfig::Tts(_)
-                    | SourceKindConfig::SoundEvents(_)
-                    | SourceKindConfig::MediaPlayer(_) => FeedKind::External,
-                },
+                        SourceKindConfig::Tts(_)
+                        | SourceKindConfig::SoundEvents(_)
+                        | SourceKindConfig::MediaPlayer(_) => FeedKind::External,
+                    },
+                }
             })
             .collect();
         Some(specs)
+    }
+
+    /// Applies one source's `to_master` and sends to the engine without
+    /// disturbing anything else about it.
+    ///
+    /// A no-op unless `scene_index` names the active scene: the engine only
+    /// ever holds the active scene's sources, so `source_index` addresses
+    /// nothing otherwise. (Sending the whole source list instead would respawn
+    /// every capture thread in the app to apply an edit to a scene that is not
+    /// even loaded.)
+    pub fn sync_source_routing(&self, scene_index: usize, source_index: usize) {
+        let config = self.config.borrow();
+        let Some(scene) = config.scenes.scenes.get(scene_index) else {
+            return;
+        };
+        if scene.name != config.scenes.active_scene {
+            return;
+        }
+        let Some(source) = scene.sources.get(source_index) else {
+            return;
+        };
+        let bus_index = |name: &str| config.buses.buses.iter().position(|b| b.name == name);
+        let (to_master, sends) = source_routing(source, bus_index);
+        self.engine.send(EngineCommand::SetSourceRouting(
+            source_index,
+            to_master,
+            sends,
+        ));
+    }
+
+    /// Applies one send's level to the engine. See [`App::sync_source_routing`]
+    /// for the active-scene rule; `bus` is a bus name, resolved here.
+    pub fn set_send_level(&self, scene_index: usize, source_index: usize, bus: &str, level: u32) {
+        let config = self.config.borrow();
+        let Some(scene) = config.scenes.scenes.get(scene_index) else {
+            return;
+        };
+        if scene.name != config.scenes.active_scene {
+            return;
+        }
+        // Speech that is off the stream has no sends in the engine at all, so
+        // there is nothing to level.
+        if !scene
+            .sources
+            .get(source_index)
+            .is_some_and(tts_reaches_the_stream)
+        {
+            return;
+        }
+        let Some(bus_index) = config.buses.buses.iter().position(|b| b.name == bus) else {
+            return;
+        };
+        self.engine
+            .send(EngineCommand::SetSendLevel(source_index, bus_index, level));
     }
 
     pub fn is_streaming_or_starting(&self) -> bool {
@@ -1537,10 +1797,23 @@ impl App {
     }
 
     /// Whether the overview list has a clock that needs re-rendering every
-    /// second. A standalone recording has one even though nothing is streaming.
+    /// second. A standalone recording has one even though nothing is streaming,
+    /// and so does an armed schedule — its countdown row is the same kind of
+    /// once-a-second value as the duration.
     pub fn overview_ticking(&self) -> bool {
         let run = self.run.borrow();
-        !matches!(run.stream, StreamState::Idle) || run.recording_started.is_some()
+        !matches!(run.stream, StreamState::Idle)
+            || run.recording_started.is_some()
+            || run.schedule.is_some()
+    }
+
+    /// Whether a scheduled stream is waiting to go live.
+    ///
+    /// Every lockout in the app asks this rather than reaching into `Runtime`,
+    /// so the rule stays in one place: while a schedule is armed, recording is
+    /// unavailable and the stream button cancels instead of starting.
+    pub fn schedule_armed(&self) -> bool {
+        self.run.borrow().schedule.is_some()
     }
 
     /// The public page of the current live stream, once it is live.
@@ -1573,6 +1846,11 @@ impl App {
                 return;
             }
             run.stream = StreamState::Stopping;
+            // Stopping discards whatever the schedule had left, which in
+            // advanced mode is a pending scene switch. Inside the guard above on
+            // purpose: a `stop_streaming` on an idle app must not silently eat a
+            // schedule that is still waiting to go live.
+            run.schedule = None;
         }
         self.engine.send(EngineCommand::StopEncoding);
         self.engine.send(EngineCommand::StopRecording);
@@ -1591,6 +1869,12 @@ impl App {
         {
             let run = self.run.borrow();
             if run.recording || run.recording_pending || !matches!(run.stream, StreamState::Idle) {
+                return;
+            }
+            // Same lockout the disabled record button expresses, enforced here so
+            // no path — button, keybind, or anything added later — can start a
+            // recording that would be in the way when the schedule fires.
+            if run.schedule.is_some() {
                 return;
             }
         }
@@ -1626,18 +1910,60 @@ impl App {
         self.refresh_stream_ui();
     }
 
+    /// Says once, in the log, that the server still has not accepted a stream
+    /// that has been connected for [`NOT_ACCEPTED_WARNING`].
+    ///
+    /// The Home tab already carries the state continuously; this exists because
+    /// the suffix alone does not explain *why* a healthy-looking broadcast is
+    /// inaudible, and the log is what users are asked to send. Deliberately not
+    /// a modal: it arrives unbidden and mid-broadcast, which is the test
+    /// `agents.md` sets for the log over a dialog. Nor is it an error — the
+    /// server may still accept the stream, and if the source has genuinely died
+    /// `AUDIO_RECONNECT_BUDGET` ends the broadcast on its own.
+    fn warn_if_the_server_has_not_accepted(&self) {
+        let mut run = self.run.borrow_mut();
+        if run.warned_not_accepted || run.server_stream != ServerStream::Pending {
+            return;
+        }
+        if !matches!(run.stream, StreamState::Live { .. }) {
+            return;
+        }
+        let Some(started) = run.stream_started else {
+            return;
+        };
+        if started.elapsed() < NOT_ACCEPTED_WARNING {
+            return;
+        }
+        run.warned_not_accepted = true;
+        drop(run);
+        log::warn!(
+            "The server has not accepted this stream after {} seconds. Audio Pub checks the \
+             mount with ffprobe before it serves anyone, and drops the source if that check \
+             fails, so listeners hear nothing until it succeeds. Your audio is going out and \
+             any recording is unaffected.",
+            NOT_ACCEPTED_WARNING.as_secs()
+        );
+    }
+
     /// Repaints everything that depends on stream state: overview list and the
     /// stream/record buttons.
     pub fn refresh_stream_ui(&self) {
+        self.warn_if_the_server_has_not_accepted();
         let run = self.run.borrow();
 
+        // While a schedule is armed the button is the way to call it off, which
+        // is also why `stream_enabled` below stays keyed on the recording: a
+        // schedule cannot be armed while recording, so the two can never fight,
+        // and the button has to stay live for the cancel to be reachable.
+        let armed = run.schedule.is_some();
         let button_label = match &run.stream {
-            StreamState::Idle => "&Start streaming",
-            _ => "S&top streaming",
+            StreamState::Idle if armed => "Cancel scheduled stream",
+            StreamState::Idle => "Start streaming",
+            _ => "Stop streaming",
         };
 
         let streaming_or_starting = !matches!(run.stream, StreamState::Idle);
-        let phase = StreamPhase::of(&run.stream);
+        let phase = StreamPhase::of(&run.stream, run.server_stream);
         let recording = run.recording;
         // The button and the streaming lockout follow the *request*, so a press
         // is answered at once and a stream cannot be started into a recording
@@ -1646,9 +1972,9 @@ impl App {
         // the engine says the file exists.
         let busy_recording = run.recording || run.recording_pending;
         let record_label = if busy_recording {
-            "Stop re&cording"
+            "Stop recording"
         } else {
-            "Start &recording"
+            "Start recording"
         };
         drop(run);
 
@@ -1670,9 +1996,12 @@ impl App {
                 w.record_button.set_label(record_label);
                 shown.record_label = record_label.to_string();
             }
-            if shown.record_enabled != Some(!streaming_or_starting) {
-                w.record_button.enable(!streaming_or_starting);
-                shown.record_enabled = Some(!streaming_or_starting);
+            // An armed schedule locks recording out too: a recording running
+            // when the schedule fires would block the stream it was armed for.
+            let can_record = !streaming_or_starting && !armed;
+            if shown.record_enabled != Some(can_record) {
+                w.record_button.enable(can_record);
+                shown.record_enabled = Some(can_record);
             }
         });
         // Outside the closure above: it holds a borrow of `run`, and this takes
@@ -1777,6 +2106,14 @@ pub fn service_profile_from_site(site: &SiteConfig) -> Result<ServiceProfile, St
     match site.service_type {
         StreamingServiceType::Audiopub => {
             let site_url = validate_site_url(&site.url)?;
+            // Blank means "the site's usual host", not "refuse to connect": the
+            // fields are an override for an instance that publishes somewhere
+            // else, and every profile written before they existed is blank.
+            // Parsed the same way the direct-Icecast branch parses its own, so
+            // a `host:port` typed into the server field is understood here too.
+            let (typed_server, typed_port) = site.icecast_endpoint();
+            let (server, embedded_port) = crate::net::icecast::split_host_port(&typed_server)?;
+            let port = embedded_port.unwrap_or(typed_port);
             if site.email.trim().is_empty() || site.password.is_empty() {
                 return Err("Enter your email and password first.".to_string());
             }
@@ -1784,6 +2121,8 @@ pub fn service_profile_from_site(site: &SiteConfig) -> Result<ServiceProfile, St
                 id: site.id.clone(),
                 nickname,
                 site_url,
+                server,
+                port,
                 email: site.email.trim().to_string(),
                 password: site.password.clone(),
             })
@@ -1797,7 +2136,7 @@ pub fn service_profile_from_site(site: &SiteConfig) -> Result<ServiceProfile, St
             if port == 0 {
                 return Err("Enter a valid Icecast port.".to_string());
             }
-            if site.icecast_mount.trim().trim_start_matches('/').is_empty() {
+            if site.icecast_mount.trim().is_empty() {
                 return Err("Enter the Icecast mount point.".to_string());
             }
             if site.icecast_password.is_empty() {
@@ -1843,11 +2182,34 @@ pub fn start_streaming(app: &Rc<App>) {
             return;
         }
     }
+    begin_stream(app);
+}
+
+/// The half of starting a stream that shows no dialog, and so may be called from
+/// a timer tick.
+///
+/// Split out for `schedule_ui::pump`, which fires an armed schedule from the
+/// one-second timer. A modal raised from there opens a nested event loop with
+/// nobody in front of the machine to dismiss it, so the scheduled broadcast
+/// would sit behind a dialog instead of going out. Keeping the preflight
+/// questions in [`start_streaming`] and the work here makes "the scheduled path
+/// cannot raise a modal" a property of the code rather than a promise: the fire
+/// path never calls anything that could ask.
+///
+/// The caller owes the two checks `start_streaming` does first — a connected
+/// service, and stream info confirmed — because this does not repeat them.
+pub fn begin_stream(app: &Rc<App>) {
     let info = app.run.borrow().stream_info.clone();
-    // Bounded, at roughly two seconds of encoded audio. Unbounded, a stalled
-    // TCP send window meant the queue grew at the encoded bitrate for as long
-    // as the stall lasted, silently — and for a live stream, minutes of
-    // buffered audio is worse than a gap.
+    // Bounded. Unbounded, a stalled TCP send window meant the queue grew at the
+    // encoded bitrate for as long as the stall lasted, silently — and for a live
+    // stream, minutes of buffered audio is worse than a gap.
+    //
+    // 200 *chunks*, which is not 200 mixer blocks: `Mp3Encoder::encode` returns
+    // nothing until LAME completes a 1152-sample frame, so a chunk is at least
+    // 24 ms and this holds nearer 4.8 s than the two seconds this comment used
+    // to claim. `net::spawn_icecast_sender` throws the whole backlog away before
+    // its first send for exactly that reason — everything encoded between here
+    // and the handshake completing is stale by the time anyone could hear it.
     let (tx, rx) = tokio::sync::mpsc::channel(200);
     let bitrate = app.config.borrow().audio.bitrate_kbps;
     // A new encoder is a clean slate; the last stream's failure must not stay
@@ -2159,6 +2521,24 @@ pub fn build(app: Rc<App>) {
                 }
                 // Cleanly terminate the stream before shutdown.
                 app.stop_streaming();
+            } else if app.schedule_armed() {
+                // A schedule is session-only, so exiting discards it. Said out
+                // loud rather than silently, because otherwise a user who armed a
+                // stream and then closed the window would find out by the stream
+                // never happening.
+                let dialog = MessageDialog::builder(
+                    &frame_for_close,
+                    "A stream is scheduled to go live later. Exit and discard it?",
+                    "Exit Pubsplash",
+                )
+                .with_style(MessageDialogStyle::YesNo | MessageDialogStyle::IconQuestion)
+                .build();
+                if dialog.show_modal() != ID_YES {
+                    if let WindowEventData::General(e) = &event {
+                        e.veto();
+                    }
+                    return;
+                }
             }
             // Flush any recording. Standalone recording is not covered by the
             // streaming check above, and without this the encoder's flush and
@@ -2238,6 +2618,14 @@ pub fn build(app: Rc<App>) {
                 }
                 return;
             }
+            // Before the refresh below, so the tick that fires a schedule also
+            // repaints the buttons and rows it changed. A deadline check on the
+            // timer that already runs rather than a waitable-timer thread: the
+            // countdown row needs a fresh value every second regardless, so
+            // there is nothing an event would save, and comparing a wall-clock
+            // deadline means a tick missed under a modal fires late instead of
+            // never — the same reasoning as `maybe_periodic` below.
+            schedule_ui::pump(&app);
             // Durations, relative chat times, and the config write that slider
             // and text edits deferred to here.
             if app.overview_ticking() {
@@ -2373,59 +2761,64 @@ fn build_menu(app: &Rc<App>, frame: &Frame) {
     let file_menu = Menu::builder()
         .append_item(
             ID_MENU_CONFIGURE,
-            "Setup streaming &services...",
+            "Setup streaming services...",
             "Manage Audiopub and Icecast streaming services",
         )
         .append_item(
             ID_MENU_STREAM_INFO,
-            "&Set stream info...",
+            "Set stream info...",
             "Title, description, and archiving for the stream",
         )
         .append_item(
+            ID_MENU_SCHEDULE,
+            "Schedule stream...",
+            "Go live automatically at a set time",
+        )
+        .append_item(
             ID_MENU_PREFERENCES,
-            "&Preferences...\tCtrl+,",
+            "Preferences...\tCtrl+,",
             "Application preferences",
         )
         .append_separator()
-        .append_item(ID_MENU_EXIT, "E&xit\tAlt+F4", "Exit Pubsplash")
+        .append_item(ID_MENU_EXIT, "Exit\tAlt+F4", "Exit Pubsplash")
         .build();
     let tools_menu = Menu::builder()
         .append_item(
             ID_MENU_SOUND_PACK_MANAGER,
-            "Sound Pack &Manager...",
+            "Sound Pack Manager...",
             "Create and compile Pubsplash sound packs",
         )
         .build();
     let goto_menu = Menu::builder()
         .append_item(
             ID_MENU_GOTO_STREAM,
-            "Go to &stream page",
+            "Go to stream page",
             "Open the current stream's page in your browser",
         )
         .append_item(
             ID_MENU_GOTO_DATA_DIR,
-            "Go to Pubsplash &data directory",
+            "Go to Pubsplash data directory",
             "Open the folder holding settings, logs, and crash dumps",
         )
         .build();
     let help_menu = Menu::builder()
-        .append_item(ID_MENU_ABOUT, "&About Pubsplash", "Version information")
+        .append_item(ID_MENU_ABOUT, "About Pubsplash", "Version information")
         .append_item(
             ID_MENU_README,
-            "Open &Readme",
+            "Open Readme",
             "Open the documentation in your browser",
         )
         .append_item(
             ID_MENU_CHANGELOG,
-            "View &Changelog",
+            "View Changelog",
             "Open the list of changes in your browser",
         )
         .build();
     let menu_bar = MenuBar::builder()
-        .append(file_menu, "&File")
-        .append(tools_menu, "&Tools")
-        .append(goto_menu, "&Go to")
-        .append(help_menu, "&Help")
+        .append(file_menu, "File")
+        .append(tools_menu, "Tools")
+        .append(goto_menu, "Go to")
+        .append(help_menu, "Help")
         .build();
     frame.set_menu_bar(menu_bar);
 
@@ -2438,6 +2831,7 @@ fn build_menu(app: &Rc<App>, frame: &Frame) {
             ID_MENU_STREAM_INFO => {
                 stream_info_dialog::show(&app, &frame);
             }
+            ID_MENU_SCHEDULE => schedule_ui::show(&app, &frame),
             ID_MENU_PREFERENCES => preferences::show(&app, &frame),
             ID_MENU_EXIT => {
                 frame.close(false);
@@ -2812,6 +3206,16 @@ fn pump_events(app: &Rc<App>) {
             }
             NetEvent::StreamStarted { stream_id } => {
                 let mut run = app.run.borrow_mut();
+                // A direct Icecast mount has no live-events feed, so nothing will
+                // ever answer this axis and it must not claim the stream is
+                // unaccepted for the whole broadcast. Same discriminator
+                // `no_stream_page_reason` uses.
+                run.server_stream = if stream_id.starts_with("icecast:") {
+                    ServerStream::Unknown
+                } else {
+                    ServerStream::Pending
+                };
+                run.warned_not_accepted = false;
                 run.stream = StreamState::Live { stream_id };
                 run.stream_started = Some(Instant::now());
                 run.audio_link = AudioLink::Ok;
@@ -2821,8 +3225,8 @@ fn pump_events(app: &Rc<App>) {
                 drop(run);
                 stream_ui_dirty = true;
                 // Only here: this event is sent after the stream is created and
-                // both Icecast and the SSE feed are up, so it is the first
-                // moment `stream_url` can answer.
+                // the Icecast source is connected, so it is the first moment
+                // `stream_url` can answer.
                 mastodon_post::on_stream_started(app);
             }
             NetEvent::StreamEnded => {
@@ -2834,6 +3238,8 @@ fn pump_events(app: &Rc<App>) {
                 run.stream_started = None;
                 run.recording_started = None;
                 run.audio_link = AudioLink::Ok;
+                run.server_stream = ServerStream::Pending;
+                run.warned_not_accepted = false;
                 drop(run);
                 stream_ui_dirty = true;
             }
@@ -2891,7 +3297,57 @@ fn pump_events(app: &Rc<App>) {
             // outage in the Home tab's stream state ("Streaming (reconnecting)"),
             // which is where Pubsplash reports on itself; the chat list is for
             // what viewers said.
-            NetEvent::ChatFeed(state) => log::info!("Chat feed: {}", chat_feed_line(&state)),
+            NetEvent::ChatFeed(state) => {
+                log::info!("Chat feed: {}", chat_feed_line(&state));
+                // The feed is also the only carrier of `ServerStreamState`, so
+                // losing it means this end can no longer be told what the server
+                // thinks. `Restored` needs no arm: the server re-sends the
+                // state on connect.
+                if matches!(
+                    state,
+                    crate::net::ChatFeedState::Interrupted { .. }
+                        | crate::net::ChatFeedState::StreamGone
+                ) {
+                    let mut run = app.run.borrow_mut();
+                    let next = run.server_stream.without_a_feed();
+                    if run.server_stream != next {
+                        run.server_stream = next;
+                        drop(run);
+                        stream_ui_dirty = true;
+                    }
+                }
+            }
+            // The server re-sends the current state on every live-events connect,
+            // so this acts on *changes* only: without that, a chat reconnect
+            // would write a duplicate log line and re-announce a stream that has
+            // been live for an hour.
+            NetEvent::ServerStreamState { state } => {
+                let next = match state.as_str() {
+                    "active" => ServerStream::Accepted,
+                    "disconnected" => ServerStream::Lost,
+                    _ => ServerStream::Pending,
+                };
+                let mut run = app.run.borrow_mut();
+                if run.server_stream != next {
+                    // The other half of the start timeline `net::start_stream`
+                    // logs, and the one number neither end can produce alone:
+                    // how long the server took to accept a source it had already
+                    // taken. A long wait here, or a wait that keeps restarting,
+                    // is what a failing ffprobe looks like from this side.
+                    if next == ServerStream::Accepted
+                        && let Some(started) = run.stream_started
+                    {
+                        log::info!(
+                            "Stream start: the server accepted the stream {} ms after it began",
+                            started.elapsed().as_millis()
+                        );
+                    }
+                    run.server_stream = next;
+                    drop(run);
+                    log::info!("Stream state: {}", server_state_line(&state));
+                    stream_ui_dirty = true;
+                }
+            }
             NetEvent::AudioLink(state) => {
                 log::info!("Audio link: {}", audio_link_line(&state));
                 app.run.borrow_mut().audio_link = match state {
@@ -3437,11 +3893,137 @@ mod chat_feed_line_tests {
     /// the stream within minutes, which is worth more than the bare state name.
     #[test]
     fn a_disconnected_state_is_explained_rather_than_named() {
-        let line = super::chat_feed_line(&ChatFeedState::ServerState {
-            state: "disconnected".to_string(),
-        });
+        let line = super::server_state_line("disconnected");
         assert!(line.contains("lost the audio connection"), "{line}");
         assert!(!line.contains("  "), "{line}");
+    }
+
+    /// The line that did not exist before this axis did: `active` is the first
+    /// moment a listener can hear anything, and it is what the whole start
+    /// timeline in the log is measuring towards.
+    #[test]
+    fn an_active_state_says_listeners_can_hear_it() {
+        let line = super::server_state_line("active");
+        assert!(line.contains("accepted"), "{line}");
+        assert!(line.to_lowercase().contains("listeners can hear"), "{line}");
+    }
+
+    /// `pending` has to explain itself: "the server reports this stream as
+    /// pending" tells a user nothing about why nobody can hear them.
+    #[test]
+    fn a_pending_state_explains_why_nobody_can_hear_it() {
+        let line = super::server_state_line("pending");
+        assert!(line.contains("not accepted"), "{line}");
+        assert!(line.contains("listeners hear nothing"), "{line}");
+    }
+
+    /// These end up in a log a user is asked to read and quote, so they owe the
+    /// same tidiness as their two siblings: no double spaces and no stray line
+    /// breaks out of the multi-line string literals.
+    #[test]
+    fn server_state_lines_are_clean() {
+        for state in ["active", "pending", "disconnected", "finished"] {
+            let line = super::server_state_line(state);
+            assert!(!line.contains("  "), "{state}: {line}");
+            assert!(!line.contains('\n'), "{state}: {line}");
+        }
+    }
+}
+
+#[cfg(test)]
+mod stream_phase_tests {
+    use super::{ServerStream, StreamPhase, StreamState};
+
+    fn live() -> StreamState {
+        StreamState::Live {
+            stream_id: "abc".into(),
+        }
+    }
+
+    /// A connected stream the server has not accepted is not one a broadcaster
+    /// should be told has started — that announcement is the only signal a
+    /// screen-reader user gets, and hearing "Streaming started" while listeners
+    /// hear silence is exactly the wrong answer.
+    #[test]
+    fn an_unaccepted_stream_announces_the_wait_and_then_the_start() {
+        let waiting = StreamPhase::of(&live(), ServerStream::Pending);
+        let accepted = StreamPhase::of(&live(), ServerStream::Accepted);
+        assert_eq!(waiting, StreamPhase::LivePending);
+        assert_eq!(accepted, StreamPhase::Live);
+        assert_eq!(
+            waiting.announcement(StreamPhase::Starting),
+            Some("Connected, waiting for the server")
+        );
+        assert_eq!(
+            accepted.announcement(waiting),
+            Some("Streaming started"),
+            "the server accepting is what 'started' has to mean"
+        );
+    }
+
+    /// A direct Icecast mount has no live-events feed to ever answer this, and
+    /// it needs none: a plain mount serves listeners the moment the source
+    /// connects. It must keep the original wording rather than wait forever.
+    #[test]
+    fn a_direct_icecast_stream_still_announces_a_plain_start() {
+        let phase = StreamPhase::of(&live(), ServerStream::Unknown);
+        assert_eq!(phase, StreamPhase::Live);
+        assert_eq!(
+            phase.announcement(StreamPhase::Starting),
+            Some("Streaming started")
+        );
+    }
+
+    /// Ending a stream the server never accepted still ended a broadcast that
+    /// was running, so it owes the user the same word as any other.
+    #[test]
+    fn ending_an_unaccepted_stream_still_says_streaming_stopped() {
+        let idle = StreamPhase::of(&StreamState::Idle, ServerStream::Pending);
+        assert_eq!(
+            idle.announcement(StreamPhase::LivePending),
+            Some("Streaming stopped")
+        );
+    }
+
+    /// A stream whose live-events feed never opens is a *healthy* broadcast
+    /// with nothing left to report on it. Staying `Pending` would hold the
+    /// Home tab at "waiting for the server to accept the stream" and withhold
+    /// "Streaming started" for the whole broadcast, which is the one thing a
+    /// screen-reader user has to go on.
+    #[test]
+    fn a_stream_whose_feed_is_down_stops_claiming_it_is_unaccepted() {
+        assert_eq!(
+            ServerStream::Pending.without_a_feed(),
+            ServerStream::Unknown
+        );
+        let phase = StreamPhase::of(&live(), ServerStream::Pending.without_a_feed());
+        assert_eq!(phase, StreamPhase::Live);
+        assert_eq!(
+            phase.announcement(StreamPhase::Starting),
+            Some("Streaming started")
+        );
+    }
+
+    /// The other states are last-known facts about the stream, not claims the
+    /// feed has to keep renewing — and dropping `Lost` would hide a real fault
+    /// the moment the feed carrying it went down.
+    #[test]
+    fn a_feed_going_down_does_not_erase_what_it_already_said() {
+        for state in [
+            ServerStream::Accepted,
+            ServerStream::Lost,
+            ServerStream::Unknown,
+        ] {
+            assert_eq!(state.without_a_feed(), state, "{state:?}");
+        }
+    }
+
+    /// Unchanged: a start that failed has already put a modal up saying why, and
+    /// "Streaming stopped" on top of it is noise.
+    #[test]
+    fn a_failed_start_still_says_nothing() {
+        let idle = StreamPhase::of(&StreamState::Idle, ServerStream::Pending);
+        assert_eq!(idle.announcement(StreamPhase::Starting), None);
     }
 }
 

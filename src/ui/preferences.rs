@@ -1,7 +1,7 @@
-//! Preferences dialog. Tabbed: "General", "Archiving", "Mastodon" (whose body
-//! lives in `ui/mastodon_prefs.rs`), "Speech", "Sound packs", "VST plugins",
-//! "Keybinds" (whose body lives in `ui/keybinds_ui.rs`), and
-//! "Logging & debugging" (`ui/logging_ui.rs`).
+//! Preferences dialog. Tabbed: "General", "Audio" (whose body lives in
+//! `ui/audio_prefs.rs`), "Archiving", "Mastodon" (`ui/mastodon_prefs.rs`),
+//! "Speech", "Sound packs", "VST plugins", "Keybinds"
+//! (`ui/keybinds_ui.rs`), and "Logging & debugging" (`ui/logging_ui.rs`).
 //! The VST tab manages the plugin folder list and starts scans; scan progress
 //! arrives on the pump (see `pump_scan_events` in `ui/mod.rs`). Every tab saves
 //! as the user changes a control, so the dialog only needs a Close button.
@@ -19,8 +19,9 @@ pub fn show(app: &Rc<App>, frame: &Frame) {
         .with_style(DialogStyle::DefaultDialogStyle | DialogStyle::ResizeBorder)
         // Wide enough for every tab label to fit on one row. At 560 the eighth
         // tab pushed the row over and wx grew a pair of scroll arrows, which
-        // hides whichever tabs are off the end until you press them.
-        .with_size(700, 480)
+        // hides whichever tabs are off the end until you press them. "Audio"
+        // was the ninth; check this again if a tenth is added.
+        .with_size(780, 480)
         .build();
 
     // An update check answers on the pump, not in the click handler, so the
@@ -33,6 +34,9 @@ pub fn show(app: &Rc<App>, frame: &Frame) {
     let general_panel = Panel::builder(&notebook).build();
     notebook.add_page(&general_panel, "General", true, None);
     build_general_tab(app, &general_panel);
+    let audio_panel = Panel::builder(&notebook).build();
+    notebook.add_page(&audio_panel, "Audio", false, None);
+    super::audio_prefs::build_tab(app, &dialog, &audio_panel);
     let archiving_panel = Panel::builder(&notebook).build();
     notebook.add_page(&archiving_panel, "Archiving", false, None);
     build_archiving_tab(app, &dialog, &archiving_panel);
@@ -55,12 +59,13 @@ pub fn show(app: &Rc<App>, frame: &Frame) {
     let logging_panel = Panel::builder(&notebook).build();
     // Doubled deliberately: wx runs a notebook tab's label through the same
     // mnemonic parsing as a button's, so a single `&` is swallowed and
-    // underlines the `d`. The tab read "Logging  debugging" until this.
+    // underlines the `d`. The tab read "Logging  debugging" until this. This is
+    // an escape for a literal ampersand, not a mnemonic — the app has none.
     notebook.add_page(&logging_panel, "Logging && debugging", false, None);
     super::logging_ui::build_tab(app, &dialog, &logging_panel);
 
     // Dismiss-only, so `dismiss_button` puts both Escape and Enter on it.
-    let close_button = super::dismiss_button(&dialog, "C&lose");
+    let close_button = super::dismiss_button(&dialog, "Close");
     {
         close_button.on_click(move |_| dialog.end_modal(ID_CANCEL));
     }
@@ -103,17 +108,13 @@ pub fn show(app: &Rc<App>, frame: &Frame) {
 /// handed over at the press: while this dialog is up its message boxes belong to
 /// it, so dismissing one puts focus back on the button that was pressed; after
 /// it closes they fall back to the main frame.
-///
-/// Mnemonics are dialog-wide (`::IsDialogMessage` searches the whole
-/// Preferences dialog, not the current page), so ALT+S and ALT+U here are picked
-/// to dodge every letter the other six tabs claim.
 fn build_general_tab(app: &Rc<App>, panel: &Panel) {
     let sizer = BoxSizer::builder(Orientation::Vertical).build();
 
     let (updates_group, updates_box) = super::group_box(panel, "Automatic updates");
 
     let check_on_start = CheckBox::builder(&updates_box)
-        .with_label("Check for updates when Pubsplash &starts")
+        .with_label("Check for updates when Pubsplash starts")
         .build();
     super::set_accessible_name(&check_on_start, "Check for updates when Pubsplash starts");
     super::help::tag(
@@ -135,7 +136,7 @@ fn build_general_tab(app: &Rc<App>, panel: &Panel) {
     // it answers a press, and a button that can silently do nothing reads as
     // broken.
     let check_now = Button::builder(&updates_box)
-        .with_label("Check for &updates now")
+        .with_label("Check for updates now")
         .build();
     super::set_accessible_name(&check_now, "Check for updates now");
     super::help::tag(
@@ -232,7 +233,7 @@ fn build_archiving_tab(app: &Rc<App>, dialog: &Dialog, panel: &Panel) {
     }
 
     let browse = Button::builder(&recording_box)
-        .with_label("&Browse...")
+        .with_label("Browse...")
         .build();
     super::help::tag(
         &browse,
@@ -607,6 +608,10 @@ fn build_engine_page(
                 "dialog.preferences.speech.starHost",
                 "Star server URL",
             );
+            let draft_host = host;
+            validation_button(app, page, sizer, engines::STAR, alive, move |speech| {
+                speech.star_host = draft_host.get_value().trim().to_string();
+            });
         }
         // SAPI, Microsoft Edge and Google Translate. Nothing focusable here, so
         // the tab order runs straight from the picker to the limits below —
@@ -630,11 +635,11 @@ fn validation_button(
     apply_draft: impl Fn(&mut crate::config::SpeechConfig) + 'static,
 ) {
     let button = Button::builder(page).with_label("&Validate").build();
-    super::set_accessible_name(&button, "Validate credentials");
+    super::set_accessible_name(&button, "Validate settings");
     let status = StaticText::builder(page)
-        .with_label("Credentials not yet validated.")
+        .with_label("Settings not yet validated.")
         .build();
-    super::set_accessible_name(&status, "Credential validation status: not yet validated");
+    super::set_accessible_name(&status, "Settings validation status: not yet validated");
     sizer.add(&button, 0, SizerFlag::All, 4);
     sizer.add(&status, 0, SizerFlag::All, 4);
     let apply_draft = Rc::new(apply_draft);
@@ -648,12 +653,9 @@ fn validation_button(
             apply_draft(&mut draft);
             button_for_click.enable(false);
             button_for_click.set_label("Validating…");
-            super::set_accessible_name(&button_for_click, "Validating credentials");
-            status_for_click.set_label("Validating credentials…");
-            super::set_accessible_name(
-                &status_for_click,
-                "Credential validation status: validating",
-            );
+            super::set_accessible_name(&button_for_click, "Validating settings");
+            status_for_click.set_label("Validating settings…");
+            super::set_accessible_name(&status_for_click, "Settings validation status: validating");
             let (sender, receiver) = crossbeam_channel::bounded(1);
             std::thread::Builder::new()
                 .name(format!("tts-validate-{engine}"))
@@ -677,7 +679,7 @@ fn validation_button(
                 };
                 button.enable(true);
                 button.set_label("&Validate");
-                super::set_accessible_name(&button, "Validate credentials");
+                super::set_accessible_name(&button, "Validate settings");
                 match result {
                     Ok((draft, catalog)) => {
                         commit_validated_credentials(
@@ -688,17 +690,17 @@ fn validation_button(
                         crate::tts::catalog::commit_engine(engine, catalog);
                         app.save_config();
                         app.flush_config();
-                        status.set_label("Credentials validated and saved.");
+                        status.set_label("Settings validated and saved.");
                         super::set_accessible_name(
                             &status,
-                            "Credential validation succeeded; credentials saved",
+                            "Settings validation succeeded; settings saved",
                         );
                     }
                     Err(error) => {
                         status.set_label(&format!("Validation failed: {error}"));
                         super::set_accessible_name(
                             &status,
-                            &format!("Credential validation failed: {error}"),
+                            &format!("Settings validation failed: {error}"),
                         );
                     }
                 }
@@ -727,6 +729,7 @@ fn commit_validated_credentials(
             saved.aws_region = draft.aws_region.clone();
         }
         engines::GOOGLE => saved.google_api_key = draft.google_api_key.clone(),
+        engines::STAR => saved.star_host = draft.star_host.clone(),
         _ => {}
     }
 }
@@ -756,7 +759,7 @@ fn text_row(
     speech_row(app, panel, sizer, label, engine, false, read, write)
 }
 
-/// Builds one setting row and wires it to save as the user types.
+/// Builds one setting row.
 ///
 /// The caller tags the returned control for context help, because `gen-help`
 /// needs those arguments to be literals at the call site.
@@ -766,10 +769,10 @@ fn speech_row(
     panel: &Panel,
     sizer: &BoxSizer,
     label: &str,
-    engine: &'static str,
+    _engine: &'static str,
     secret: bool,
     read: fn(&crate::config::SpeechConfig) -> String,
-    write: fn(&mut crate::config::SpeechConfig, String),
+    _write: fn(&mut crate::config::SpeechConfig, String),
 ) -> TextCtrl {
     let caption = StaticText::builder(panel).with_label(label).build();
     let mut builder = TextCtrl::builder(panel).with_value(&read(&app.config.borrow().speech));
@@ -781,20 +784,6 @@ fn speech_row(
     super::set_accessible_name(&input, label);
     sizer.add(&caption, 0, SizerFlag::All, 2);
     sizer.add(&input, 0, SizerFlag::Expand | SizerFlag::All, 2);
-    // Star has no enumerable catalog and therefore no Validate button. Its URL
-    // remains an ordinary setting; credential-bearing providers stay local to
-    // their widgets until validation succeeds.
-    if engine == crate::tts::engines::STAR {
-        let app = app.clone();
-        let input_for_update = input;
-        input.clone().on_text_updated(move |_| {
-            write(
-                &mut app.config.borrow_mut().speech,
-                input_for_update.get_value().trim().to_string(),
-            );
-            app.save_config();
-        });
-    }
     input
 }
 
@@ -832,12 +821,13 @@ fn build_sounds_tab(app: &Rc<App>, dialog: &Dialog, panel: &Panel) -> SoundsTab 
 
     let pack_buttons = BoxSizer::builder(Orientation::Horizontal).build();
     let import_pack = Button::builder(&pack_box)
-        .with_label("&Import pack...")
+        .with_label("Import pack...")
         .build();
-    // ALT+K, not ALT+M: the VST tab's "Re&move folder" already claims that
-    // mnemonic in this dialog.
+    let preview_pack = Button::builder(&pack_box)
+        .with_label("Preview sounds...")
+        .build();
     let remove_pack = Button::builder(&pack_box)
-        .with_label("Remove pac&k")
+        .with_label("Remove pack")
         .build();
     super::help::tag(
         &import_pack,
@@ -845,11 +835,17 @@ fn build_sounds_tab(app: &Rc<App>, dialog: &Dialog, panel: &Panel) -> SoundsTab 
         "Import sound pack button",
     );
     super::help::tag(
+        &preview_pack,
+        "dialog.preferences.sounds.previewPack",
+        "Preview sound pack button",
+    );
+    super::help::tag(
         &remove_pack,
         "dialog.preferences.sounds.removePack",
         "Remove sound pack button",
     );
     pack_buttons.add(&import_pack, 0, SizerFlag::All, 4);
+    pack_buttons.add(&preview_pack, 0, SizerFlag::All, 4);
     pack_buttons.add(&remove_pack, 0, SizerFlag::All, 4);
     pack_group.add_sizer(&pack_buttons, 0, SizerFlag::Expand, 0);
 
@@ -1076,6 +1072,17 @@ fn build_sounds_tab(app: &Rc<App>, dialog: &Dialog, panel: &Panel) -> SoundsTab 
     {
         let dialog = *dialog;
         let apply_pack = apply_pack.clone();
+        preview_pack.on_click(move |_| {
+            // The picker debounces by `SETTLE_MS`, so without this flush the
+            // preview would play the pack the user just arrowed off.
+            apply_pack();
+            super::sound_preview::show(&dialog);
+        });
+    }
+
+    {
+        let dialog = *dialog;
+        let apply_pack = apply_pack.clone();
         let refresh_packs = refresh_packs.clone();
         let selected_pack = selected_pack.clone();
         remove_pack.clone().on_click(move |_| {
@@ -1175,8 +1182,8 @@ fn build_vst_tab(app: &Rc<App>, dialog: &Dialog, panel: &Panel) {
     );
 
     let folder_buttons = BoxSizer::builder(Orientation::Horizontal).build();
-    let add_folder = Button::builder(panel).with_label("&Add folder...").build();
-    let remove_folder = Button::builder(panel).with_label("Re&move folder").build();
+    let add_folder = Button::builder(panel).with_label("Add folder...").build();
+    let remove_folder = Button::builder(panel).with_label("Remove folder").build();
     super::help::tag(
         &add_folder,
         "dialog.preferences.vst.addFolder",
@@ -1192,10 +1199,10 @@ fn build_vst_tab(app: &Rc<App>, dialog: &Dialog, panel: &Panel) {
 
     let scan_buttons = BoxSizer::builder(Orientation::Horizontal).build();
     let scan_new = Button::builder(panel)
-        .with_label("Scan for &new plugins")
+        .with_label("Scan for new plugins")
         .build();
     let rescan_all = Button::builder(panel)
-        .with_label("&Rescan all plugins")
+        .with_label("Rescan all plugins")
         .build();
     super::help::tag(
         &scan_new,
@@ -1359,13 +1366,20 @@ mod speech_validation_tests {
     fn validation_commits_only_the_selected_provider() {
         let mut saved = crate::config::SpeechConfig {
             google_api_key: Secret::new("old-google"),
+            star_host: "ws://old.example:7774".into(),
             ..Default::default()
         };
         let mut draft = saved.clone();
         draft.openai_api_key = Secret::new("new-openai");
         draft.google_api_key = Secret::new("draft-google");
+        draft.star_host = "ws://new.example:7774".into();
         commit_validated_credentials(crate::tts::engines::OPENAI, &mut saved, &draft);
         assert_eq!(saved.openai_api_key.as_str(), "new-openai");
+        assert_eq!(saved.google_api_key.as_str(), "old-google");
+        assert_eq!(saved.star_host, "ws://old.example:7774");
+
+        commit_validated_credentials(crate::tts::engines::STAR, &mut saved, &draft);
+        assert_eq!(saved.star_host, "ws://new.example:7774");
         assert_eq!(saved.google_api_key.as_str(), "old-google");
     }
 }
