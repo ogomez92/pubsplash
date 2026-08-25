@@ -281,6 +281,10 @@ mod imp {
             // call; `sigaction` copies it.
             unsafe {
                 let mut action: libc::sigaction = std::mem::zeroed();
+                // Through the fn-pointer type first: casting a fn *item*
+                // straight to an integer is a lint, and rightly, because the
+                // item is zero-sized and the cast reads as if it were not.
+                let handler: extern "C" fn(i32, *mut libc::siginfo_t, *mut libc::c_void) = handler;
                 action.sa_sigaction = handler as usize;
                 action.sa_flags = libc::SA_SIGINFO | libc::SA_ONSTACK | libc::SA_RESETHAND;
                 libc::sigemptyset(&mut action.sa_mask);

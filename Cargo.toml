@@ -5,6 +5,17 @@ edition = "2024"
 # Several binaries live here, so `cargo run` is ambiguous without naming the
 # default target.
 default-run = "pubsplash"
+# Every binary is declared below, `src/main.rs` included. Auto-discovery is off
+# so that `src/bin/updater_win.rs` -- the Windows half of `pubsplash-update`,
+# which its `bin/updater.rs` seam includes with `#[path]` -- is a module rather
+# than a sixth binary.
+autobins = false
+
+# The app itself. Spelled out because `autobins = false` above turns off the
+# auto-discovery that would otherwise find `src/main.rs`.
+[[bin]]
+name = "pubsplash"
+path = "src/main.rs"
 
 # Loads a single VST plugin and reports its info; kept out-of-process so a
 # crashing plugin cannot take down Pubsplash during a scan.

@@ -14,6 +14,13 @@
 //! have wx spellings: a window's native id is `WxWidget::get_handle` (an `HWND`
 //! on Windows, an `NSView*` on macOS, and only ever compared for equality
 //! here), and handing focus to the plugin's own view is `set_focus`.
+// Items below are reached only from the Windows `imp` in this file (or from the
+// subsystem it belongs to). They are not dead in the codebase, only unreached
+// while the macOS side of this seam is unbuilt, and each will be wanted again
+// the moment it is -- so this is scoped to the file rather than being a
+// crate-wide allow, and comes off with the last stub here.
+#![cfg_attr(not(windows), allow(dead_code))]
+
 
 use super::App;
 use super::WXK_ESCAPE;

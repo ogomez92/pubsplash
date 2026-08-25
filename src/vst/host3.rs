@@ -285,13 +285,21 @@ impl Vst3Plugin {
         self.lock().plugin.get_editor_size().ok()
     }
 
-    pub fn editor_open(&self, hwnd: *mut std::ffi::c_void) -> bool {
+    /// Embeds the plugin's editor in `native_handle`, which is whatever
+    /// `WxWidget::get_handle` gave for the host panel: an `HWND` on Windows, an
+    /// `NSView*` on macOS. VST3 calls those `kPlatformTypeHWND` and
+    /// `kPlatformTypeNSView`, and `vst3-host` picks the right one from which
+    /// constructor was used — the pointer itself is the same value either way.
+    pub fn editor_open(&self, native_handle: *mut std::ffi::c_void) -> bool {
         let _suspended = self.suspend.raise();
         let mut inner = self.lock();
         if inner.editor_open {
             return true;
         }
-        let handle = WindowHandle::from_hwnd(hwnd);
+        #[cfg(windows)]
+        let handle = WindowHandle::from_hwnd(native_handle);
+        #[cfg(target_os = "macos")]
+        let handle = WindowHandle::from_nsview(native_handle);
         match inner.plugin.open_editor(handle) {
             Ok(()) => {
                 inner.editor_open = true;

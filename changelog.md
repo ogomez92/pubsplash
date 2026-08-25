@@ -4,9 +4,19 @@
 
 ### Additions
 
+- Pubsplash now builds and runs its test suite on macOS. This is the platform groundwork only: the window opens, but audio, the local voice, plugin hosting and the F1/keybind hooks are not implemented there yet.
+
 ### Fixes
 
+- A schedule set for a local time that does not exist, or across a daylight-saving change, now converts using the full timezone rules for that date rather than only the machine's current pair of offsets.
+
+- Three networking tests raced their own clock and failed intermittently.
+
 ### Changes
+
+- Scheduling, Mastodon posting and the log-archive and recording filenames now take the local time from a timezone database rather than from Windows.
+
+- Credential encryption, the single-instance guard, the crash handler and the plugin scan helper each gained a macOS implementation alongside the existing Windows one; the Windows behaviour is unchanged.
 
 ## 1.0.0
 

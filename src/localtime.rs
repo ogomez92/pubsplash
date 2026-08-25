@@ -67,13 +67,19 @@ pub fn now() -> Local {
 /// `datetime.rs`), so components read straight off a `DatePickerCtrl` pass
 /// through unchanged.
 ///
-/// Two kinds of input have no answer and both return `None`. An impossible date
-/// — 31 February — is refused by the civil-date constructor. And the hour a
-/// spring-forward skips is a **gap**: no such local time occurred, so there is
-/// no instant to convert it to. A **fold**, the hour a fall-back repeats, is a
-/// different thing: it happened twice, so it does have an answer, and the
-/// earlier of the two is taken (`compatible` is jiff's name for that rule, and
-/// it is the same choice Win32 made here before).
+/// Three kinds of input have no answer and all return `None`. An out-of-range
+/// component — hour 25, month 13 — and an impossible date such as 31 February
+/// are both refused by the civil constructors. And the hour a spring-forward
+/// skips is a **gap**: no such local time occurred, so there is no instant to
+/// convert it to. A **fold**, the hour a fall-back repeats, is a different
+/// thing: it happened twice, so it does have an answer, and the earlier of the
+/// two is taken (`compatible` is jiff's name for that rule, and it is the same
+/// choice Win32 made here before).
+///
+/// Note `Date::new` and `Time::new`, never `civil::date()`/`Date::at()`: the
+/// short constructors **panic** on a component out of range, and this function's
+/// whole contract is to answer `None` instead. The pickers cannot produce such a
+/// value, but a settings file can.
 pub fn to_unix(
     year: i32,
     month: u16,
@@ -88,13 +94,14 @@ pub fn to_unix(
         i8::try_from(day).ok()?,
     )
     .ok()?;
-    let at = date.at(
+    let time = civil::Time::new(
         i8::try_from(hour).ok()?,
         i8::try_from(minute).ok()?,
         i8::try_from(second).ok()?,
         0,
-    );
-    let ambiguous = TimeZone::system().to_ambiguous_zoned(at);
+    )
+    .ok()?;
+    let ambiguous = TimeZone::system().to_ambiguous_zoned(date.to_datetime(time));
     if matches!(ambiguous.offset(), AmbiguousOffset::Gap { .. }) {
         return None;
     }
@@ -140,10 +147,15 @@ mod tests {
         );
     }
 
+    /// Out-of-range components must answer `None`, not panic — which is what
+    /// `Date::at` and `civil::date` would do.
     #[test]
-    fn an_impossible_date_has_no_answer() {
-        assert_eq!(to_unix(2026, 2, 31, 12, 0, 0), None);
-        assert_eq!(to_unix(2026, 13, 1, 12, 0, 0), None);
+    fn an_impossible_date_or_time_has_no_answer() {
+        assert_eq!(to_unix(2026, 2, 31, 12, 0, 0), None, "31 February");
+        assert_eq!(to_unix(2026, 13, 1, 12, 0, 0), None, "month 13");
+        assert_eq!(to_unix(2026, 1, 1, 25, 0, 0), None, "hour 25");
+        assert_eq!(to_unix(2026, 1, 1, 12, 60, 0), None, "minute 60");
+        assert_eq!(to_unix(2026, 1, 1, 12, 0, 61), None, "second 61");
     }
 
     /// The gap and fold rules, asserted against a zone whose transitions are

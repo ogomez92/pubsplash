@@ -1,6 +1,13 @@
 //! Capture threads: each audio source that reads from the OS runs one of
 //! these, producing interleaved stereo f32 at 48 kHz into a ring buffer the
 //! mixer drains.
+// Items below are reached only from the Windows `imp` in this file (or from the
+// subsystem it belongs to). They are not dead in the codebase, only unreached
+// while the macOS side of this seam is unbuilt, and each will be wanted again
+// the moment it is -- so this is scoped to the file rather than being a
+// crate-wide allow, and comes off with the last stub here.
+#![cfg_attr(not(windows), allow(dead_code))]
+
 
 use crate::audio::device;
 use crate::audio::health::CaptureStats;
@@ -705,7 +712,14 @@ mod tests {
     /// kill the source. It reports the failure once, keeps retrying in the
     /// background, and still shuts down promptly when the source is retired.
     /// A device id that cannot exist stands in for the real case (a USB
-    /// interface Windows has not finished bringing up).
+    /// interface the OS has not finished bringing up).
+    ///
+    /// What is asserted is the *supervisor's* contract, which is portable: one
+    /// report carrying the source's name and spawn epoch, a thread still alive
+    /// afterwards, and a prompt exit when the source is retired. Only the
+    /// wording of the message belongs to the platform, so only that assertion
+    /// is `cfg`'d — and on a platform whose capture is not built yet, an
+    /// immediate failure is exactly what this test wants to see handled.
     #[test]
     fn a_device_that_will_not_open_is_reported_once_and_retried() {
         let (producer, _consumer) = rtrb::RingBuffer::<f32>::new(64);
@@ -731,6 +745,11 @@ mod tests {
         let CaptureState::Failed(message) = report.state else {
             panic!("expected a failure, got {:?}", report.state);
         };
+        assert!(
+            !message.trim().is_empty(),
+            "a failure report must carry a reason"
+        );
+        #[cfg(windows)]
         assert!(
             message.contains("looking up the configured microphone"),
             "the message should name the step that failed: {message}"

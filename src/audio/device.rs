@@ -8,6 +8,13 @@
 //! is on. The **endpoint** half is the platform's own audio API and lives in
 //! `imp` below, along with the one other genuinely platform-shaped thing here:
 //! turning an executable path into the name a user recognises.
+// Items below are reached only from the Windows `imp` in this file (or from the
+// subsystem it belongs to). They are not dead in the codebase, only unreached
+// while the macOS side of this seam is unbuilt, and each will be wanted again
+// the moment it is -- so this is scoped to the file rather than being a
+// crate-wide allow, and comes off with the last stub here.
+#![cfg_attr(not(windows), allow(dead_code))]
+
 
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};

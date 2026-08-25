@@ -39,6 +39,10 @@ enum Never {}
 
 /// What a VST2 plugin would be if this platform hosted them. No value of this
 /// type can be constructed; see the module header.
+///
+/// Every field mirrors the Windows struct so the callers reading them typecheck.
+/// Some are read there and not here, which is the point rather than an oversight.
+#[allow(dead_code)]
 pub struct Vst2Plugin {
     pub info: PluginRef,
     pub num_params: i32,

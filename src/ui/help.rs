@@ -34,6 +34,13 @@
 //! Threading: `tag`, `install_*`, `uninstall_*`, and `pump` all run on the UI
 //! thread (thread-locals below live there); only the hook proc runs in the OS
 //! hook context, and it touches nothing but atomics.
+// Items below are reached only from the Windows `imp` in this file (or from the
+// subsystem it belongs to). They are not dead in the codebase, only unreached
+// while the macOS side of this seam is unbuilt, and each will be wanted again
+// the moment it is -- so this is scoped to the file rather than being a
+// crate-wide allow, and comes off with the last stub here.
+#![cfg_attr(not(windows), allow(dead_code))]
+
 
 use std::cell::RefCell;
 use std::collections::HashMap;

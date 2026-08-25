@@ -8,6 +8,13 @@
 //! <arch>/<binary>`, and only the two innermost names differ — which is why the
 //! walk itself is shared and the platform seam is three small items:
 //! [`ARCH_DIR`], [`bundle_binary_name`] and [`accepts`].
+// Items below are reached only from the Windows `imp` in this file (or from the
+// subsystem it belongs to). They are not dead in the codebase, only unreached
+// while the macOS side of this seam is unbuilt, and each will be wanted again
+// the moment it is -- so this is scoped to the file rather than being a
+// crate-wide allow, and comes off with the last stub here.
+#![cfg_attr(not(windows), allow(dead_code))]
+
 
 use super::types::PluginFormat;
 use std::collections::HashSet;
@@ -260,6 +267,10 @@ mod tests {
         assert_eq!(discovery.skipped_other_arch, 0);
     }
 
+    /// Windows-only, and not merely for the path: the rule under test is that a
+    /// DLL with no VST export is ignored, and macOS has neither DLLs nor a VST2
+    /// arm in the walk for one to reach.
+    #[cfg(windows)]
     #[test]
     fn plain_dlls_are_not_candidates() {
         // System32 is full of DLLs, none of which export VSTPluginMain.

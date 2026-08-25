@@ -36,7 +36,11 @@ pub fn voice_names() -> Vec<String> {
 }
 
 /// One utterance for the speech worker.
+///
+/// The fields are unread until there is a worker to read them; the shape has to
+/// match the Windows one because `speaker` builds these regardless of platform.
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct SapiRequest {
     pub synth: SynthRequest,
     /// Name of the TTS source in the audio engine to feed.

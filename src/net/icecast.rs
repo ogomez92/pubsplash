@@ -665,9 +665,20 @@ mod tests {
         );
     }
 
-    /// A blip must surface in seconds. Time is paused, so this asserts the
-    /// timeout is wired up without actually waiting five seconds.
-    #[tokio::test(start_paused = true)]
+    /// A blip must surface in seconds. The clock is paused for the write, so
+    /// this asserts the timeout is wired up without actually waiting five
+    /// seconds.
+    ///
+    /// Paused *partway through*, not from the start, and that matters. With
+    /// `start_paused = true` tokio advances the clock the moment every task is
+    /// idle — and a task blocked on a real socket that has not yet been notified
+    /// counts as idle. So the handshake below would race the clock: sometimes
+    /// the server's `100 Continue` arrived first, sometimes `HANDSHAKE_TIMEOUT`
+    /// was auto-advanced past before it did, and the test failed in `connect`
+    /// having tested nothing. Real time until the connection is up, paused only
+    /// for the write that is meant to time out — where auto-advance is the
+    /// point, since nothing is being waited on but the timeout itself.
+    #[tokio::test]
     async fn write_timeout_fires_when_the_peer_stops_reading() {
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
@@ -691,6 +702,9 @@ mod tests {
             content_type: "audio/mpeg".into(),
         };
         let mut conn = IcecastConnection::connect(&target).await.unwrap();
+
+        // Everything that had to happen on the wire has happened.
+        tokio::time::pause();
 
         // Fill the send buffer until a write cannot complete.
         let block = vec![0u8; 64 * 1024];

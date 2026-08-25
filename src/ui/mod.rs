@@ -789,7 +789,9 @@ pub fn key_of(event: &WindowEventData) -> Option<(i32, bool)> {
 pub struct Widgets {
     pub frame: Frame,
     /// The tab bar. Kept so [`panes`] can reach the current page and focus the
-    /// tabs themselves.
+    /// tabs themselves — which is why it reads as unused wherever `panes` has no
+    /// implementation yet.
+    #[cfg_attr(not(windows), allow(dead_code))]
     pub notebook: Notebook,
     pub overview: ListBox,
     pub stream_button: Button,
@@ -3697,9 +3699,18 @@ mod recording_failure_tests {
     use std::io::ErrorKind;
     use std::path::PathBuf;
 
+    /// The folder the message must name, and the file it must not.
+    ///
+    /// Built from components rather than a literal path, because a backslash is
+    /// not a separator on both platforms — as one string, `h:\shows\...` has no
+    /// parent at all on Unix and every assertion below would pass vacuously.
+    fn folder() -> PathBuf {
+        PathBuf::from("shows-that-are-not-there")
+    }
+
     fn failure(kind: Option<ErrorKind>) -> RecordingStartFailure {
         RecordingStartFailure {
-            path: PathBuf::from(r"h:\shows\recording_2026-08-03.mp3"),
+            path: folder().join("recording_2026-08-03.mp3"),
             kind,
         }
     }
@@ -3709,7 +3720,7 @@ mod recording_failure_tests {
     #[test]
     fn a_missing_folder_is_named_along_with_where_to_change_it() {
         let text = recording_failure_message(&failure(Some(ErrorKind::NotFound)), "detail", false);
-        assert!(text.contains(r"h:\shows"), "{text}");
+        assert!(text.contains(&folder().display().to_string()), "{text}");
         assert!(!text.contains("recording_2026-08-03.mp3"), "{text}");
         assert!(text.contains("does not exist"), "{text}");
         assert!(text.contains("Preferences"), "{text}");
@@ -3729,7 +3740,7 @@ mod recording_failure_tests {
     fn an_encoder_failure_does_not_blame_the_folder() {
         let text = recording_failure_message(&failure(None), "detail", false);
         assert!(text.contains("encoder"), "{text}");
-        assert!(!text.contains(r"h:\shows"), "{text}");
+        assert!(!text.contains(&folder().display().to_string()), "{text}");
     }
 
     /// A modal arriving mid-broadcast reads as the stream having died unless it
@@ -3798,7 +3809,10 @@ mod snapshot_key_tests {
     }
 }
 
-#[cfg(test)]
+/// `NameOnlyAccessible` is a `wxAccessible`, which is wxMSW-only — see
+/// [`set_accessible_name`], which reaches VoiceOver by a different API entirely.
+/// There is nothing here to test on another platform.
+#[cfg(all(test, windows))]
 mod accessible_tests {
     use super::NameOnlyAccessible;
     use wxdragon::accessible::AccessibleImpl;

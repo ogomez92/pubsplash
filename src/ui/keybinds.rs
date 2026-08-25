@@ -9,7 +9,7 @@
 //! wants raw keys (the chat input, a mixer slider) eats them first. Worse, a
 //! **global** binding is not something wx can express at all.
 //!
-//! So both capture and dispatch ride the app-wide `WH_KEYBOARD_LL` hook that
+//! So both capture and dispatch ride the app-wide low-level keyboard hook that
 //! [`super::help`] already installs for F1 — that file is explicit that it is
 //! "the one hook installed for the whole life of the app", and it already hosts
 //! the F6 arm for [`super::panes`]. `help::keyboard_hook` calls into here in a
@@ -32,16 +32,41 @@
 //! by [`reload`] on every keybinds edit, parks the matched action in [`PENDING`],
 //! rings the idle doorbell, and returns; [`pump`] does the real work on the UI
 //! thread from the 100 ms pump. Same shape as `panes.rs`.
+//!
+//! ## Chords are Windows virtual-key codes
+//!
+//! Not wx key codes, and not scan codes — the settings file stores raw VK
+//! numbers, and has since before there was a second platform. That is why the
+//! codes below are spelled as literals rather than imported from the `windows`
+//! crate: it makes the format explicit instead of implicit, and it means the
+//! matching logic compiles anywhere.
+//!
+//! It also means macOS needs a decision rather than an implementation. A
+//! `CGEventTap` reports a `CGKeyCode`, which is a *positional* code with no
+//! relation to a VK number, so either the model becomes a portable key enum with
+//! a migration for existing settings, or the macOS hook translates into VK
+//! space. Neither is written yet; see `imp` below.
+// Items below are reached only from the Windows `imp` in this file (or from the
+// subsystem it belongs to). They are not dead in the codebase, only unreached
+// while the macOS side of this seam is unbuilt, and each will be wanted again
+// the moment it is -- so this is scoped to the file rather than being a
+// crate-wide allow, and comes off with the last stub here.
+#![cfg_attr(not(windows), allow(dead_code))]
+
 
 use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Mutex, OnceLock};
 
-use windows::Win32::Foundation::HWND;
-use windows::Win32::UI::Input::KeyboardAndMouse::{
-    GetAsyncKeyState, VK_CONTROL, VK_LWIN, VK_MENU, VK_RWIN, VK_SHIFT,
-};
-use windows::Win32::UI::WindowsAndMessaging::{GUITHREADINFO, GetClassNameW, GetGUIThreadInfo};
+/// Two questions only the OS can answer, and only it can: the hook runs outside
+/// the wx event loop with no `App` to borrow.
+///
+/// - **modifiers** is the *physical* state, not this thread's queued state.
+/// - **focus_is_text_entry** keeps a binding on a bare character key (`K`, `7`)
+///   from making that key untypable in the chat box — the hook swallows it
+///   before the control ever sees it. Anything with a modifier, and every
+///   non-character key, still fires.
+use imp::{focus_is_text_entry, modifiers};
 
 use super::App;
 use super::home::{self, StripTarget};
@@ -116,24 +141,24 @@ pub fn take_captured() -> Option<Chord> {
         .then(|| unpack(CAPTURED.load(Ordering::Relaxed)))
 }
 
-/// Physical modifier state. `GetKeyState` would report this thread's *queued*
-/// state, which is not what the user is holding right now — `help.rs` makes the
-/// same point about its SHIFT read.
-fn modifiers() -> (bool, bool, bool) {
-    let down = |vk: u16| unsafe { GetAsyncKeyState(vk as i32) } as u16 & 0x8000 != 0;
-    (down(VK_CONTROL.0), down(VK_MENU.0), down(VK_SHIFT.0))
-}
-
+/// The virtual-key codes this module names. See the module header for why they
+/// are literals: a chord in the settings file is a raw VK number on both
+/// platforms.
 const VK_TAB: u32 = 0x09;
 const VK_ESCAPE: u32 = 0x1B;
 const VK_DELETE: u32 = 0x2E;
+const VK_SHIFT: u32 = 0x10;
+const VK_CONTROL: u32 = 0x11;
+/// ALT.
+const VK_MENU: u32 = 0x12;
+const VK_LWIN: u32 = 0x5B;
+const VK_RWIN: u32 = 0x5C;
 
 fn is_modifier_key(vk: u32) -> bool {
-    matches!(
-        vk as u16,
-        x if x == VK_SHIFT.0 || x == VK_CONTROL.0 || x == VK_MENU.0
-            || x == VK_LWIN.0 || x == VK_RWIN.0
-    ) || matches!(vk, 0xA0..=0xA5)
+    matches!(vk, VK_SHIFT | VK_CONTROL | VK_MENU | VK_LWIN | VK_RWIN)
+        // The left/right-specific codes, which a hook reports in place of the
+        // generic ones on some keyboards.
+        || matches!(vk, 0xA0..=0xA5)
 }
 
 /// Called from the hook before anything else. Returns `true` to swallow the key.
@@ -179,36 +204,6 @@ pub fn capture_key(vk: u32) -> bool {
 }
 
 // --- dispatch --------------------------------------------------------------
-
-/// Whether the focused control is a text entry.
-///
-/// A binding on a bare character key (`K`, `7`) would otherwise make that key
-/// untypable in the chat box — the hook swallows it before the control sees it.
-/// Anything with a modifier, and every non-character key, still fires.
-fn focus_is_text_entry() -> bool {
-    let mut info = GUITHREADINFO {
-        cbSize: std::mem::size_of::<GUITHREADINFO>() as u32,
-        ..Default::default()
-    };
-    let focus = unsafe {
-        if GetGUIThreadInfo(0, &mut info).is_ok() {
-            info.hwndFocus
-        } else {
-            HWND::default()
-        }
-    };
-    if focus.0.is_null() {
-        return false;
-    }
-    let mut buffer = [0u16; 64];
-    let written = unsafe { GetClassNameW(focus, &mut buffer) };
-    if written <= 0 {
-        return false;
-    }
-    let class = String::from_utf16_lossy(&buffer[..written as usize]);
-    let class = class.to_ascii_lowercase();
-    class == "edit" || class.starts_with("richedit") || class == "combobox"
-}
 
 /// Called from the hook. Returns `true` when a binding claimed the key, in which
 /// case the caller swallows it and wakes the idle pump.
@@ -395,9 +390,78 @@ mod tests {
     fn the_modifier_keys_are_never_chords_of_their_own() {
         assert!(is_modifier_key(0xA0)); // left shift
         assert!(is_modifier_key(0xA5)); // right alt
-        assert!(is_modifier_key(VK_CONTROL.0 as u32));
-        assert!(is_modifier_key(VK_LWIN.0 as u32));
+        assert!(is_modifier_key(VK_CONTROL));
+        assert!(is_modifier_key(VK_LWIN));
         assert!(!is_modifier_key(0x78)); // F9
         assert!(!is_modifier_key(b'K' as u32));
+    }
+}
+
+/// `GetAsyncKeyState` for the modifiers, and the focused window's class name for
+/// the text-entry test.
+#[cfg(windows)]
+mod imp {
+    use windows::Win32::Foundation::HWND;
+    use windows::Win32::UI::Input::KeyboardAndMouse::{
+        GetAsyncKeyState, VK_CONTROL, VK_MENU, VK_SHIFT,
+    };
+    use windows::Win32::UI::WindowsAndMessaging::{GUITHREADINFO, GetClassNameW, GetGUIThreadInfo};
+
+    /// Physical modifier state. `GetKeyState` would report this thread's
+    /// *queued* state, which is not what the user is holding right now —
+    /// `help.rs` makes the same point about its SHIFT read.
+    pub fn modifiers() -> (bool, bool, bool) {
+        let down = |vk: u16| unsafe { GetAsyncKeyState(vk as i32) } as u16 & 0x8000 != 0;
+        (down(VK_CONTROL.0), down(VK_MENU.0), down(VK_SHIFT.0))
+    }
+
+    pub fn focus_is_text_entry() -> bool {
+        let mut info = GUITHREADINFO {
+            cbSize: std::mem::size_of::<GUITHREADINFO>() as u32,
+            ..Default::default()
+        };
+        let focus = unsafe {
+            if GetGUIThreadInfo(0, &mut info).is_ok() {
+                info.hwndFocus
+            } else {
+                HWND::default()
+            }
+        };
+        if focus.0.is_null() {
+            return false;
+        }
+        let mut buffer = [0u16; 64];
+        let written = unsafe { GetClassNameW(focus, &mut buffer) };
+        if written <= 0 {
+            return false;
+        }
+        let class = String::from_utf16_lossy(&buffer[..written as usize]);
+        let class = class.to_ascii_lowercase();
+        class == "edit" || class.starts_with("richedit") || class == "combobox"
+    }
+}
+
+/// **Neither question is answered on macOS yet**, and both are downstream of the
+/// hook that would ask them — `help::install_hook` is a no-op there, so nothing
+/// in this file is reached at runtime.
+///
+/// When the hook is built, these are the two pieces that go with it.
+/// `modifiers` is `CGEventSource.flagsState` or `NSEvent.modifierFlags`, either
+/// of which reports the physical state the same way `GetAsyncKeyState` does.
+/// `focus_is_text_entry` has no class-name equivalent — the honest form is to
+/// ask the accessibility API for the focused element's role and compare against
+/// `AXTextField`/`AXTextArea`/`AXComboBox`, which needs the same Accessibility
+/// permission the tap does and so costs nothing extra.
+///
+/// The answers below are the safe ones for a hook that is not running:
+/// no modifiers held, and no text entry focused.
+#[cfg(target_os = "macos")]
+mod imp {
+    pub fn modifiers() -> (bool, bool, bool) {
+        (false, false, false)
+    }
+
+    pub fn focus_is_text_entry() -> bool {
+        false
     }
 }

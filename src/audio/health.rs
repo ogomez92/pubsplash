@@ -25,6 +25,13 @@
 //! Nothing in here is on the mixing hot path except integer counter arithmetic.
 //! The formatting happens once every thirty seconds, from the engine loop, which
 //! already logs and allocates on that thread.
+// Items below are reached only from the Windows `imp` in this file (or from the
+// subsystem it belongs to). They are not dead in the codebase, only unreached
+// while the macOS side of this seam is unbuilt, and each will be wanted again
+// the moment it is -- so this is scoped to the file rather than being a
+// crate-wide allow, and comes off with the last stub here.
+#![cfg_attr(not(windows), allow(dead_code))]
+
 
 use crate::audio::mixer::{CHANNELS, SAMPLE_RATE};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};

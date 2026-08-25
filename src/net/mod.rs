@@ -1209,9 +1209,11 @@ mod chat_feed_tests {
     /// The whole point of the feature: a source whose connection dies mid-send
     /// reopens it and carries on, rather than ending the broadcast.
     ///
-    /// Time is paused so the backoff ladder costs nothing; the sockets are real,
-    /// so the handshake, the drop and the second connect are the genuine ones.
-    #[tokio::test(start_paused = true)]
+    /// Time is paused for the backoff ladder so it costs nothing; the sockets
+    /// are real, so the handshake, the drop and the second connect are the
+    /// genuine ones. See the `tokio::time::pause()` below for why it is not
+    /// paused from the start.
+    #[tokio::test]
     async fn sender_reconnects_after_the_server_drops_the_source() {
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
@@ -1263,6 +1265,15 @@ mod chat_feed_tests {
         };
         let first = IcecastConnection::connect(&target).await.unwrap();
 
+        // Paused only now, not from the start of the test. `start_paused = true`
+        // lets tokio advance the clock the moment every task is idle, and a task
+        // blocked on a real socket that has not yet been notified counts as
+        // idle -- so the handshake above raced the clock and `connect` sometimes
+        // returned a timeout instead of a connection. Real time while there is
+        // something on the wire to wait for; paused from here, where the only
+        // thing being skipped is the backoff ladder.
+        tokio::time::pause();
+
         let (event_tx, event_rx) = crossbeam_channel::unbounded();
         let (audio_tx, audio_rx) = tokio_mpsc::channel(200);
         let task = spawn_icecast_sender(target, first, audio_rx, EventSender(event_tx));
@@ -1312,7 +1323,7 @@ mod chat_feed_tests {
     /// A terminal rejection must end the broadcast at once rather than retry
     /// for four minutes: a revoked stream key or an expired stream row will
     /// answer exactly the same way every time.
-    #[tokio::test(start_paused = true)]
+    #[tokio::test]
     async fn a_terminal_rejection_ends_the_stream_without_retrying() {
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
@@ -1350,6 +1361,15 @@ mod chat_feed_tests {
             content_type: "audio/mpeg".into(),
         };
         let first = IcecastConnection::connect(&target).await.unwrap();
+
+        // Paused only now, not from the start of the test. `start_paused = true`
+        // lets tokio advance the clock the moment every task is idle, and a task
+        // blocked on a real socket that has not yet been notified counts as
+        // idle -- so the handshake above raced the clock and `connect` sometimes
+        // returned a timeout instead of a connection. Real time while there is
+        // something on the wire to wait for; paused from here, where the only
+        // thing being skipped is the backoff ladder.
+        tokio::time::pause();
         let (event_tx, event_rx) = crossbeam_channel::unbounded();
         let (audio_tx, audio_rx) = tokio_mpsc::channel(200);
         let task = spawn_icecast_sender(target, first, audio_rx, EventSender(event_tx));
@@ -1395,7 +1415,7 @@ mod chat_feed_tests {
     /// Sending it would open the broadcast seconds behind live and *stay* there:
     /// it lands in Icecast's burst buffer, which is exactly what the first
     /// listener is handed as their starting point.
-    #[tokio::test(start_paused = true)]
+    #[tokio::test]
     async fn the_first_connection_drops_the_backlog_encoded_before_it_existed() {
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
@@ -1427,6 +1447,15 @@ mod chat_feed_tests {
             content_type: "audio/mpeg".into(),
         };
         let first = IcecastConnection::connect(&target).await.unwrap();
+
+        // Paused only now, not from the start of the test. `start_paused = true`
+        // lets tokio advance the clock the moment every task is idle, and a task
+        // blocked on a real socket that has not yet been notified counts as
+        // idle -- so the handshake above raced the clock and `connect` sometimes
+        // returned a timeout instead of a connection. Real time while there is
+        // something on the wire to wait for; paused from here, where the only
+        // thing being skipped is the backoff ladder.
+        tokio::time::pause();
 
         let (event_tx, _event_rx) = crossbeam_channel::unbounded();
         let (audio_tx, audio_rx) = tokio_mpsc::channel(200);

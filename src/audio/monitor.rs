@@ -16,6 +16,13 @@
 //! buffer between them absorbs that difference. The engine drops samples when
 //! the ring is full and this thread writes silence when it runs dry — neither
 //! side ever blocks the other.
+// Items below are reached only from the Windows `imp` in this file (or from the
+// subsystem it belongs to). They are not dead in the codebase, only unreached
+// while the macOS side of this seam is unbuilt, and each will be wanted again
+// the moment it is -- so this is scoped to the file rather than being a
+// crate-wide allow, and comes off with the last stub here.
+#![cfg_attr(not(windows), allow(dead_code))]
+
 
 use crate::audio::device;
 use rtrb::Consumer;
