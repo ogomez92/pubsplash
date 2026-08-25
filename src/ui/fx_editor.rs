@@ -3,10 +3,17 @@
 //!
 //! A plugin editor is a raw child window that swallows Tab and most keys, so
 //! a screen-reader user who tabs into it can get stuck. The escape hatch is
-//! **F6**: while any editor frame is open, a low-level keyboard hook watches
-//! for F6 in one of our editor frames and refocuses that frame's toolbar
+//! **F6**: while any editor frame is open, a system-wide key watcher looks for
+//! F6 landing in one of our editor frames and refocuses that frame's toolbar
 //! (Close button). Everything else the plugin receives normally, and the
 //! toolbar's own buttons are ordinary Tab-reachable wx controls.
+//!
+//! The platform seam is that watcher and nothing else — [`install_hook`] and
+//! [`uninstall_hook_if_idle`] in `imp`. Everything else here is already
+//! portable, because the two other native things this file does turn out to
+//! have wx spellings: a window's native id is `WxWidget::get_handle` (an `HWND`
+//! on Windows, an `NSView*` on macOS, and only ever compared for equality
+//! here), and handing focus to the plugin's own view is `set_focus`.
 
 use super::App;
 use super::WXK_ESCAPE;
@@ -17,16 +24,12 @@ use std::sync::Mutex;
 use std::sync::atomic::{AtomicIsize, AtomicUsize, Ordering};
 use wxdragon::prelude::*;
 
-use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, WPARAM};
-use windows::Win32::UI::Input::KeyboardAndMouse::{SetFocus, VK_F6};
-use windows::Win32::UI::WindowsAndMessaging::{
-    CallNextHookEx, GA_ROOT, GetAncestor, GetForegroundWindow, HC_ACTION, HHOOK, KBDLLHOOKSTRUCT,
-    SetWindowsHookExW, UnhookWindowsHookEx, WH_KEYBOARD_LL, WM_KEYDOWN, WM_SYSKEYDOWN,
-};
+use imp::{install_hook, uninstall_hook_if_idle};
 
 /// The installed low-level keyboard hook (as isize; 0 = not installed).
 static HOOK: AtomicIsize = AtomicIsize::new(0);
-/// Root HWNDs of open editor frames (as usize).
+/// Native window ids of open editor frames — root `HWND`s on Windows,
+/// `NSWindow`-backed `NSView`s on macOS. Only ever compared for equality.
 static EDITOR_HWNDS: Mutex<Vec<usize>> = Mutex::new(Vec::new());
 /// A frame HWND the pump should refocus after F6 (0 = nothing pending).
 static ESCAPE_TO: AtomicUsize = AtomicUsize::new(0);
@@ -58,52 +61,88 @@ fn frame_size(w: i32, h: i32) -> Size {
     Size::new(host.width + 20, host.height + 70)
 }
 
-unsafe extern "system" fn keyboard_hook(code: i32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
-    if code == HC_ACTION as i32
-        && (wparam.0 as u32 == WM_KEYDOWN || wparam.0 as u32 == WM_SYSKEYDOWN)
-    {
-        let kb = unsafe { &*(lparam.0 as *const KBDLLHOOKSTRUCT) };
-        if kb.vkCode == VK_F6.0 as u32 {
-            unsafe {
-                let root = GetAncestor(GetForegroundWindow(), GA_ROOT);
-                if let Ok(hwnds) = EDITOR_HWNDS.lock()
-                    && hwnds.contains(&(root.0 as usize))
-                {
-                    ESCAPE_TO.store(root.0 as usize, Ordering::Relaxed);
-                    // Swallow F6 so the plugin never sees it.
-                    return LRESULT(1);
+/// A low-level keyboard hook, which is also what `ui::help` uses and for the
+/// same reason: `IsDialogMessage` eats F6 during pre-processing, so no wx
+/// handler ever sees it.
+#[cfg(windows)]
+mod imp {
+    use super::{EDITOR_HWNDS, ESCAPE_TO, HOOK};
+    use std::sync::atomic::Ordering;
+    use windows::Win32::Foundation::{LPARAM, LRESULT, WPARAM};
+    use windows::Win32::UI::Input::KeyboardAndMouse::VK_F6;
+    use windows::Win32::UI::WindowsAndMessaging::{
+        CallNextHookEx, GA_ROOT, GetAncestor, GetForegroundWindow, HC_ACTION, HHOOK,
+        KBDLLHOOKSTRUCT, SetWindowsHookExW, UnhookWindowsHookEx, WH_KEYBOARD_LL, WM_KEYDOWN,
+        WM_SYSKEYDOWN,
+    };
+
+    unsafe extern "system" fn keyboard_hook(code: i32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
+        if code == HC_ACTION as i32
+            && (wparam.0 as u32 == WM_KEYDOWN || wparam.0 as u32 == WM_SYSKEYDOWN)
+        {
+            let kb = unsafe { &*(lparam.0 as *const KBDLLHOOKSTRUCT) };
+            if kb.vkCode == VK_F6.0 as u32 {
+                unsafe {
+                    let root = GetAncestor(GetForegroundWindow(), GA_ROOT);
+                    if let Ok(hwnds) = EDITOR_HWNDS.lock()
+                        && hwnds.contains(&(root.0 as usize))
+                    {
+                        ESCAPE_TO.store(root.0 as usize, Ordering::Relaxed);
+                        // Swallow F6 so the plugin never sees it.
+                        return LRESULT(1);
+                    }
+                }
+            }
+        }
+        unsafe { CallNextHookEx(None, code, wparam, lparam) }
+    }
+
+    pub fn install_hook() {
+        if HOOK.load(Ordering::Relaxed) != 0 {
+            return;
+        }
+        unsafe {
+            if let Ok(hook) = SetWindowsHookExW(WH_KEYBOARD_LL, Some(keyboard_hook), None, 0) {
+                HOOK.store(hook.0 as isize, Ordering::Relaxed);
+            }
+        }
+    }
+
+    pub fn uninstall_hook_if_idle() {
+        let empty = EDITOR_HWNDS.lock().map(|h| h.is_empty()).unwrap_or(true);
+        if empty {
+            let raw = HOOK.swap(0, Ordering::Relaxed);
+            if raw != 0 {
+                unsafe {
+                    let _ = UnhookWindowsHookEx(HHOOK(raw as *mut _));
                 }
             }
         }
     }
-    unsafe { CallNextHookEx(None, code, wparam, lparam) }
 }
 
-fn install_hook() {
-    if HOOK.load(Ordering::Relaxed) != 0 {
-        return;
-    }
-    unsafe {
-        if let Ok(hook) = SetWindowsHookExW(WH_KEYBOARD_LL, Some(keyboard_hook), None, 0) {
-            HOOK.store(hook.0 as isize, Ordering::Relaxed);
-        }
-    }
+/// **The F6 escape hatch is not built on macOS yet**, and it is the one thing
+/// in this file that has no wx spelling.
+///
+/// The equivalent is a `CGEventTap` or a global `NSEvent` monitor, both of which
+/// need the Accessibility permission in System Settings — an ordinary onboarding
+/// step, and the same permission `ui::keybinds` needs for user keybindings, so
+/// the two are one piece of work and should be built together rather than each
+/// asking separately.
+///
+/// Until then a plugin editor can still be left: the toolbar is reached with
+/// the VoiceOver cursor rather than by Tab, and Escape on any toolbar button
+/// closes the frame. Losing F6 is a degraded escape, not a trap.
+#[cfg(target_os = "macos")]
+mod imp {
+    pub fn install_hook() {}
+
+    pub fn uninstall_hook_if_idle() {}
 }
 
-fn uninstall_hook_if_idle() {
-    let empty = EDITOR_HWNDS.lock().map(|h| h.is_empty()).unwrap_or(true);
-    if empty {
-        let raw = HOOK.swap(0, Ordering::Relaxed);
-        if raw != 0 {
-            unsafe {
-                let _ = UnhookWindowsHookEx(HHOOK(raw as *mut _));
-            }
-        }
-    }
-}
-
-fn hwnd_of(widget: &dyn WxWidget) -> HWND {
-    HWND(widget.get_handle())
+/// A window's native id, used only as an identity to match an editor frame by.
+fn hwnd_of(widget: &dyn WxWidget) -> usize {
+    widget.get_handle() as usize
 }
 
 /// Opens (or re-focuses) the native editor for a plugin slot.
@@ -128,9 +167,7 @@ pub fn open_editor(
         for e in app.open_editors.borrow().iter() {
             if e.effect_id == effect_id {
                 e.frame.show(true);
-                unsafe {
-                    let _ = SetFocus(Some(hwnd_of(&e.close_button)));
-                }
+                e.close_button.set_focus();
             }
         }
         return;
@@ -216,7 +253,7 @@ pub fn open_editor(
 
     // Register for the F6 hook.
     if let Ok(mut hwnds) = EDITOR_HWNDS.lock() {
-        hwnds.push(hwnd_of(&frame).0 as usize);
+        hwnds.push(hwnd_of(&frame));
     }
     install_hook();
 
@@ -236,8 +273,11 @@ pub fn open_editor(
         });
     }
     {
-        focus_plugin.clone().on_click(move |_| unsafe {
-            let _ = SetFocus(Some(HWND(host.get_handle())));
+        // wx's own call rather than the platform's: `SetFocus`/`makeFirstResponder`
+        // is exactly what this does, and the plugin's view is a child of `host`,
+        // so focusing the host is what hands the keyboard to the plugin.
+        focus_plugin.clone().on_click(move |_| {
+            host.set_focus();
         });
     }
     {
@@ -296,7 +336,7 @@ fn close_editor(app: &Rc<App>, effect_id: u64) {
     editor.plugin.editor_close();
     fx::snapshot_slot(app, editor.target, editor.slot);
     if let Ok(mut hwnds) = EDITOR_HWNDS.lock() {
-        hwnds.retain(|&h| h != hwnd_of(&editor.frame).0 as usize);
+        hwnds.retain(|&h| h != hwnd_of(&editor.frame));
     }
     uninstall_hook_if_idle();
     editor.frame.destroy();
@@ -381,13 +421,8 @@ pub fn pump(app: &Rc<App>) {
     let escape = ESCAPE_TO.swap(0, Ordering::Relaxed);
     if escape != 0 {
         let editors = app.open_editors.borrow();
-        if let Some(editor) = editors
-            .iter()
-            .find(|e| hwnd_of(&e.frame).0 as usize == escape)
-        {
-            unsafe {
-                let _ = SetFocus(Some(hwnd_of(&editor.close_button)));
-            }
+        if let Some(editor) = editors.iter().find(|e| hwnd_of(&e.frame) == escape) {
+            editor.close_button.set_focus();
         }
     }
 }

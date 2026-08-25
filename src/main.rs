@@ -9,6 +9,7 @@ mod fx;
 mod instance;
 mod json_store;
 mod keybind;
+mod localtime;
 mod logging;
 mod mastodon;
 mod media;

@@ -18,13 +18,11 @@
 //! side ever blocks the other.
 
 use crate::audio::device;
-use crate::audio::mixer::{CHANNELS, SAMPLE_RATE};
 use rtrb::Consumer;
 use std::collections::VecDeque;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
-use wasapi::{Direction, SampleType, StreamMode, WaveFormat};
 
 /// How long to wait before the next attempt to open the playback device, after
 /// `attempt` consecutive failures. Same shape as the capture backoff: quick at
@@ -85,67 +83,104 @@ pub fn spawn(consumer: Consumer<f32>, stop: Arc<AtomicBool>) -> std::thread::Joi
         .expect("spawning monitor thread")
 }
 
-/// Opens the default playback device and feeds it until `stop` is set.
+/// Opens Pubsplash's chosen playback device and feeds it until `stop` is set.
+///
+/// The platform seam of the monitoring path. The supervisor above it — the
+/// backoff, the stop flag, the "only the first failure is news" logging — is
+/// portable and stays where it is.
 fn run(consumer: &mut Consumer<f32>, stop: &AtomicBool) -> Result<(), String> {
-    let format = WaveFormat::new(
-        32,
-        32,
-        &SampleType::Float,
-        SAMPLE_RATE as usize,
-        CHANNELS,
-        None,
-    );
+    imp::run(consumer, stop)
+}
 
-    let mut client = crate::audio::render::output_render_device()?
-        .get_iaudioclient()
-        .map_err(|e| format!("activating the playback device's audio client: {e}"))?;
+#[cfg(windows)]
+mod imp {
+    use super::fill;
+    use crate::audio::mixer::{CHANNELS, SAMPLE_RATE};
+    use rtrb::Consumer;
+    use std::collections::VecDeque;
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use wasapi::{Direction, SampleType, StreamMode, WaveFormat};
 
-    let mode = StreamMode::EventsShared {
-        autoconvert: true,
-        buffer_duration_hns: 0,
-    };
-    client
-        .initialize_client(&format, &Direction::Render, &mode)
-        .map_err(|e| format!("initializing the playback stream: {e}"))?;
+    pub fn run(consumer: &mut Consumer<f32>, stop: &AtomicBool) -> Result<(), String> {
+        let format = WaveFormat::new(
+            32,
+            32,
+            &SampleType::Float,
+            SAMPLE_RATE as usize,
+            CHANNELS,
+            None,
+        );
 
-    let event = client
-        .set_get_eventhandle()
-        .map_err(|e| format!("setting up the playback event: {e}"))?;
-    let render = client
-        .get_audiorenderclient()
-        .map_err(|e| format!("getting the render client: {e}"))?;
-    let blockalign = format.get_blockalign() as usize;
+        let mut client = crate::audio::render::output_render_device()?
+            .get_iaudioclient()
+            .map_err(|e| format!("activating the playback device's audio client: {e}"))?;
 
-    client
-        .start_stream()
-        .map_err(|e| format!("starting the playback stream: {e}"))?;
-    log::debug!("Monitoring output is running");
+        let mode = StreamMode::EventsShared {
+            autoconvert: true,
+            buffer_duration_hns: 0,
+        };
+        client
+            .initialize_client(&format, &Direction::Render, &mode)
+            .map_err(|e| format!("initializing the playback stream: {e}"))?;
 
-    let mut bytes: VecDeque<u8> = VecDeque::new();
-    let mut guard = crate::audio::capture::StallGuard::default();
-    while !stop.load(Ordering::Relaxed) {
-        let frames = client
-            .get_available_space_in_frames()
-            .map_err(|e| format!("reading the available playback space: {e}"))?
-            as usize;
-        if frames > 0 {
-            bytes.clear();
-            bytes.reserve(frames * blockalign);
-            fill(&mut bytes, consumer, frames * CHANNELS);
-            render
-                .write_to_device_from_deque(frames, &mut bytes, None)
-                .map_err(|e| format!("writing to the playback device: {e}"))?;
+        let event = client
+            .set_get_eventhandle()
+            .map_err(|e| format!("setting up the playback event: {e}"))?;
+        let render = client
+            .get_audiorenderclient()
+            .map_err(|e| format!("getting the render client: {e}"))?;
+        let blockalign = format.get_blockalign() as usize;
+
+        client
+            .start_stream()
+            .map_err(|e| format!("starting the playback stream: {e}"))?;
+        log::debug!("Monitoring output is running");
+
+        let mut bytes: VecDeque<u8> = VecDeque::new();
+        let mut guard = crate::audio::capture::StallGuard::default();
+        while !stop.load(Ordering::Relaxed) {
+            let frames = client
+                .get_available_space_in_frames()
+                .map_err(|e| format!("reading the available playback space: {e}"))?
+                as usize;
+            if frames > 0 {
+                bytes.clear();
+                bytes.reserve(frames * blockalign);
+                fill(&mut bytes, consumer, frames * CHANNELS);
+                render
+                    .write_to_device_from_deque(frames, &mut bytes, None)
+                    .map_err(|e| format!("writing to the playback device: {e}"))?;
+            }
+            // A timeout is normal when the device wants nothing yet, so the result
+            // is not an error on its own. It used to be discarded outright, which
+            // also discarded the case where the wait fails instantly and this loop
+            // spins; `StallGuard` tells the two apart.
+            guard.wait("playback", || {
+                event.wait_for_event(crate::audio::capture::WAIT_MS).is_ok()
+            })?;
         }
-        // A timeout is normal when the device wants nothing yet, so the result
-        // is not an error on its own. It used to be discarded outright, which
-        // also discarded the case where the wait fails instantly and this loop
-        // spins; `StallGuard` tells the two apart.
-        guard.wait("playback", || {
-            event.wait_for_event(crate::audio::capture::WAIT_MS).is_ok()
-        })?;
+        let _ = client.stop_stream();
+        Ok(())
     }
-    let _ = client.stop_stream();
-    Ok(())
+}
+
+/// Core Audio monitoring output. **Not built yet.**
+///
+/// The same output `AudioUnit` `render::play_samples_until` needs, driven from
+/// a render callback that pulls the ring instead of a fixed buffer — so the two
+/// are one piece of work, and `fill` below is already the callback's body.
+///
+/// Monitoring failing is logged and nothing more, by design: it is a
+/// convenience and nothing about it may disturb the stream. So until this
+/// exists, the app runs with a line in the log and no monitor.
+#[cfg(target_os = "macos")]
+mod imp {
+    use rtrb::Consumer;
+    use std::sync::atomic::AtomicBool;
+
+    pub fn run(_consumer: &mut Consumer<f32>, _stop: &AtomicBool) -> Result<(), String> {
+        Err("monitoring output is not implemented on macOS yet".to_string())
+    }
 }
 
 /// Appends `samples` samples' worth of little-endian f32 bytes to `bytes`,

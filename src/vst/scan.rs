@@ -325,22 +325,27 @@ fn run_helper(
     cancel: &AtomicBool,
     skip: &AtomicBool,
 ) -> HelperResult {
-    use std::os::windows::process::CommandExt;
-    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-
     let flag = match candidate.format {
         PluginFormat::Vst2 => "--vst2",
         PluginFormat::Vst3 => "--vst3",
     };
-    let mut child = match std::process::Command::new(helper)
+    let mut command = std::process::Command::new(helper);
+    command
         .arg(flag)
         .arg(&candidate.path)
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
-        .creation_flags(CREATE_NO_WINDOW)
-        .spawn()
+        .stderr(std::process::Stdio::piped());
+    // A scan runs the helper once per plugin, and a console window flashing up
+    // that many times is unusable. Windows needs to be told; on macOS a process
+    // with no bundle and no `NSApplication` shows nothing to begin with.
+    #[cfg(windows)]
     {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        command.creation_flags(CREATE_NO_WINDOW);
+    }
+    let mut child = match command.spawn() {
         Ok(child) => child,
         Err(e) => return HelperResult::Failed(format!("could not run scan helper: {e}")),
     };

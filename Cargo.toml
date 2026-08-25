@@ -38,11 +38,13 @@ path = "src/bin/soundpack.rs"
 name = "gen-help"
 path = "src/bin/gen_help.rs"
 
-[build-dependencies]
+# Embeds the Windows resource script; build.rs only calls it under
+# `CARGO_CFG_WINDOWS`, and it has nothing to do on any other platform.
+[target.'cfg(windows)'.build-dependencies]
 winresource = "0.1"
 
 [dependencies]
-wxdragon = "0.9"
+wxdragon = "0.9.20"
 
 log = "0.4"
 # `async` gives `WriteMode::Async`, which keeps log writes off the audio
@@ -87,7 +89,6 @@ sha2 = "0.10"
 hmac = "0.12"
 urlencoding = "2"
 
-wasapi = "0.23"
 mp3lame-encoder = "0.2"
 rtrb = "0.3"
 hound = "3.5"
@@ -102,8 +103,32 @@ sysinfo = { version = "0.36", default-features = false, features = ["system"] }
 # and the default feature set drags in bzip2, lzma, zstd, xz and an AES stack
 # none of which would ever be reached.
 zip = { version = "8", default-features = false, features = ["deflate-flate2-zlib-rs"] }
+# The local wall clock, and the only thing in the tree that knows a time zone.
+# It replaced three separate Win32 calls -- `GetLocalTime` in two places and
+# `TzSpecificLocalTimeToSystemTime` in `schedule` -- which were between them the
+# app's only reason to ask for the `Win32_System_Time` feature. Worth having on
+# Windows on its own account: jiff carries the real IANA rules, so a schedule
+# set across a DST transition lands on the right instant on either platform.
+jiff = "0.2"
+
+# Windows-only. `wasapi` is the capture and render stack, and the `windows`
+# crates are everything else Win32: DPAPI, the keyboard hook, MSAA/UIA, the
+# minidump writer, SAPI, and the process/registry queries. Everything that
+# needs them sits behind `crate::platform`, so no portable module names them.
+[target.'cfg(windows)'.dependencies]
+wasapi = "0.23"
 windows-core = "0.62.2"
 windows = { version = "0.62", features = ["Win32_Media_Speech", "Win32_Media_Audio", "Win32_System_Com", "Win32_System_Com_StructuredStorage", "Win32_Foundation", "Win32_System_Registry", "Win32_System_LibraryLoader", "Win32_Storage_FileSystem", "Win32_System_Diagnostics_Debug", "Win32_System_Kernel", "Win32_System_Memory", "Win32_System_Threading", "Win32_System_SystemInformation", "Win32_System_Time", "Win32_UI_WindowsAndMessaging", "Win32_UI_Input_KeyboardAndMouse", "Win32_UI_Accessibility", "Win32_UI_Controls", "Win32_Globalization", "Win32_UI_Shell", "Win32_System_Variant", "Win32_System_Ole", "Win32_Security_Cryptography"] }
+
+# macOS-only. The Keychain, which is where `secret::Secret` keeps the key it
+# encrypts stored credentials with -- the nearest equivalent to what DPAPI does
+# for the same type on Windows.
+[target.'cfg(target_os = "macos")'.dependencies]
+security-framework = "3"
+# `crash.rs` only: `sigaction`, `dladdr` and `backtrace`. Already in the tree
+# several times over transitively; named here so the crash handler's FFI is
+# declared by the crate that owns those declarations rather than by hand.
+libc = "0.2"
 
 [dev-dependencies]
 # `test-util` gives `#[tokio::test(start_paused = true)]`, which lets the

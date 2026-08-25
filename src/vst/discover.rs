@@ -1,19 +1,33 @@
 //! Walks the configured plugin folders and produces the list of scan
-//! candidates: VST2 DLLs that really export a VST entry point, single-file
-//! VST3 plugins, and VST3 bundle folders. Wrong-architecture binaries are
-//! counted and skipped; DLLs without a VST export are silently ignored.
+//! candidates: single-file VST3 plugins, VST3 bundle folders, and — on Windows,
+//! which is the only platform Pubsplash hosts the format on — VST2 DLLs that
+//! really export a VST entry point. Wrong-architecture binaries are counted and
+//! skipped; DLLs without a VST export are silently ignored.
+//!
+//! A VST3 bundle has the same shape on both platforms, `Name.vst3/Contents/
+//! <arch>/<binary>`, and only the two innermost names differ — which is why the
+//! walk itself is shared and the platform seam is three small items:
+//! [`ARCH_DIR`], [`bundle_binary_name`] and [`accepts`].
 
-use super::pe;
 use super::types::PluginFormat;
 use std::collections::HashSet;
+use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 
-/// Architecture folder inside a VST3 bundle (`Name.vst3\Contents\<arch>\`).
-#[cfg(target_arch = "aarch64")]
+/// Architecture folder inside a VST3 bundle.
+///
+/// Windows names one folder per architecture, so the wrong-arch case is
+/// visible by inspection. macOS names a single `MacOS` folder holding a
+/// universal binary, so there is nothing to compare and nothing to count as
+/// skipped — a genuinely single-architecture plugin fails at load instead,
+/// where the scan helper reports it like any other load failure.
+#[cfg(all(windows, target_arch = "aarch64"))]
 const ARCH_DIR: &str = "arm64-win";
-#[cfg(not(target_arch = "aarch64"))]
+#[cfg(all(windows, not(target_arch = "aarch64")))]
 const ARCH_DIR: &str = "x86_64-win";
+#[cfg(target_os = "macos")]
+const ARCH_DIR: &str = "MacOS";
 
 const MAX_DEPTH: u32 = 8;
 
@@ -76,7 +90,7 @@ fn walk(
             }
         } else if has_extension(&path, "vst3") {
             file_candidate(&path, PluginFormat::Vst3, None, discovery, seen);
-        } else if has_extension(&path, "dll") {
+        } else if cfg!(windows) && has_extension(&path, "dll") {
             file_candidate(&path, PluginFormat::Vst2, None, discovery, seen);
         }
     }
@@ -94,12 +108,12 @@ fn display_of(path: &Path) -> String {
         .unwrap_or_else(|| path.to_string_lossy().to_string())
 }
 
-/// A `Name.vst3` folder: the binary lives at `Contents\<arch>\Name.vst3`.
+/// A `Name.vst3` folder: the binary lives at `Contents/<arch>/<binary>`.
 fn bundle_candidate(bundle: &Path, discovery: &mut Discovery, seen: &mut HashSet<String>) {
-    let Some(file_name) = bundle.file_name() else {
+    let Some(file_name) = bundle_binary_name(bundle) else {
         return;
     };
-    let binary = bundle.join("Contents").join(ARCH_DIR).join(file_name);
+    let binary = bundle.join("Contents").join(ARCH_DIR).join(&file_name);
     if binary.is_file() {
         file_candidate(
             &binary,
@@ -124,7 +138,7 @@ fn bundle_candidate(bundle: &Path, discovery: &mut Discovery, seen: &mut HashSet
                 .file_name()
                 .and_then(|n| n.to_str())
                 .is_some_and(|n| n.ends_with("-win"))
-            && dir.join(file_name).is_file()
+            && dir.join(&file_name).is_file()
         {
             discovery.skipped_other_arch += 1;
             return;
@@ -142,11 +156,66 @@ fn file_candidate(
     if !seen.insert(path.to_string_lossy().to_lowercase()) {
         return;
     }
-    let info = match pe::inspect(path) {
+    match accepts(path, format) {
+        Accepted::Yes => {}
+        // Just some file living in a plugin folder; not a plugin at all.
+        Accepted::No => return,
+        Accepted::OtherArchitecture => {
+            discovery.skipped_other_arch += 1;
+            return;
+        }
+    }
+    discovery.candidates.push(Candidate {
+        format,
+        path: path.to_path_buf(),
+        display: display_of(bundle.as_deref().unwrap_or(path)),
+        bundle,
+    });
+}
+
+/// What [`accepts`] decided about a file.
+enum Accepted {
+    Yes,
+    No,
+    OtherArchitecture,
+}
+
+/// The file name of the binary inside a `Name.vst3` bundle.
+///
+/// Windows repeats the bundle's own name, extension and all
+/// (`Name.vst3/Contents/x86_64-win/Name.vst3`); macOS drops the extension, as
+/// every Mac bundle does (`Name.vst3/Contents/MacOS/Name`).
+#[cfg(windows)]
+fn bundle_binary_name(bundle: &Path) -> Option<OsString> {
+    bundle.file_name().map(ToOwned::to_owned)
+}
+
+#[cfg(target_os = "macos")]
+fn bundle_binary_name(bundle: &Path) -> Option<OsString> {
+    bundle.file_stem().map(ToOwned::to_owned)
+}
+
+/// Whether a file is really a plugin of `format` this build can load.
+///
+/// On Windows this is a PE header read, and it is doing two jobs: plugin
+/// folders are full of ordinary support DLLs, so the export table is what tells
+/// a plugin from a dependency, and a 32-bit binary has to be counted and skipped
+/// rather than handed to a loader that will only fail.
+///
+/// On macOS neither job arises. Every candidate reaching here came from a
+/// `.vst3` bundle or a `.vst3` file, so it is a plugin by construction and there
+/// are no stray libraries to filter out; and the binary in `Contents/MacOS` is
+/// universal by convention, with the rare single-architecture one failing at
+/// load where the scan helper already reports load failures properly. Reading a
+/// Mach-O header to pre-empt that would be a parser to maintain for a message
+/// the next step already prints.
+#[cfg(windows)]
+fn accepts(path: &Path, format: PluginFormat) -> Accepted {
+    let info = match super::pe::inspect(path) {
         Ok(info) => info,
         Err(e) => {
             log::debug!("Ignoring {}: {e}", path.display());
-            return;
+            return Accepted::No;
         }
     };
     let required: &[&str] = match format {
@@ -155,19 +224,22 @@ fn file_candidate(
         PluginFormat::Vst3 => &["GetPluginFactory"],
     };
     if !info.exports_any(required) {
-        // Just some DLL living in a plugin folder; not a plugin at all.
-        return;
+        return Accepted::No;
     }
-    if info.machine != pe::native_machine() {
-        discovery.skipped_other_arch += 1;
-        return;
+    if info.machine != super::pe::native_machine() {
+        return Accepted::OtherArchitecture;
     }
-    discovery.candidates.push(Candidate {
-        format,
-        path: path.to_path_buf(),
-        display: display_of(bundle.as_deref().unwrap_or(path)),
-        bundle,
-    });
+    Accepted::Yes
+}
+
+#[cfg(target_os = "macos")]
+fn accepts(path: &Path, format: PluginFormat) -> Accepted {
+    match format {
+        // The walk never offers one, and the host could not load it anyway.
+        PluginFormat::Vst2 => Accepted::No,
+        PluginFormat::Vst3 if path.is_file() => Accepted::Yes,
+        PluginFormat::Vst3 => Accepted::No,
+    }
 }
 
 #[cfg(test)]

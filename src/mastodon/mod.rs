@@ -297,13 +297,8 @@ pub fn time_of_day(hour: u32) -> &'static str {
 }
 
 /// The local hour, 0-23.
-///
-/// `GetLocalTime` rather than a date crate: the tree has neither `chrono` nor
-/// `time`, and this is the only wall-clock reading in the app.
 pub fn local_hour() -> u32 {
-    // SAFETY: `GetLocalTime` only writes the `SYSTEMTIME` it is handed.
-    let now = unsafe { windows::Win32::System::SystemInformation::GetLocalTime() };
-    u32::from(now.wHour)
+    u32::from(crate::localtime::now().hour)
 }
 
 /// Seconds since the Unix epoch, for the "last posted" stamp in the config.

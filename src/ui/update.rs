@@ -378,7 +378,10 @@ fn apply(app: &Rc<App>, plan: ApplyPlan) {
     }
     // DETACHED_PROCESS so it does not inherit this process's console, and a new
     // process group so nothing that signals Pubsplash's group on the way out can
-    // reach the one process that has to survive it.
+    // reach the one process that has to survive it. Windows-only because the
+    // helper is: macOS replaces a running bundle quite happily, so there is no
+    // separate process that has to outlive us there.
+    #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
         const CREATE_NEW_PROCESS_GROUP: u32 = 0x0000_0200;

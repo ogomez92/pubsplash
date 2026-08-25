@@ -22,14 +22,24 @@ mod mastodon_post;
 mod mastodon_prefs;
 mod mastodon_templates;
 mod media;
+// The three accessibility modules below are the ones the port measurement found
+// to be Windows problems rather than accessibility problems: on macOS the native
+// controls announce what these fight wx to achieve on MSW. Each `*_mac.rs`
+// records what its Windows twin exists for and why none of it is needed, and
+// keeps the same public surface so no call site is cfg'd.
+#[cfg_attr(not(windows), path = "native_acc_mac.rs")]
 mod native_acc;
 mod panes;
+#[cfg_attr(not(windows), path = "picker_acc_mac.rs")]
 mod picker_acc;
 mod preferences;
 mod scan_dialog;
 mod scenes;
 mod schedule_ui;
 mod sends;
+/// The slider key convention, shared by both platforms.
+mod slider_keys;
+#[cfg_attr(not(windows), path = "slider_uia_mac.rs")]
 mod slider_uia;
 mod sound_preview;
 mod stream_info_dialog;
@@ -49,9 +59,6 @@ use std::rc::Rc;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
-use windows::Win32::UI::Shell::ShellExecuteW;
-use windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
-use windows::core::{PCWSTR, w};
 use wxdragon::prelude::*;
 
 // wxWidgets key codes (not exported by wxdragon).
@@ -677,8 +684,15 @@ impl Default for Runtime {
 
 /// An MSAA accessible object that only supplies a name, leaving all other
 /// behavior to the control's default accessibility.
+///
+/// Windows-only, because `wxAccessible` is: wxdragon's whole `accessible`
+/// module is `wxUSE_ACCESSIBILITY`, which is wxMSW. macOS has no need of a
+/// stand-in — [`set_accessible_name`] reaches VoiceOver through
+/// `set_accessibility_label` instead.
+#[cfg(windows)]
 struct NameOnlyAccessible(String);
 
+#[cfg(windows)]
 impl wxdragon::accessible::AccessibleImpl for NameOnlyAccessible {
     /// Delegates the child count, which is what "name only" is supposed to mean
     /// for every method but this one.
@@ -720,15 +734,26 @@ impl wxdragon::accessible::AccessibleImpl for NameOnlyAccessible {
 /// Gives a control an explicit accessible name for screen readers. Needed
 /// where the visual label (or adjacent StaticText) is not announced.
 ///
-/// Not for list boxes: replacing wx's accessible leaves the control's MSAA
-/// object split across two unrelated COM object graphs, which made every list
-/// announce its selected row twice on focus. Lists use [`native_acc::install`],
-/// which takes wx out of the loop entirely.
+/// Not for list boxes: on Windows, replacing wx's accessible leaves the
+/// control's MSAA object split across two unrelated COM object graphs, which
+/// made every list announce its selected row twice on focus. Lists use
+/// [`native_acc::install`], which takes wx out of the loop entirely. On macOS a
+/// list cannot be named at all — see `native_acc_mac` — so the rule holds there
+/// too, for a different reason.
+///
+/// The two platforms reach it by different wx APIs. `set_accessible` installs a
+/// `wxAccessible`, which is **wxMSW-only** and silently does nothing anywhere
+/// else, so macOS goes through `set_accessibility_label` instead — the native
+/// VoiceOver label, which the port measurement confirmed names sliders, text
+/// fields and checkboxes correctly.
 pub fn set_accessible_name(widget: &dyn WxWidget, name: &str) {
+    #[cfg(windows)]
     widget.set_accessible(wxdragon::accessible::Accessible::new(
         widget,
         NameOnlyAccessible(name.to_string()),
     ));
+    #[cfg(not(windows))]
+    widget.set_accessibility_label(name);
 }
 
 /// Builds a labelled group box, handing back the sizer together with the
@@ -2043,12 +2068,7 @@ impl App {
 /// `recording_<yyyy-mm-dd>_<HH-MM-SS>.mp3`. The prefix is always the literal
 /// word "recording" so files sort together regardless of the stream title.
 fn recording_filename() -> String {
-    use windows::Win32::System::SystemInformation::GetLocalTime;
-    let t = unsafe { GetLocalTime() };
-    format!(
-        "recording_{:04}-{:02}-{:02}_{:02}-{:02}-{:02}.mp3",
-        t.wYear, t.wMonth, t.wDay, t.wHour, t.wMinute, t.wSecond
-    )
+    format!("recording_{}.mp3", crate::localtime::now().file_stamp())
 }
 
 /// Checks the Audio Pub site URL and returns it normalized (no trailing slash).
@@ -2929,10 +2949,12 @@ fn open_doc(name: &str, fallback_url: &str) -> Result<(), String> {
     shell_open(fallback_url).map_err(|e| format!("Could not open {fallback_url}: {e}"))
 }
 
-/// Opens the data directory — settings, logs, crash dumps — in Explorer.
+/// Opens the data directory — settings, logs, crash dumps — in the system file
+/// browser.
 ///
 /// Created first: on a first run that has never saved anything the directory may
-/// not exist yet, and `ShellExecuteW` on a missing path only reports a number.
+/// not exist yet, and neither platform's opener says anything useful about a
+/// path that is not there.
 fn open_data_dir() -> Result<(), String> {
     let dir = crate::config::config_dir();
     std::fs::create_dir_all(&dir)
@@ -2962,7 +2984,12 @@ fn doc_in<'a>(dirs: impl Iterator<Item = &'a Path>, name: &str) -> Option<PathBu
 ///
 /// `ShellExecuteW` rather than `cmd /C start`: the latter flashes a console
 /// window and treats `&` in a path as a command separator.
+#[cfg(windows)]
 fn shell_open(target: &str) -> Result<(), String> {
+    use windows::Win32::UI::Shell::ShellExecuteW;
+    use windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
+    use windows::core::{PCWSTR, w};
+
     let wide: Vec<u16> = target.encode_utf16().chain(std::iter::once(0)).collect();
     let result = unsafe {
         ShellExecuteW(
@@ -2980,6 +3007,31 @@ fn shell_open(target: &str) -> Result<(), String> {
         Ok(())
     } else {
         Err(format!("ShellExecute failed with code {code}"))
+    }
+}
+
+/// `/usr/bin/open`, which is the documented way to ask Launch Services to open
+/// a path or a URL with whatever the user has chosen for it.
+///
+/// The argument is passed as a real `argv` entry, never through a shell, so a
+/// path containing spaces, quotes or `&` needs no escaping and cannot be
+/// re-parsed as anything else. `--` stops a path beginning with `-` being read
+/// as an option.
+///
+/// `status()` rather than `spawn()`: `open` hands the request to Launch Services
+/// and exits immediately, so this does not wait for the application to appear,
+/// and a non-zero exit is the only way to learn that the target was unopenable.
+#[cfg(target_os = "macos")]
+fn shell_open(target: &str) -> Result<(), String> {
+    let status = std::process::Command::new("/usr/bin/open")
+        .arg("--")
+        .arg(target)
+        .status()
+        .map_err(|e| format!("could not run open: {e}"))?;
+    if status.success() {
+        Ok(())
+    } else {
+        Err(format!("open failed with {status}"))
     }
 }
 

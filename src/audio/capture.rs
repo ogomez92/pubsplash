@@ -3,13 +3,11 @@
 //! mixer drains.
 
 use crate::audio::device;
-use crate::audio::health::{CaptureStats, DeviceTimeline};
-use crate::audio::mixer::{CHANNELS, SAMPLE_RATE};
+use crate::audio::health::CaptureStats;
 use rtrb::Producer;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::time::{Duration, Instant};
-use wasapi::{AudioClient, Direction, SampleType, StreamMode, WaveFormat};
+use std::time::Duration;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CaptureKind {
@@ -204,112 +202,13 @@ pub fn spawn(
         .expect("spawning capture thread")
 }
 
-/// How a device is waited on between reads.
+/// Opens the device `kind` names and pumps it into `producer` until `stop` is
+/// set, calling `started` once it is actually delivering audio.
 ///
-/// Endpoint loopback (a Desktop Audio source pinned to one render device) does
-/// not get an event: `AUDCLNT_STREAMFLAGS_LOOPBACK` and
-/// `AUDCLNT_STREAMFLAGS_EVENTCALLBACK` do not work together — the endpoint is
-/// clocked by whatever is *playing* on it, so with nothing playing there is
-/// nothing to raise the event, and the wait can block for the life of the
-/// source. Every other form is event-driven exactly as before.
-///
-/// [`StallGuard`] is unaffected by the polling arm: a wait that always reports
-/// success never counts an immediate failure, which is the right answer —
-/// a poll that returns nothing is not a wait that has stopped working.
-enum Pump {
-    Event(wasapi::Handle),
-    Poll(Duration),
-}
-
-impl Pump {
-    /// Waits one turn, reporting whether there is any reason to think data
-    /// arrived. A [`Pump::Poll`] always says yes: it slept its full interval,
-    /// and the caller finds out by asking for the next packet size.
-    fn wait(&self) -> bool {
-        match self {
-            Pump::Event(event) => event.wait_for_event(WAIT_MS).is_ok(),
-            Pump::Poll(interval) => {
-                std::thread::sleep(*interval);
-                true
-            }
-        }
-    }
-}
-
-/// How often a polled (endpoint-loopback) capture checks for new audio. One
-/// mixer block, so the ring is fed at the cadence it is drained at — but this
-/// is a floor, not a promise: see [`POLL_BUFFER_HNS`].
-const POLL_INTERVAL: Duration = Duration::from_millis(10);
-
-/// The capture buffer a polled endpoint-loopback stream asks for, in 100 ns
-/// units — 200 ms.
-///
-/// Sized against `thread::sleep`'s real granularity rather than
-/// [`POLL_INTERVAL`]'s nominal one: an unmodified Windows timer resolution of
-/// 15.6 ms, plus whatever a busy machine adds on top. 200 ms absorbs more than
-/// ten consecutive late turns, and costs nothing when turns are on time,
-/// because the drain loop empties whatever is there rather than a fixed amount.
-const POLL_BUFFER_HNS: i64 = 200 * 10_000;
-
-/// Whether a Desktop Audio source pinned to `device_id` would capture
-/// Pubsplash's own output.
-///
-/// Endpoint loopback captures *everything* on an endpoint, so pinning the one
-/// Pubsplash plays out of would put its own speech, sound cues and monitoring
-/// back into the stream. The Desktop Audio dialog refuses that pairing, but a
-/// refusal at the dialog is not enough on its own: the output device can be
-/// changed afterwards, and a `None` output setting follows the *system*
-/// default, which moves when a headset is plugged in. So the question is asked
-/// again here, every time the device is opened.
-///
-/// An unknown effective output device (no default endpoint, or the enumeration
-/// failed) counts as a collision. Capturing all endpoints when we meant one is
-/// a smaller wrong answer than broadcasting our own audio back at the listener.
-fn would_capture_pubsplash(device_id: &str) -> bool {
-    match device::effective_output_device_id() {
-        Some(output) => output == device_id,
-        None => true,
-    }
-}
-
-/// Opens a Desktop Audio source, in one of three ways.
-///
-/// Returns the client and how it must be pumped — see [`Pump`], and note that
-/// only the endpoint-loopback case is polled.
-fn open_desktop_audio(device_id: Option<&str>) -> Result<(AudioClient, bool), String> {
-    // Process-exclusion loopback with our own process as the excluded tree: all
-    // system audio except Pubsplash itself. This keeps locally played TTS and
-    // sound cues out of the capture, so they can never feed back into the
-    // stream — and it is the *only* form that can exclude anything, because
-    // Windows' process-loopback activation carries no endpoint id at all.
-    let all_endpoints = || {
-        AudioClient::new_application_loopback_client(std::process::id(), false)
-            .map_err(|e| format!("opening the desktop audio loopback client: {e}"))
-            .map(|client| (client, false))
-    };
-
-    let Some(device_id) = device_id else {
-        return all_endpoints();
-    };
-    if would_capture_pubsplash(device_id) {
-        log::warn!(
-            "Desktop Audio is pinned to the device Pubsplash itself plays out of, which would \
-             feed its own speech and sound cues back into the stream. Capturing every output \
-             device instead, with Pubsplash excluded. Choose a different output device in \
-             Preferences > Audio, or a different capture device for this source."
-        );
-        return all_endpoints();
-    }
-    // Endpoint loopback: everything rendered to this one device. Nothing is
-    // excluded, which is exactly why the check above has to have passed.
-    device::render_device(device_id)?
-        .get_iaudioclient()
-        .map_err(|e| format!("activating the output device's audio client: {e}"))
-        .map(|client| (client, true))
-}
-
-/// Opens the device and pumps it until `stop` is set. `started` is called once
-/// audio is actually flowing, which is also what resets the retry backoff.
+/// **This is the platform seam of the whole capture path.** Everything above it
+/// — the supervisor loop, the backoff schedule, the state reporting, the stall
+/// guard — is portable and stays put; everything below it is the OS's capture
+/// API and its particular set of hazards.
 fn run(
     kind: &CaptureKind,
     producer: &mut Producer<f32>,
@@ -317,176 +216,366 @@ fn run(
     stats: &CaptureStats,
     started: impl FnOnce(),
 ) -> Result<(), String> {
-    let format = WaveFormat::new(
-        32,
-        32,
-        &SampleType::Float,
-        SAMPLE_RATE as usize,
-        CHANNELS,
-        None,
-    );
+    imp::run(kind, producer, stop, stats, started)
+}
 
-    // `endpoint_loopback` decides how the stream is pumped below; see [`Pump`].
-    let (mut client, endpoint_loopback) = match kind {
-        CaptureKind::Microphone { device_id } => (
-            device::capture_device(device_id.as_deref())?
-                .get_iaudioclient()
-                .map_err(|e| format!("activating the microphone's audio client: {e}"))?,
-            false,
-        ),
-        CaptureKind::DesktopAudio { device_id } => open_desktop_audio(device_id.as_deref())?,
-        CaptureKind::Application { pid } => (
-            AudioClient::new_application_loopback_client(*pid, true)
-                .map_err(|e| format!("opening the loopback client for process {pid}: {e}"))?,
-            false,
-        ),
-    };
+/// Whether a Desktop Audio source pinned to `device_id` would capture
+/// Pubsplash's own output, which would feed our speech and cues back into the
+/// stream.
+///
+/// Asked at every open and not only in the dialog, because the output device
+/// can change afterwards — and a `None` output setting follows the *system*
+/// default, which moves when a headset is plugged in. An unknown effective
+/// output device answers `true`: the caller must read that as "cannot rule out
+/// a collision", never as "no collision".
+pub fn would_capture_pubsplash(device_id: &str) -> bool {
+    imp::would_capture_pubsplash(device_id)
+}
 
-    // Endpoint loopback cannot be event-driven (see [`Pump`]), so it is the one
-    // form initialized for polling.
-    let mode = if endpoint_loopback {
-        StreamMode::PollingShared {
-            autoconvert: true,
-            // Explicitly bigger than the default period, unlike every other
-            // path here. A polled reader is woken by `thread::sleep`, whose
-            // floor is the system timer resolution — 15.6 ms unless something
-            // on the machine has asked for better, and nothing here does. A
-            // default-sized buffer is one device period, so a turn that lands
-            // late has nowhere to put the audio that arrived meanwhile and
-            // WASAPI discards it. This is the headroom that turns that loss
-            // into latency the drain loop below pays straight back off.
-            buffer_duration_hns: POLL_BUFFER_HNS,
-        }
-    } else {
-        StreamMode::EventsShared {
-            autoconvert: true,
-            buffer_duration_hns: 0,
-        }
+#[cfg(windows)]
+mod imp {
+    use super::{
+        CHANNELS, CaptureKind, IMMEDIATE, SAMPLE_RATE, STALL_LIMIT, StallGuard, WAIT_MS, device,
+        push_f32, silence_appended,
     };
-    // What the device itself runs at, before `autoconvert` puts a resampler in
-    // the way to give us the 48 kHz stereo float we asked for. Worth a line
-    // because that resampler is a suspect whenever a source sounds wrong and
-    // nothing else in the log moves — and it is invisible from anywhere else.
-    match client.get_mixformat() {
-        Ok(mix) => {
-            let (rate, channels) = (mix.get_samplespersec(), mix.get_nchannels());
-            if rate == SAMPLE_RATE && channels as usize == CHANNELS {
-                log::debug!("Capture device is {rate} Hz, {channels} channels (no conversion)");
-            } else {
-                log::info!(
-                    "Capture device is {rate} Hz, {channels} channels; Windows is converting it \
-                     to {SAMPLE_RATE} Hz, {CHANNELS} channels"
-                );
-            }
-        }
-        // Not knowing the device format costs us a diagnostic, not the capture.
-        Err(e) => log::debug!("Could not read the capture device's format: {e}"),
+    use crate::audio::health::CaptureStats;
+    use rtrb::Producer;
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::time::Duration;
+    use wasapi::{AudioClient, Direction, SampleType, StreamMode, WaveFormat};
+
+    /// How a device is waited on between reads.
+    ///
+    /// Endpoint loopback (a Desktop Audio source pinned to one render device) does
+    /// not get an event: `AUDCLNT_STREAMFLAGS_LOOPBACK` and
+    /// `AUDCLNT_STREAMFLAGS_EVENTCALLBACK` do not work together — the endpoint is
+    /// clocked by whatever is *playing* on it, so with nothing playing there is
+    /// nothing to raise the event, and the wait can block for the life of the
+    /// source. Every other form is event-driven exactly as before.
+    ///
+    /// [`StallGuard`] is unaffected by the polling arm: a wait that always reports
+    /// success never counts an immediate failure, which is the right answer —
+    /// a poll that returns nothing is not a wait that has stopped working.
+    enum Pump {
+        Event(wasapi::Handle),
+        Poll(Duration),
     }
-    client
-        .initialize_client(&format, &Direction::Capture, &mode)
-        .map_err(|e| format!("initializing the capture stream: {e}"))?;
 
-    let pump = if endpoint_loopback {
-        Pump::Poll(POLL_INTERVAL)
-    } else {
-        Pump::Event(
-            client
-                .set_get_eventhandle()
-                .map_err(|e| format!("setting up the capture event: {e}"))?,
-        )
-    };
-    let capture = client
-        .get_audiocaptureclient()
-        .map_err(|e| format!("getting the capture client: {e}"))?;
-    let blockalign = format.get_blockalign() as usize;
-
-    client
-        .start_stream()
-        .map_err(|e| format!("starting the capture stream: {e}"))?;
-    started();
-    // A reopen is a new device session, and carrying the previous one's drops
-    // into it would blame this device for the last one's trouble.
-    stats.reset();
-
-    let mut byte_queue: std::collections::VecDeque<u8> = std::collections::VecDeque::new();
-    let mut guard = StallGuard::default();
-    let mut timeline = DeviceTimeline::new();
-    // The first packet after a start carries `DATA_DISCONTINUITY` as a matter of
-    // course — there is a gap between the device starting and us reading it, and
-    // Windows says so. Counting it would put a 1 in every log line.
-    let mut first_packet = true;
-    while !stop.load(Ordering::Relaxed) {
-        // Drain *every* packet the device has waiting, not just one.
-        //
-        // `read_from_device_to_deque` is a single `GetBuffer`/`ReleaseBuffer`
-        // pair, so it returns exactly one packet — one device period's worth.
-        // Reading one per turn is only ever break-even, and on the polled path
-        // it is worse than that: `thread::sleep` is bounded below by the system
-        // timer resolution, which is 15.6 ms by default, so a nominal 10 ms
-        // sleep consumes one 10 ms packet every 15.6 ms. The endpoint's buffer
-        // fills, WASAPI drops what will not fit, and the source crackles
-        // steadily however quiet the machine is — the loop can never catch up,
-        // because falling behind is what each turn *does*.
-        //
-        // Draining decouples the loop from its own cadence: a late turn costs
-        // latency for one turn and is then paid off, rather than compounding.
-        // The event path takes the same treatment, where it is a no-op in the
-        // ordinary case (the event fires once per packet) and a recovery when
-        // a turn runs late.
-        loop {
-            // The drain's exit is normally "the device has nothing left", but
-            // that is not guaranteed to arrive: a device that has a packet ready
-            // every time it is asked keeps the loop here indefinitely, and
-            // nothing inside it blocks (`push_f32` discards rather than waits,
-            // because capture must never block). Stopping is checked each turn
-            // so a `SetSources` or a shutdown is not held up by a busy endpoint.
-            if stop.load(Ordering::Relaxed) {
-                break;
+    impl Pump {
+        /// Waits one turn, reporting whether there is any reason to think data
+        /// arrived. A [`Pump::Poll`] always says yes: it slept its full interval,
+        /// and the caller finds out by asking for the next packet size.
+        fn wait(&self) -> bool {
+            match self {
+                Pump::Event(event) => event.wait_for_event(WAIT_MS).is_ok(),
+                Pump::Poll(interval) => {
+                    std::thread::sleep(*interval);
+                    true
+                }
             }
-            let new_frames = capture
-                .get_next_packet_size()
-                .map_err(|e| format!("reading the next packet size: {e}"))?
-                .unwrap_or(0);
-            if new_frames == 0 {
-                break;
-            }
-            byte_queue.reserve(new_frames as usize * blockalign);
-            let before = byte_queue.len();
-            let info = capture
-                .read_from_device_to_deque(&mut byte_queue)
-                .map_err(|e| format!("reading from the device: {e}"))?;
-            // `AUDCLNT_BUFFERFLAGS_SILENT` means the contents of that buffer are
-            // undefined, not that they are zeros — the crate copies them out
-            // regardless, so without this whatever was in that memory would be
-            // mixed and broadcast as audio.
-            if info.flags.silent {
-                stats.note_silent_packet();
-                silence_appended(&mut byte_queue, before);
-            }
-            if info.flags.data_discontinuity && !first_packet {
-                stats.note_discontinuity();
-            }
-            first_packet = false;
-            let frames = ((byte_queue.len() - before) / blockalign) as u64;
-            stats.add_frames(frames);
-            let gap = timeline.observe(info.index, frames, Instant::now());
-            if gap > 0 {
-                stats.add_gap_frames(gap);
-            }
-            stats.set_index_usable(timeline.index_usable());
-            if let Some(rate) = timeline.rate_millihz() {
-                stats.set_rate_millihz(rate);
-            }
-            stats.add_dropped_samples(push_f32(&mut byte_queue, producer) as u64);
         }
-        // Timeouts are normal here — loopback with nothing playing times out
-        // every turn — so a failed wait is not itself an error. `StallGuard`
-        // separates those from a wait that has stopped waiting at all, which
-        // would otherwise spin this loop on a core forever; see its docs.
-        guard.wait("capture", || pump.wait())?;
     }
-    let _ = client.stop_stream();
-    Ok(())
+
+    /// How often a polled (endpoint-loopback) capture checks for new audio. One
+    /// mixer block, so the ring is fed at the cadence it is drained at — but this
+    /// is a floor, not a promise: see [`POLL_BUFFER_HNS`].
+    const POLL_INTERVAL: Duration = Duration::from_millis(10);
+
+    /// The capture buffer a polled endpoint-loopback stream asks for, in 100 ns
+    /// units — 200 ms.
+    ///
+    /// Sized against `thread::sleep`'s real granularity rather than
+    /// [`POLL_INTERVAL`]'s nominal one: an unmodified Windows timer resolution of
+    /// 15.6 ms, plus whatever a busy machine adds on top. 200 ms absorbs more than
+    /// ten consecutive late turns, and costs nothing when turns are on time,
+    /// because the drain loop empties whatever is there rather than a fixed amount.
+    const POLL_BUFFER_HNS: i64 = 200 * 10_000;
+
+    /// See `super::would_capture_pubsplash`. Whether a Desktop Audio source
+    /// pinned to `device_id` would capture Pubsplash's own output.
+    ///
+    /// Endpoint loopback captures *everything* on an endpoint, so pinning the one
+    /// Pubsplash plays out of would put its own speech, sound cues and monitoring
+    /// back into the stream. The Desktop Audio dialog refuses that pairing, but a
+    /// refusal at the dialog is not enough on its own: the output device can be
+    /// changed afterwards, and a `None` output setting follows the *system*
+    /// default, which moves when a headset is plugged in. So the question is asked
+    /// again here, every time the device is opened.
+    ///
+    /// An unknown effective output device (no default endpoint, or the enumeration
+    /// failed) counts as a collision. Capturing all endpoints when we meant one is
+    /// a smaller wrong answer than broadcasting our own audio back at the listener.
+    pub fn would_capture_pubsplash(device_id: &str) -> bool {
+        match device::effective_output_device_id() {
+            Some(output) => output == device_id,
+            None => true,
+        }
+    }
+
+    /// Opens a Desktop Audio source, in one of three ways.
+    ///
+    /// Returns the client and how it must be pumped — see [`Pump`], and note that
+    /// only the endpoint-loopback case is polled.
+    fn open_desktop_audio(device_id: Option<&str>) -> Result<(AudioClient, bool), String> {
+        // Process-exclusion loopback with our own process as the excluded tree: all
+        // system audio except Pubsplash itself. This keeps locally played TTS and
+        // sound cues out of the capture, so they can never feed back into the
+        // stream — and it is the *only* form that can exclude anything, because
+        // Windows' process-loopback activation carries no endpoint id at all.
+        let all_endpoints = || {
+            AudioClient::new_application_loopback_client(std::process::id(), false)
+                .map_err(|e| format!("opening the desktop audio loopback client: {e}"))
+                .map(|client| (client, false))
+        };
+
+        let Some(device_id) = device_id else {
+            return all_endpoints();
+        };
+        if would_capture_pubsplash(device_id) {
+            log::warn!(
+                "Desktop Audio is pinned to the device Pubsplash itself plays out of, which would \
+                 feed its own speech and sound cues back into the stream. Capturing every output \
+                 device instead, with Pubsplash excluded. Choose a different output device in \
+                 Preferences > Audio, or a different capture device for this source."
+            );
+            return all_endpoints();
+        }
+        // Endpoint loopback: everything rendered to this one device. Nothing is
+        // excluded, which is exactly why the check above has to have passed.
+        device::render_device(device_id)?
+            .get_iaudioclient()
+            .map_err(|e| format!("activating the output device's audio client: {e}"))
+            .map(|client| (client, true))
+    }
+
+    /// Opens the device and pumps it until `stop` is set. `started` is called once
+    /// audio is actually flowing, which is also what resets the retry backoff.
+    pub fn run(
+        kind: &CaptureKind,
+        producer: &mut Producer<f32>,
+        stop: &AtomicBool,
+        stats: &CaptureStats,
+        started: impl FnOnce(),
+    ) -> Result<(), String> {
+        let format = WaveFormat::new(
+            32,
+            32,
+            &SampleType::Float,
+            SAMPLE_RATE as usize,
+            CHANNELS,
+            None,
+        );
+
+        // `endpoint_loopback` decides how the stream is pumped below; see [`Pump`].
+        let (mut client, endpoint_loopback) = match kind {
+            CaptureKind::Microphone { device_id } => (
+                device::capture_device(device_id.as_deref())?
+                    .get_iaudioclient()
+                    .map_err(|e| format!("activating the microphone's audio client: {e}"))?,
+                false,
+            ),
+            CaptureKind::DesktopAudio { device_id } => open_desktop_audio(device_id.as_deref())?,
+            CaptureKind::Application { pid } => (
+                AudioClient::new_application_loopback_client(*pid, true)
+                    .map_err(|e| format!("opening the loopback client for process {pid}: {e}"))?,
+                false,
+            ),
+        };
+
+        // Endpoint loopback cannot be event-driven (see [`Pump`]), so it is the one
+        // form initialized for polling.
+        let mode = if endpoint_loopback {
+            StreamMode::PollingShared {
+                autoconvert: true,
+                // Explicitly bigger than the default period, unlike every other
+                // path here. A polled reader is woken by `thread::sleep`, whose
+                // floor is the system timer resolution — 15.6 ms unless something
+                // on the machine has asked for better, and nothing here does. A
+                // default-sized buffer is one device period, so a turn that lands
+                // late has nowhere to put the audio that arrived meanwhile and
+                // WASAPI discards it. This is the headroom that turns that loss
+                // into latency the drain loop below pays straight back off.
+                buffer_duration_hns: POLL_BUFFER_HNS,
+            }
+        } else {
+            StreamMode::EventsShared {
+                autoconvert: true,
+                buffer_duration_hns: 0,
+            }
+        };
+        // What the device itself runs at, before `autoconvert` puts a resampler in
+        // the way to give us the 48 kHz stereo float we asked for. Worth a line
+        // because that resampler is a suspect whenever a source sounds wrong and
+        // nothing else in the log moves — and it is invisible from anywhere else.
+        match client.get_mixformat() {
+            Ok(mix) => {
+                let (rate, channels) = (mix.get_samplespersec(), mix.get_nchannels());
+                if rate == SAMPLE_RATE && channels as usize == CHANNELS {
+                    log::debug!("Capture device is {rate} Hz, {channels} channels (no conversion)");
+                } else {
+                    log::info!(
+                        "Capture device is {rate} Hz, {channels} channels; Windows is converting it \
+                         to {SAMPLE_RATE} Hz, {CHANNELS} channels"
+                    );
+                }
+            }
+            // Not knowing the device format costs us a diagnostic, not the capture.
+            Err(e) => log::debug!("Could not read the capture device's format: {e}"),
+        }
+        client
+            .initialize_client(&format, &Direction::Capture, &mode)
+            .map_err(|e| format!("initializing the capture stream: {e}"))?;
+
+        let pump = if endpoint_loopback {
+            Pump::Poll(POLL_INTERVAL)
+        } else {
+            Pump::Event(
+                client
+                    .set_get_eventhandle()
+                    .map_err(|e| format!("setting up the capture event: {e}"))?,
+            )
+        };
+        let capture = client
+            .get_audiocaptureclient()
+            .map_err(|e| format!("getting the capture client: {e}"))?;
+        let blockalign = format.get_blockalign() as usize;
+
+        client
+            .start_stream()
+            .map_err(|e| format!("starting the capture stream: {e}"))?;
+        started();
+        // A reopen is a new device session, and carrying the previous one's drops
+        // into it would blame this device for the last one's trouble.
+        stats.reset();
+
+        let mut byte_queue: std::collections::VecDeque<u8> = std::collections::VecDeque::new();
+        let mut guard = StallGuard::default();
+        let mut timeline = DeviceTimeline::new();
+        // The first packet after a start carries `DATA_DISCONTINUITY` as a matter of
+        // course — there is a gap between the device starting and us reading it, and
+        // Windows says so. Counting it would put a 1 in every log line.
+        let mut first_packet = true;
+        while !stop.load(Ordering::Relaxed) {
+            // Drain *every* packet the device has waiting, not just one.
+            //
+            // `read_from_device_to_deque` is a single `GetBuffer`/`ReleaseBuffer`
+            // pair, so it returns exactly one packet — one device period's worth.
+            // Reading one per turn is only ever break-even, and on the polled path
+            // it is worse than that: `thread::sleep` is bounded below by the system
+            // timer resolution, which is 15.6 ms by default, so a nominal 10 ms
+            // sleep consumes one 10 ms packet every 15.6 ms. The endpoint's buffer
+            // fills, WASAPI drops what will not fit, and the source crackles
+            // steadily however quiet the machine is — the loop can never catch up,
+            // because falling behind is what each turn *does*.
+            //
+            // Draining decouples the loop from its own cadence: a late turn costs
+            // latency for one turn and is then paid off, rather than compounding.
+            // The event path takes the same treatment, where it is a no-op in the
+            // ordinary case (the event fires once per packet) and a recovery when
+            // a turn runs late.
+            loop {
+                // The drain's exit is normally "the device has nothing left", but
+                // that is not guaranteed to arrive: a device that has a packet ready
+                // every time it is asked keeps the loop here indefinitely, and
+                // nothing inside it blocks (`push_f32` discards rather than waits,
+                // because capture must never block). Stopping is checked each turn
+                // so a `SetSources` or a shutdown is not held up by a busy endpoint.
+                if stop.load(Ordering::Relaxed) {
+                    break;
+                }
+                let new_frames = capture
+                    .get_next_packet_size()
+                    .map_err(|e| format!("reading the next packet size: {e}"))?
+                    .unwrap_or(0);
+                if new_frames == 0 {
+                    break;
+                }
+                byte_queue.reserve(new_frames as usize * blockalign);
+                let before = byte_queue.len();
+                let info = capture
+                    .read_from_device_to_deque(&mut byte_queue)
+                    .map_err(|e| format!("reading from the device: {e}"))?;
+                // `AUDCLNT_BUFFERFLAGS_SILENT` means the contents of that buffer are
+                // undefined, not that they are zeros — the crate copies them out
+                // regardless, so without this whatever was in that memory would be
+                // mixed and broadcast as audio.
+                if info.flags.silent {
+                    stats.note_silent_packet();
+                    silence_appended(&mut byte_queue, before);
+                }
+                if info.flags.data_discontinuity && !first_packet {
+                    stats.note_discontinuity();
+                }
+                first_packet = false;
+                let frames = ((byte_queue.len() - before) / blockalign) as u64;
+                stats.add_frames(frames);
+                let gap = timeline.observe(info.index, frames, Instant::now());
+                if gap > 0 {
+                    stats.add_gap_frames(gap);
+                }
+                stats.set_index_usable(timeline.index_usable());
+                if let Some(rate) = timeline.rate_millihz() {
+                    stats.set_rate_millihz(rate);
+                }
+                stats.add_dropped_samples(push_f32(&mut byte_queue, producer) as u64);
+            }
+            // Timeouts are normal here — loopback with nothing playing times out
+            // every turn — so a failed wait is not itself an error. `StallGuard`
+            // separates those from a wait that has stopped waiting at all, which
+            // would otherwise spin this loop on a core forever; see its docs.
+            guard.wait("capture", || pump.wait())?;
+        }
+        let _ = client.stop_stream();
+        Ok(())
+    }
+}
+
+/// Core Audio capture. **Not built yet** — the seam standing open, not a design.
+///
+/// The three source kinds map onto three different macOS mechanisms, and only
+/// the first is straightforward:
+///
+/// - a **microphone** is an ordinary input `AudioUnit` on a chosen device, and
+///   needs the `NSMicrophoneUsageDescription` prompt;
+/// - **Desktop Audio** is a Core Audio process tap created with
+///   `CATapDescription(excludingProcesses:)`, which is very nearly a direct
+///   translation of today's default — capture everything except Pubsplash's own
+///   output — and is why `would_capture_pubsplash` survives in spirit;
+/// - an **Application** source is the same tap mechanism with an *inclusion*
+///   list. That is where the process-tree rule has to be rewritten rather than
+///   ported: a tap takes a list of process object ids, not a "and its
+///   descendants" flag, so `choose_pid`'s walk to the root becomes an explicit
+///   enumeration of the tree.
+///
+/// All of it needs macOS 14.4 and the audio-capture TCC consent, and none of it
+/// works under the App Sandbox.
+///
+/// Until then a source reports a plain failure, which the supervisor above
+/// already knows how to show: the source appears in the mixer and says why it is
+/// not running, rather than pretending to be live and sending silence.
+#[cfg(target_os = "macos")]
+mod imp {
+    use super::CaptureKind;
+    use crate::audio::health::CaptureStats;
+    use rtrb::Producer;
+    use std::sync::atomic::AtomicBool;
+
+    pub fn run(
+        _kind: &CaptureKind,
+        _producer: &mut Producer<f32>,
+        _stop: &AtomicBool,
+        _stats: &CaptureStats,
+        _started: impl FnOnce(),
+    ) -> Result<(), String> {
+        Err("audio capture is not implemented on macOS yet".to_string())
+    }
+
+    /// Answers "cannot rule it out" until the real check exists, which is the
+    /// safe direction: the fallback for a collision is to capture more than was
+    /// asked for, never to broadcast our own audio.
+    pub fn would_capture_pubsplash(_device_id: &str) -> bool {
+        true
+    }
 }
 
 /// Replaces everything appended to `bytes` from `before` onward with zeros.

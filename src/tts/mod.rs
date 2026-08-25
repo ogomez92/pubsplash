@@ -11,6 +11,10 @@ pub mod engine;
 pub mod engines;
 pub mod net;
 pub mod queue;
+/// The local, offline system voice. SAPI 5 on Windows; the same slot on macOS,
+/// where `AVSpeechSynthesizer` is what will fill it. The engine id stays `sapi`
+/// on both — see the macOS file for why.
+#[cfg_attr(not(windows), path = "sapi_mac.rs")]
 pub mod sapi;
 pub mod speaker;
 pub mod ssml;

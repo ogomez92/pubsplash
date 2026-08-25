@@ -7,11 +7,26 @@
 //! the main app.
 
 pub mod discover;
+/// VST2 hosting. Windows only — the macOS file is an uninhabited stand-in that
+/// keeps `PluginInstance`'s `Vst2` arm compiling without a `cfg` at any call
+/// site. See its header for the decision behind that.
+#[cfg_attr(not(windows), path = "host2_mac.rs")]
 pub mod host2;
 pub mod host3;
 mod instance;
+/// Keeps a plugin binary and its factory mapped for the life of the process.
+/// A Windows problem: `FreeLibrary` can unmap an image a plugin still has a
+/// thread or a COM stub running in. `dlclose` on a bundle macOS has decided to
+/// keep is a no-op, and `vst3-host` does not call it, so there is nothing to
+/// hold down.
+#[cfg_attr(not(windows), path = "module_pin_mac.rs")]
 mod module_pin;
 mod moduleinfo;
+/// PE header inspection, to reject a 32-bit plugin before loading it. Windows
+/// only: a macOS plugin bundle is a Mach-O, and the only format Pubsplash hosts
+/// here is VST3, whose bundle layout names its architecture in a directory name
+/// rather than in a header.
+#[cfg(windows)]
 mod pe;
 pub mod scan;
 pub mod suspend;
@@ -49,39 +64,17 @@ pub fn save_cache_to(cache: &PluginCache, path: &Path) {
     crate::json_store::save(cache, path, "plugin cache");
 }
 
-/// The standard Windows VST folders that exist on this machine, plus any
-/// folder named by the `HKLM\SOFTWARE\VST\VSTPluginsPath` registry value
-/// (and its 32-bit Wow6432Node twin). Used as the default folder list.
+/// The standard plugin folders that exist on this machine. Used as the default
+/// folder list.
+///
+/// On Windows that is the `Common Files` and Steinberg conventions plus any
+/// folder named by the `HKLM\SOFTWARE\VST\VSTPluginsPath` registry value (and
+/// its 32-bit Wow6432Node twin). On macOS it is the two locations the format
+/// specifies and every host agrees on — one for all users, one for this one —
+/// with no registry equivalent to consult.
 pub fn default_folders() -> Vec<String> {
     let mut candidates: Vec<PathBuf> = Vec::new();
-    if let Ok(pf) = std::env::var("ProgramFiles") {
-        let pf = PathBuf::from(pf);
-        for sub in [
-            "Common Files\\VST",
-            "Common Files\\VST2",
-            "Common Files\\VST3",
-            "Common Files\\Steinberg\\VST2",
-            "Steinberg\\VSTPlugins",
-        ] {
-            candidates.push(pf.join(sub));
-        }
-    }
-    if let Ok(pf86) = std::env::var("ProgramFiles(x86)") {
-        let pf86 = PathBuf::from(pf86);
-        for sub in ["Common Files\\VST3", "Steinberg\\VSTPlugins"] {
-            candidates.push(pf86.join(sub));
-        }
-    }
-    // Official user-level VST3 location.
-    if let Some(local) = dirs::data_local_dir() {
-        candidates.push(local.join("Programs\\Common\\VST3"));
-    }
-    for subkey in ["SOFTWARE\\VST", "SOFTWARE\\Wow6432Node\\VST"] {
-        if let Some(path) = registry_string(subkey, "VSTPluginsPath") {
-            candidates.push(PathBuf::from(path));
-        }
-    }
-
+    candidates.extend(platform_folders());
     let mut seen = std::collections::HashSet::new();
     candidates
         .into_iter()
@@ -91,7 +84,54 @@ pub fn default_folders() -> Vec<String> {
         .collect()
 }
 
+#[cfg(windows)]
+fn platform_folders() -> Vec<PathBuf> {
+    let mut candidates: Vec<PathBuf> = Vec::new();
+        if let Ok(pf) = std::env::var("ProgramFiles") {
+            let pf = PathBuf::from(pf);
+            for sub in [
+                "Common Files\\VST",
+                "Common Files\\VST2",
+                "Common Files\\VST3",
+                "Common Files\\Steinberg\\VST2",
+                "Steinberg\\VSTPlugins",
+            ] {
+                candidates.push(pf.join(sub));
+            }
+        }
+        if let Ok(pf86) = std::env::var("ProgramFiles(x86)") {
+            let pf86 = PathBuf::from(pf86);
+            for sub in ["Common Files\\VST3", "Steinberg\\VSTPlugins"] {
+                candidates.push(pf86.join(sub));
+            }
+        }
+        // Official user-level VST3 location.
+        if let Some(local) = dirs::data_local_dir() {
+            candidates.push(local.join("Programs\\Common\\VST3"));
+        }
+        for subkey in ["SOFTWARE\\VST", "SOFTWARE\\Wow6432Node\\VST"] {
+            if let Some(path) = registry_string(subkey, "VSTPluginsPath") {
+                candidates.push(PathBuf::from(path));
+            }
+        }
+    candidates
+}
+
+/// `/Library/Audio/Plug-Ins/VST3` and its per-user twin: the two locations the
+/// VST3 specification names, which every Mac host scans and every installer
+/// writes to. VST2's `.../VST` folders are deliberately not offered — the format
+/// is not hosted here.
+#[cfg(target_os = "macos")]
+fn platform_folders() -> Vec<PathBuf> {
+    let mut candidates = vec![PathBuf::from("/Library/Audio/Plug-Ins/VST3")];
+    if let Some(home) = dirs::home_dir() {
+        candidates.push(home.join("Library/Audio/Plug-Ins/VST3"));
+    }
+    candidates
+}
+
 /// Reads a REG_SZ value under HKEY_LOCAL_MACHINE.
+#[cfg(windows)]
 fn registry_string(subkey: &str, value: &str) -> Option<String> {
     use windows::Win32::Foundation::ERROR_SUCCESS;
     use windows::Win32::System::Registry::{HKEY_LOCAL_MACHINE, RRF_RT_REG_SZ, RegGetValueW};

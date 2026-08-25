@@ -4,18 +4,25 @@
 //! Three moving parts:
 //!
 //! 1. [`tag`] is called next to each control as it is built, stamping a stable
-//!    help-id onto the control's window via `SetPropW`. The property dies with
-//!    the window automatically, so rebuilt panels (the mixer) never leave stale
-//!    ids behind.
+//!    help-id onto the control's native window. On Windows that is `SetPropW`,
+//!    and the property dies with the window automatically, so rebuilt panels
+//!    (the mixer) never leave stale ids behind — a property this file leans on
+//!    rather than merely enjoys, which is why a side map keyed by window handle
+//!    is the wrong shape for it.
 //! 2. The authored messages live in `help.toml` at the repo root, embedded with
 //!    `include_str!` and parsed once into an id -> message map. The dev binary
 //!    `gen-help` round-trips that file from the `tag` call sites (see
 //!    `src/bin/gen_help.rs`).
-//! 3. A global low-level keyboard hook (mirroring the F6 hook in `fx_editor`)
-//!    catches F1 app-wide, swallows it, and flags the pump. [`pump`] resolves the
-//!    focused window to its id and announces the message via a UIA notification
-//!    raised on the main frame's host provider — so NVDA/Narrator speak it,
-//!    interrupting whatever they were saying.
+//! 3. A global keyboard hook (mirroring the F6 hook in `fx_editor`) catches F1
+//!    app-wide, swallows it, and flags the pump. [`pump`] resolves the focused
+//!    window to its id and announces the message through the screen reader — on
+//!    Windows a UIA notification raised on the main frame's host provider, so
+//!    NVDA and Narrator speak it, interrupting whatever they were saying.
+//!
+//! The authored content — `help.toml`, the parse, the interning — is portable
+//! and stays here. Everything that stamps, hooks or speaks lives in `imp`, and
+//! **none of it is built on macOS yet**; see the macOS `imp` for what each of
+//! the three needs.
 //!
 //! The same hook also catches F6/SHIFT+F6 for [`super::panes`] and every user
 //! keybinding for [`super::keybinds`], since it is the one hook installed for
@@ -31,49 +38,22 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::OnceLock;
-use std::sync::atomic::{AtomicBool, AtomicIsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicIsize};
 
-use windows::Win32::Foundation::{HANDLE, HWND, LPARAM, LRESULT, WPARAM};
-use windows::Win32::System::Threading::GetCurrentProcessId;
-use windows::Win32::System::Variant::VARIANT;
-use windows::Win32::UI::Accessibility::{
-    IRawElementProviderSimple, IRawElementProviderSimple_Impl, NotificationKind_Other,
-    NotificationProcessing_ImportantMostRecent, ProviderOptions,
-    ProviderOptions_ServerSideProvider, UIA_ControlTypePropertyId, UIA_NamePropertyId,
-    UIA_PATTERN_ID, UIA_PROPERTY_ID, UIA_WindowControlTypeId, UiaClientsAreListening,
-    UiaDisconnectProvider, UiaHostProviderFromHwnd, UiaRaiseNotificationEvent,
-    UiaReturnRawElementProvider, UiaRootObjectId,
+pub use imp::{
+    announce, install_announcer, install_hook, pump, tag, uninstall_announcer, uninstall_hook,
 };
-use windows::Win32::UI::Input::KeyboardAndMouse::{GetAsyncKeyState, VK_F1, VK_F6, VK_SHIFT};
-use windows::Win32::UI::Shell::{DefSubclassProc, RemoveWindowSubclass, SetWindowSubclass};
-use windows::Win32::UI::WindowsAndMessaging::{
-    CallNextHookEx, GUITHREADINFO, GetForegroundWindow, GetGUIThreadInfo, GetPropW,
-    GetWindowThreadProcessId, HC_ACTION, HHOOK, KBDLLHOOKSTRUCT, SetPropW, SetWindowsHookExW,
-    UnhookWindowsHookEx, WH_KEYBOARD_LL, WM_GETOBJECT, WM_KEYDOWN, WM_SYSKEYDOWN,
-};
-use windows::core::{BSTR, Error, IUnknown, PCWSTR, Result, implement, w};
-use wxdragon::prelude::WxWidget;
-
-/// Distinguishes our frame subclass from any other on the same window.
-const FRAME_SUBCLASS_ID: usize = 0x0A12;
-
-/// Window-property name carrying a control's interned help-id (index + 1).
-const HELP_PROP: PCWSTR = w!("PubsplashHelpId");
+pub(super) use imp::{foreground_is_main_frame, foreground_is_ours};
 
 /// Spoken when a control has no id, or an id with no authored message.
 const GENERIC: &str = "No help available for this control.";
 
 thread_local! {
     /// Interns help-ids to small indices so each can be stored as a single
-    /// `SetPropW` handle value. Ids repeat (the mixer re-tags its strips on every
+    /// window-property value. Ids repeat (the mixer re-tags its strips on every
     /// rebuild), so the map dedupes and the vec stays tiny.
     static INTERN: RefCell<(Vec<String>, HashMap<String, usize>)> =
         RefCell::new((Vec::new(), HashMap::new()));
-
-    /// The main frame (hwnd) and the server-side UIA provider installed on it,
-    /// used to raise notification events. Set by [`install_announcer`].
-    static ANNOUNCER: RefCell<Option<(isize, IRawElementProviderSimple)>> =
-        const { RefCell::new(None) };
 }
 
 /// The installed low-level keyboard hook (as isize; 0 = not installed).
@@ -100,20 +80,6 @@ fn intern(id: &str) -> usize {
 
 fn id_for(idx: usize) -> Option<String> {
     INTERN.with(|c| c.borrow().0.get(idx).cloned())
-}
-
-/// Gives `widget` a context-help id. Call beside `set_accessible_name` at each
-/// control site. `label` is documentation for the `gen-help` scanner only and is
-/// unused at runtime.
-pub fn tag(widget: &dyn WxWidget, id: &str, _label: &str) {
-    let hwnd = HWND(widget.get_handle());
-    if hwnd.0.is_null() {
-        return;
-    }
-    let handle = HANDLE((intern(id) as isize + 1) as *mut _);
-    if let Err(e) = unsafe { SetPropW(hwnd, HELP_PROP, Some(handle)) } {
-        log::warn!("help::tag: SetPropW failed for {id:?}: {e}");
-    }
 }
 
 // --- authored content ------------------------------------------------------
@@ -151,8 +117,9 @@ fn messages() -> &'static HashMap<String, String> {
     })
 }
 
-fn help_for(hwnd: HWND) -> String {
-    let raw = unsafe { GetPropW(hwnd, HELP_PROP) }.0 as isize;
+/// The message for a stamped property value — index + 1, or 0/negative for a
+/// control that was never tagged. Portable, so both `imp`s resolve the same way.
+fn message_for_stamp(raw: isize) -> String {
     if raw <= 0 {
         return GENERIC.to_string();
     }
@@ -161,234 +128,363 @@ fn help_for(hwnd: HWND) -> String {
         .unwrap_or_else(|| GENERIC.to_string())
 }
 
-// --- UIA announcer ---------------------------------------------------------
-//
-// A screen reader only processes a UIA notification event whose provider is
-// connected to its automation tree. A bare `UiaHostProviderFromHwnd` provider
-// that was never returned through `WM_GETOBJECT` is not connected, so the
-// notification is dropped. We therefore install a real server-side provider on
-// the frame — reachable via the frame's `WM_GETOBJECT`/`UiaRootObjectId` — and
-// raise the notification on it. `HostRawElementProvider` delegates structure to
-// the default window provider, so the frame's children still enumerate normally.
+/// A window property for the stamp, a low-level keyboard hook for the keys, and
+/// a server-side UIA provider on the frame for the speech.
+///
+/// The provider is not optional decoration. A screen reader only processes a UIA
+/// notification whose provider is connected to its automation tree, and a bare
+/// `UiaHostProviderFromHwnd` provider that was never returned through
+/// `WM_GETOBJECT` is not connected — the notification is simply dropped. So a
+/// real server-side provider is installed on the frame, reachable via the
+/// frame's `WM_GETOBJECT`/`UiaRootObjectId`, and the notification is raised on
+/// that. `HostRawElementProvider` delegates structure to the default window
+/// provider, so the frame's children still enumerate normally.
+#[cfg(windows)]
+mod imp {
+    use super::{GENERIC, HELP_REQUESTED, HELP_HOOK, MAIN_FRAME, intern};
+    use std::cell::RefCell;
+    use std::collections::HashMap;
+    use std::sync::atomic::Ordering;
 
-thread_local! {
-    /// The frame provider, keyed by frame hwnd, for the subclass proc (which
-    /// only has the hwnd) to return on the UIA root query.
-    static FRAME_PROVIDER: RefCell<HashMap<isize, IRawElementProviderSimple>> =
-        RefCell::new(HashMap::new());
-}
+    use windows::Win32::Foundation::{HANDLE, HWND, LPARAM, LRESULT, WPARAM};
+    use windows::Win32::System::Threading::GetCurrentProcessId;
+    use windows::Win32::System::Variant::VARIANT;
+    use windows::Win32::UI::Accessibility::{
+        IRawElementProviderSimple, IRawElementProviderSimple_Impl, NotificationKind_Other,
+        NotificationProcessing_ImportantMostRecent, ProviderOptions,
+        ProviderOptions_ServerSideProvider, UIA_ControlTypePropertyId, UIA_NamePropertyId,
+        UIA_PATTERN_ID, UIA_PROPERTY_ID, UIA_WindowControlTypeId, UiaClientsAreListening,
+        UiaDisconnectProvider, UiaHostProviderFromHwnd, UiaRaiseNotificationEvent,
+        UiaReturnRawElementProvider, UiaRootObjectId,
+    };
+    use windows::Win32::UI::Input::KeyboardAndMouse::{GetAsyncKeyState, VK_F1, VK_F6, VK_SHIFT};
+    use windows::Win32::UI::Shell::{DefSubclassProc, RemoveWindowSubclass, SetWindowSubclass};
+    use windows::Win32::UI::WindowsAndMessaging::{
+        CallNextHookEx, GUITHREADINFO, GetForegroundWindow, GetGUIThreadInfo, GetPropW,
+        GetWindowThreadProcessId, HC_ACTION, HHOOK, KBDLLHOOKSTRUCT, SetPropW, SetWindowsHookExW,
+        UnhookWindowsHookEx, WH_KEYBOARD_LL, WM_GETOBJECT, WM_KEYDOWN, WM_SYSKEYDOWN,
+    };
+    use windows::core::{BSTR, Error, IUnknown, PCWSTR, Result, implement, w};
+    use wxdragon::prelude::WxWidget;
 
-#[implement(IRawElementProviderSimple)]
-struct FrameProvider {
-    hwnd: isize,
-}
+    /// Distinguishes our frame subclass from any other on the same window.
+    const FRAME_SUBCLASS_ID: usize = 0x0A12;
 
-impl IRawElementProviderSimple_Impl for FrameProvider_Impl {
-    fn ProviderOptions(&self) -> Result<ProviderOptions> {
-        Ok(ProviderOptions_ServerSideProvider)
+    /// Window-property name carrying a control's interned help-id (index + 1).
+    const HELP_PROP: PCWSTR = w!("PubsplashHelpId");
+
+    thread_local! {
+        /// The main frame (hwnd) and the server-side UIA provider installed on
+        /// it, used to raise notification events. Set by `install_announcer`.
+        static ANNOUNCER: RefCell<Option<(isize, IRawElementProviderSimple)>> =
+            const { RefCell::new(None) };
     }
 
-    fn GetPatternProvider(&self, _patternid: UIA_PATTERN_ID) -> Result<IUnknown> {
-        // No control patterns; this element exists only to source notifications.
-        Err(Error::empty())
-    }
-
-    fn GetPropertyValue(&self, propertyid: UIA_PROPERTY_ID) -> Result<VARIANT> {
-        Ok(if propertyid == UIA_ControlTypePropertyId {
-            VARIANT::from(UIA_WindowControlTypeId.0)
-        } else if propertyid == UIA_NamePropertyId {
-            VARIANT::from("Pubsplash")
-        } else {
-            VARIANT::default()
-        })
-    }
-
-    fn HostRawElementProvider(&self) -> Result<IRawElementProviderSimple> {
-        // Delegate structure/navigation to the default window provider so the
-        // frame's children remain visible to the screen reader.
-        unsafe { UiaHostProviderFromHwnd(HWND(self.hwnd as *mut _)) }
-    }
-}
-
-unsafe extern "system" fn frame_subclass(
-    hwnd: HWND,
-    msg: u32,
-    wparam: WPARAM,
-    lparam: LPARAM,
-    _id: usize,
-    _refdata: usize,
-) -> LRESULT {
-    if msg == WM_GETOBJECT
-        && lparam.0 as i32 == UiaRootObjectId
-        && let Some(provider) = FRAME_PROVIDER.with(|r| r.borrow().get(&(hwnd.0 as isize)).cloned())
-    {
-        return unsafe { UiaReturnRawElementProvider(hwnd, wparam, lparam, &provider) };
-    }
-    unsafe { DefSubclassProc(hwnd, msg, wparam, lparam) }
-}
-
-/// Installs a UIA provider on the main frame so [`pump`] can raise notification
-/// events that the screen reader will speak, regardless of which control has
-/// focus.
-pub fn install_announcer(frame: &dyn WxWidget) {
-    let hwnd = HWND(frame.get_handle());
-    let key = hwnd.0 as isize;
-    let provider: IRawElementProviderSimple = FrameProvider { hwnd: key }.into();
-    FRAME_PROVIDER.with(|r| {
-        r.borrow_mut().insert(key, provider.clone());
-    });
-    let ok = unsafe { SetWindowSubclass(hwnd, Some(frame_subclass), FRAME_SUBCLASS_ID, 0) };
-    if !ok.as_bool() {
-        log::warn!("help: SetWindowSubclass failed for frame hwnd={key:#x}");
-    }
-    ANNOUNCER.with(|a| *a.borrow_mut() = Some((key, provider)));
-    MAIN_FRAME.store(key, Ordering::Relaxed);
-}
-
-pub fn uninstall_announcer() {
-    MAIN_FRAME.store(0, Ordering::Relaxed);
-    let entry = ANNOUNCER.with(|a| a.borrow_mut().take());
-    if let Some((key, provider)) = entry {
-        unsafe {
-            let _ =
-                RemoveWindowSubclass(HWND(key as *mut _), Some(frame_subclass), FRAME_SUBCLASS_ID);
-            if let Err(e) = UiaDisconnectProvider(&provider) {
-                log::warn!("help: UiaDisconnectProvider failed: {e}");
-            }
+    pub fn tag(widget: &dyn WxWidget, id: &str, _label: &str) {
+        let hwnd = HWND(widget.get_handle());
+        if hwnd.0.is_null() {
+            return;
         }
+        let handle = HANDLE((intern(id) as isize + 1) as *mut _);
+        if let Err(e) = unsafe { SetPropW(hwnd, HELP_PROP, Some(handle)) } {
+            log::warn!("help::tag: SetPropW failed for {id:?}: {e}");
+        }
+    }
+
+    fn help_for(hwnd: HWND) -> String {
+        super::message_for_stamp(unsafe { GetPropW(hwnd, HELP_PROP) }.0 as isize)
+    }
+
+    // --- UIA announcer ---------------------------------------------------------
+    //
+    // A screen reader only processes a UIA notification event whose provider is
+    // connected to its automation tree. A bare `UiaHostProviderFromHwnd` provider
+    // that was never returned through `WM_GETOBJECT` is not connected, so the
+    // notification is dropped. We therefore install a real server-side provider on
+    // the frame — reachable via the frame's `WM_GETOBJECT`/`UiaRootObjectId` — and
+    // raise the notification on it. `HostRawElementProvider` delegates structure to
+    // the default window provider, so the frame's children still enumerate normally.
+
+    thread_local! {
+        /// The frame provider, keyed by frame hwnd, for the subclass proc (which
+        /// only has the hwnd) to return on the UIA root query.
+        static FRAME_PROVIDER: RefCell<HashMap<isize, IRawElementProviderSimple>> =
+            RefCell::new(HashMap::new());
+    }
+
+    #[implement(IRawElementProviderSimple)]
+    struct FrameProvider {
+        hwnd: isize,
+    }
+
+    impl IRawElementProviderSimple_Impl for FrameProvider_Impl {
+        fn ProviderOptions(&self) -> Result<ProviderOptions> {
+            Ok(ProviderOptions_ServerSideProvider)
+        }
+
+        fn GetPatternProvider(&self, _patternid: UIA_PATTERN_ID) -> Result<IUnknown> {
+            // No control patterns; this element exists only to source notifications.
+            Err(Error::empty())
+        }
+
+        fn GetPropertyValue(&self, propertyid: UIA_PROPERTY_ID) -> Result<VARIANT> {
+            Ok(if propertyid == UIA_ControlTypePropertyId {
+                VARIANT::from(UIA_WindowControlTypeId.0)
+            } else if propertyid == UIA_NamePropertyId {
+                VARIANT::from("Pubsplash")
+            } else {
+                VARIANT::default()
+            })
+        }
+
+        fn HostRawElementProvider(&self) -> Result<IRawElementProviderSimple> {
+            // Delegate structure/navigation to the default window provider so the
+            // frame's children remain visible to the screen reader.
+            unsafe { UiaHostProviderFromHwnd(HWND(self.hwnd as *mut _)) }
+        }
+    }
+
+    unsafe extern "system" fn frame_subclass(
+        hwnd: HWND,
+        msg: u32,
+        wparam: WPARAM,
+        lparam: LPARAM,
+        _id: usize,
+        _refdata: usize,
+    ) -> LRESULT {
+        if msg == WM_GETOBJECT
+            && lparam.0 as i32 == UiaRootObjectId
+            && let Some(provider) = FRAME_PROVIDER.with(|r| r.borrow().get(&(hwnd.0 as isize)).cloned())
+        {
+            return unsafe { UiaReturnRawElementProvider(hwnd, wparam, lparam, &provider) };
+        }
+        unsafe { DefSubclassProc(hwnd, msg, wparam, lparam) }
+    }
+
+    /// Installs a UIA provider on the main frame so [`pump`] can raise notification
+    /// events that the screen reader will speak, regardless of which control has
+    /// focus.
+    pub fn install_announcer(frame: &dyn WxWidget) {
+        let hwnd = HWND(frame.get_handle());
+        let key = hwnd.0 as isize;
+        let provider: IRawElementProviderSimple = FrameProvider { hwnd: key }.into();
         FRAME_PROVIDER.with(|r| {
-            r.borrow_mut().remove(&key);
+            r.borrow_mut().insert(key, provider.clone());
+        });
+        let ok = unsafe { SetWindowSubclass(hwnd, Some(frame_subclass), FRAME_SUBCLASS_ID, 0) };
+        if !ok.as_bool() {
+            log::warn!("help: SetWindowSubclass failed for frame hwnd={key:#x}");
+        }
+        ANNOUNCER.with(|a| *a.borrow_mut() = Some((key, provider)));
+        MAIN_FRAME.store(key, Ordering::Relaxed);
+    }
+
+    pub fn uninstall_announcer() {
+        MAIN_FRAME.store(0, Ordering::Relaxed);
+        let entry = ANNOUNCER.with(|a| a.borrow_mut().take());
+        if let Some((key, provider)) = entry {
+            unsafe {
+                let _ =
+                    RemoveWindowSubclass(HWND(key as *mut _), Some(frame_subclass), FRAME_SUBCLASS_ID);
+                if let Err(e) = UiaDisconnectProvider(&provider) {
+                    log::warn!("help: UiaDisconnectProvider failed: {e}");
+                }
+            }
+            FRAME_PROVIDER.with(|r| {
+                r.borrow_mut().remove(&key);
+            });
+        }
+    }
+
+    /// Speaks `text` through the running screen reader immediately, interrupting
+    /// whatever it was saying. Used for F1 help and for state changes that have no
+    /// control of their own to announce them (see the mixer's monitoring toggle).
+    pub fn announce(text: &str) {
+        ANNOUNCER.with(|a| {
+            let Some((_, provider)) = a.borrow().clone() else {
+                return;
+            };
+            unsafe {
+                if !UiaClientsAreListening().as_bool() {
+                    return;
+                }
+                // ImportantMostRecent asks the screen reader to speak this now and
+                // discard any older queued help, so repeated F1 presses interrupt
+                // rather than pile up.
+                if let Err(e) = UiaRaiseNotificationEvent(
+                    &provider,
+                    NotificationKind_Other,
+                    NotificationProcessing_ImportantMostRecent,
+                    &BSTR::from(text),
+                    &BSTR::new(),
+                ) {
+                    log::warn!("help: UiaRaiseNotificationEvent failed: {e}");
+                }
+            }
         });
     }
-}
 
-/// Speaks `text` through the running screen reader immediately, interrupting
-/// whatever it was saying. Used for F1 help and for state changes that have no
-/// control of their own to announce them (see the mixer's monitoring toggle).
-pub fn announce(text: &str) {
-    ANNOUNCER.with(|a| {
-        let Some((_, provider)) = a.borrow().clone() else {
+    // --- F1 hook ---------------------------------------------------------------
+
+    pub fn foreground_is_ours() -> bool {
+        unsafe {
+            let fg = GetForegroundWindow();
+            if fg.0.is_null() {
+                return false;
+            }
+            let mut pid = 0u32;
+            GetWindowThreadProcessId(fg, Some(&mut pid));
+            pid == GetCurrentProcessId()
+        }
+    }
+
+    /// True only while the main frame is the foreground window. Tighter than
+    /// [`foreground_is_ours`] on purpose: it excludes our own modal dialogs and the
+    /// plugin editor frames, which have their own F6 (see `fx_editor`).
+    pub fn foreground_is_main_frame() -> bool {
+        let frame = MAIN_FRAME.load(Ordering::Relaxed);
+        frame != 0 && unsafe { GetForegroundWindow() }.0 as isize == frame
+    }
+
+    unsafe extern "system" fn keyboard_hook(code: i32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
+        if code == HC_ACTION as i32
+            && (wparam.0 as u32 == WM_KEYDOWN || wparam.0 as u32 == WM_SYSKEYDOWN)
+        {
+            let kb = unsafe { &*(lparam.0 as *const KBDLLHOOKSTRUCT) };
+            // First refusal goes to the Add-binding dialog's shortcut box: while it
+            // has focus every key belongs to it, F1 and F6 included, which is the
+            // only way they could ever be typed into it.
+            if super::keybinds::capture_key(kb.vkCode) {
+                wxdragon::wake_up_idle();
+                return LRESULT(1);
+            }
+            if kb.vkCode == VK_F1.0 as u32 && foreground_is_ours() {
+                HELP_REQUESTED.store(true, Ordering::Relaxed);
+                // Ring the doorbell: `pump` runs from the idle handler, and F1 is
+                // swallowed below, so nothing else would wake the loop to notice.
+                wxdragon::wake_up_idle();
+                // Swallow F1 so no underlying control pops its own help.
+                return LRESULT(1);
+            }
+            if kb.vkCode == VK_F6.0 as u32 && foreground_is_main_frame() {
+                // Physical shift state: `GetKeyState` here would report this
+                // thread's queued state, which is not what the user just held.
+                let shift = unsafe { GetAsyncKeyState(VK_SHIFT.0 as i32) } as u16 & 0x8000 != 0;
+                super::panes::request(shift);
+                wxdragon::wake_up_idle();
+                // Swallow it: MSW gives F6 its own pane-switching meaning.
+                return LRESULT(1);
+            }
+            // Last, so the two built-ins above can never be shadowed by a user
+            // binding. `keybinds_ui` refuses F1 and F6 for that reason.
+            if super::keybinds::hook_key(kb.vkCode) {
+                wxdragon::wake_up_idle();
+                return LRESULT(1);
+            }
+        }
+        unsafe { CallNextHookEx(None, code, wparam, lparam) }
+    }
+
+    /// Installs the app-wide F1 hook. Idempotent.
+    pub fn install_hook() {
+        if HELP_HOOK.load(Ordering::Relaxed) != 0 {
             return;
+        }
+        unsafe {
+            if let Ok(hook) = SetWindowsHookExW(WH_KEYBOARD_LL, Some(keyboard_hook), None, 0) {
+                HELP_HOOK.store(hook.0 as isize, Ordering::Relaxed);
+            }
+        }
+    }
+
+    /// Removes the F1 hook. Idempotent.
+    pub fn uninstall_hook() {
+        let raw = HELP_HOOK.swap(0, Ordering::Relaxed);
+        if raw != 0 {
+            unsafe {
+                let _ = UnhookWindowsHookEx(HHOOK(raw as *mut _));
+            }
+        }
+    }
+
+    /// Called each pump tick. If F1 was pressed, resolves the focused control to its
+    /// help message and announces it.
+    pub fn pump() {
+        if !HELP_REQUESTED.swap(false, Ordering::Relaxed) {
+            return;
+        }
+        let mut info = GUITHREADINFO {
+            cbSize: std::mem::size_of::<GUITHREADINFO>() as u32,
+            ..Default::default()
         };
-        unsafe {
-            if !UiaClientsAreListening().as_bool() {
-                return;
+        let focus = unsafe {
+            if GetGUIThreadInfo(0, &mut info).is_ok() {
+                info.hwndFocus
+            } else {
+                HWND::default()
             }
-            // ImportantMostRecent asks the screen reader to speak this now and
-            // discard any older queued help, so repeated F1 presses interrupt
-            // rather than pile up.
-            if let Err(e) = UiaRaiseNotificationEvent(
-                &provider,
-                NotificationKind_Other,
-                NotificationProcessing_ImportantMostRecent,
-                &BSTR::from(text),
-                &BSTR::new(),
-            ) {
-                log::warn!("help: UiaRaiseNotificationEvent failed: {e}");
-            }
-        }
-    });
-}
-
-// --- F1 hook ---------------------------------------------------------------
-
-pub(super) fn foreground_is_ours() -> bool {
-    unsafe {
-        let fg = GetForegroundWindow();
-        if fg.0.is_null() {
-            return false;
-        }
-        let mut pid = 0u32;
-        GetWindowThreadProcessId(fg, Some(&mut pid));
-        pid == GetCurrentProcessId()
+        };
+        announce(&help_for(focus));
     }
 }
 
-/// True only while the main frame is the foreground window. Tighter than
-/// [`foreground_is_ours`] on purpose: it excludes our own modal dialogs and the
-/// plugin editor frames, which have their own F6 (see `fx_editor`).
-pub(super) fn foreground_is_main_frame() -> bool {
-    let frame = MAIN_FRAME.load(Ordering::Relaxed);
-    frame != 0 && unsafe { GetForegroundWindow() }.0 as isize == frame
-}
+/// **None of the three parts is built on macOS yet.** Each needs something
+/// different, and they are listed here in the order they are worth building.
+///
+/// - **[`announce`]** is the smallest and the one everything else is worth
+///   little without. VoiceOver speaks an `NSAccessibilityAnnouncementRequested`
+///   notification posted on the app object, with
+///   `NSAccessibilityPriorityKey` deciding whether it interrupts — which is
+///   exactly the `ImportantMostRecent` distinction the Windows side makes. There
+///   is no wxdragon API for it, so it is a short piece of `objc2`. Note that it
+///   is used for more than F1: the mixer's monitoring toggle and other state
+///   changes with no control of their own announce through it too, so until this
+///   exists those changes are silent.
+/// - **[`tag`]** wants the property to die with the window, which is the whole
+///   reason the Windows side uses `SetPropW` rather than a side map — the mixer
+///   rebuilds its strips constantly, and native handles get reused, so a map
+///   keyed by handle would eventually answer with another control's help. The
+///   faithful equivalent is `objc_setAssociatedObject` on the control's
+///   `NSView`, which is released with the view.
+/// - **[`install_hook`]** is a `CGEventTap` or a global `NSEvent` monitor, both
+///   behind the Accessibility permission in System Settings. That is an ordinary
+///   onboarding step rather than a reason to weaken the design, and it is the
+///   same permission `ui::keybinds` needs — so the two should be built as one
+///   thing, asking once.
+///
+/// Until then F1 says nothing, and neither do the keybindings.
+#[cfg(target_os = "macos")]
+mod imp {
+    use wxdragon::prelude::WxWidget;
 
-unsafe extern "system" fn keyboard_hook(code: i32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
-    if code == HC_ACTION as i32
-        && (wparam.0 as u32 == WM_KEYDOWN || wparam.0 as u32 == WM_SYSKEYDOWN)
-    {
-        let kb = unsafe { &*(lparam.0 as *const KBDLLHOOKSTRUCT) };
-        // First refusal goes to the Add-binding dialog's shortcut box: while it
-        // has focus every key belongs to it, F1 and F6 included, which is the
-        // only way they could ever be typed into it.
-        if super::keybinds::capture_key(kb.vkCode) {
-            wxdragon::wake_up_idle();
-            return LRESULT(1);
-        }
-        if kb.vkCode == VK_F1.0 as u32 && foreground_is_ours() {
-            HELP_REQUESTED.store(true, Ordering::Relaxed);
-            // Ring the doorbell: `pump` runs from the idle handler, and F1 is
-            // swallowed below, so nothing else would wake the loop to notice.
-            wxdragon::wake_up_idle();
-            // Swallow F1 so no underlying control pops its own help.
-            return LRESULT(1);
-        }
-        if kb.vkCode == VK_F6.0 as u32 && foreground_is_main_frame() {
-            // Physical shift state: `GetKeyState` here would report this
-            // thread's queued state, which is not what the user just held.
-            let shift = unsafe { GetAsyncKeyState(VK_SHIFT.0 as i32) } as u16 & 0x8000 != 0;
-            super::panes::request(shift);
-            wxdragon::wake_up_idle();
-            // Swallow it: MSW gives F6 its own pane-switching meaning.
-            return LRESULT(1);
-        }
-        // Last, so the two built-ins above can never be shadowed by a user
-        // binding. `keybinds_ui` refuses F1 and F6 for that reason.
-        if super::keybinds::hook_key(kb.vkCode) {
-            wxdragon::wake_up_idle();
-            return LRESULT(1);
-        }
-    }
-    unsafe { CallNextHookEx(None, code, wparam, lparam) }
-}
+    pub fn tag(_widget: &dyn WxWidget, _id: &str, _label: &str) {}
 
-/// Installs the app-wide F1 hook. Idempotent.
-pub fn install_hook() {
-    if HELP_HOOK.load(Ordering::Relaxed) != 0 {
-        return;
-    }
-    unsafe {
-        if let Ok(hook) = SetWindowsHookExW(WH_KEYBOARD_LL, Some(keyboard_hook), None, 0) {
-            HELP_HOOK.store(hook.0 as isize, Ordering::Relaxed);
-        }
-    }
-}
+    pub fn install_announcer(_frame: &dyn WxWidget) {}
 
-/// Removes the F1 hook. Idempotent.
-pub fn uninstall_hook() {
-    let raw = HELP_HOOK.swap(0, Ordering::Relaxed);
-    if raw != 0 {
-        unsafe {
-            let _ = UnhookWindowsHookEx(HHOOK(raw as *mut _));
-        }
-    }
-}
+    pub fn uninstall_announcer() {}
 
-/// Called each pump tick. If F1 was pressed, resolves the focused control to its
-/// help message and announces it.
-pub fn pump() {
-    if !HELP_REQUESTED.swap(false, Ordering::Relaxed) {
-        return;
+    pub fn announce(text: &str) {
+        // Not dropped silently: this is the app talking to a screen-reader user,
+        // and a log line is the only trace there is until the real path exists.
+        log::debug!("Would announce to the screen reader: {text}");
     }
-    let mut info = GUITHREADINFO {
-        cbSize: std::mem::size_of::<GUITHREADINFO>() as u32,
-        ..Default::default()
-    };
-    let focus = unsafe {
-        if GetGUIThreadInfo(0, &mut info).is_ok() {
-            info.hwndFocus
-        } else {
-            HWND::default()
-        }
-    };
-    announce(&help_for(focus));
+
+    pub fn install_hook() {}
+
+    pub fn uninstall_hook() {}
+
+    pub fn pump() {}
+
+    /// Answers "yes" rather than "no", because every caller uses it to *gate*
+    /// an action and nothing currently reaches them: with no hook installed
+    /// there are no keybindings to dispatch, so the value is unobservable. It
+    /// becomes a real question — `NSApp.isActive` — at the same time the hook
+    /// does.
+    pub fn foreground_is_ours() -> bool {
+        true
+    }
+
+    pub fn foreground_is_main_frame() -> bool {
+        true
+    }
 }
