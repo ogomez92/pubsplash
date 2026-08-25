@@ -187,6 +187,7 @@ mod imp {
 mod imp {
     use aes_gcm::{Aes256Gcm, KeyInit, Nonce, aead::Aead};
     use rand::{RngCore, rngs::OsRng};
+    #[cfg(not(test))]
     use std::sync::OnceLock;
 
     /// What the Keychain item is filed under. Neither string carries a version
@@ -207,12 +208,35 @@ mod imp {
     /// (locked, or denied) the answer will not change within this run, and the
     /// callers above already handle a `None` by keeping the value in plaintext
     /// rather than losing it.
+    #[cfg(not(test))]
     fn key() -> Option<&'static [u8; 32]> {
         static KEY: OnceLock<Option<[u8; 32]>> = OnceLock::new();
         KEY.get_or_init(load_or_create_key).as_ref()
     }
 
-    fn load_or_create_key() -> Option<[u8; 32]> {
+    /// **The test build never touches the Keychain.**
+    ///
+    /// Reading a Keychain item puts an authorization dialog in front of whoever
+    /// ran `cargo test`, because macOS keys the item's ACL to the *code
+    /// signature* of the program asking — and an unsigned test binary is a
+    /// different program every time it is rebuilt. So the suite would prompt on
+    /// every run, block until answered, and write to the developer's real
+    /// login keychain while it was at it. None of that is testing anything:
+    /// what the tests above check is the serde shape, the `enc:` marker, the
+    /// legacy-plaintext path and the never-print `Debug`, all of which want a
+    /// key and do not care where it came from.
+    ///
+    /// The Keychain path itself is covered by `the_real_keychain_round_trips`
+    /// below, which is `#[ignore]`d for exactly the reason the other
+    /// resource-touching tests in this codebase are.
+    #[cfg(test)]
+    fn key() -> Option<&'static [u8; 32]> {
+        static KEY: [u8; 32] = [0x5a; 32];
+        Some(&KEY)
+    }
+
+    #[cfg_attr(test, allow(dead_code))]
+    pub fn load_or_create_key() -> Option<[u8; 32]> {
         use security_framework::passwords::{get_generic_password, set_generic_password};
 
         if let Ok(stored) = get_generic_password(SERVICE, ACCOUNT) {
@@ -304,6 +328,28 @@ mod tests {
     fn empty_secrets_stay_empty_and_unencrypted() {
         let json = serde_json::to_string(&Secret::default()).unwrap();
         assert_eq!(json, "\"\"");
+    }
+
+    /// The Keychain path, which the rest of the suite deliberately avoids.
+    ///
+    /// `#[ignore]`d because it prompts: macOS ties a Keychain item's ACL to the
+    /// asking program's code signature, and an unsigned test binary is a new
+    /// program on every rebuild. Run it deliberately, the way the other
+    /// resource-touching tests here are run:
+    ///
+    /// `cargo test the_real_keychain -- --ignored`
+    #[cfg(target_os = "macos")]
+    #[test]
+    #[ignore]
+    fn the_real_keychain_round_trips() {
+        let key = super::imp::load_or_create_key().expect("a Keychain key");
+        assert_eq!(key.len(), 32);
+        assert_ne!(key, [0u8; 32], "an all-zero key means nothing was read");
+        assert_eq!(
+            super::imp::load_or_create_key(),
+            Some(key),
+            "a second read must find the same key, or every stored credential is orphaned"
+        );
     }
 
     #[test]
