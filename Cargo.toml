@@ -140,6 +140,24 @@ security-framework = "3"
 # several times over transitively; named here so the crash handler's FFI is
 # declared by the crate that owns those declarations rather than by hand.
 libc = "0.2"
+# Core Audio, for capture, playback and device enumeration. The `objc2` family
+# rather than `coreaudio-rs`/`coreaudio-sys` for two reasons: these are
+# pre-generated bindings with no `bindgen` and so no libclang at build time, and
+# wxdragon already pulls objc2 0.3 into the tree, so they share one version of
+# it instead of standing up a second FFI stack beside it.
+#
+# They are bindings and nothing more -- no stream abstraction, no device
+# manager. That is what is wanted here: `audio::capture` and `audio::monitor`
+# already own the supervisor loop, the backoff, the ring buffers and the health
+# accounting, and a crate that owns those too would have to be fought rather
+# than used.
+objc2-core-audio = "0.3"
+objc2-audio-toolbox = "0.3"
+objc2-core-audio-types = "0.3"
+# A device's UID and name come back as `CFString`s, which have to be retained
+# and copied out. Already in the tree under `objc2-core-audio`; named here
+# because this crate uses it directly.
+objc2-core-foundation = "0.3"
 
 [dev-dependencies]
 # `test-util` gives `#[tokio::test(start_paused = true)]`, which lets the

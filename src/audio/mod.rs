@@ -5,6 +5,10 @@
 pub mod app_list;
 pub mod capture;
 pub mod convert;
+/// The Core Audio primitives `device`, `render`, `monitor` and `capture` are
+/// built on. Self-contained, for the same reason `convert.rs` is.
+#[cfg(target_os = "macos")]
+pub mod coreaudio;
 pub mod cue;
 pub mod device;
 pub mod encoder;

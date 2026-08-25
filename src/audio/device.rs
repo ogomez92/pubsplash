@@ -288,51 +288,93 @@ mod imp {
     }
 }
 
-/// Core Audio. **Enumeration is not built yet** — the seam standing open.
+/// Core Audio, through the HAL's property API. See [`crate::audio::coreaudio`]
+/// for the primitives and, in particular, for why a stored device id is a
+/// **UID string** and never an `AudioDeviceID`.
 ///
-/// What goes here is `AudioObjectGetPropertyData` against
-/// `kAudioHardwarePropertyDevices`, filtered by whether each device has input or
-/// output streams, with `kAudioDevicePropertyDeviceUID` as the stable id to
-/// store in the settings file (a raw `AudioDeviceID` is a per-boot handle and
-/// must never be persisted) and `kAudioObjectPropertyName` for the label. The
-/// Windows `Active`-state rule has a direct equivalent worth keeping: a stored
-/// UID that no longer resolves must be an error the caller retries, never a
-/// silent swap for the default device.
+/// There is one device list here, not a capture list and a render list: a
+/// device is an input or an output according to whether it carries streams in
+/// that scope, and every USB interface carries both. So both pickers walk the
+/// same list and filter it, and an interface correctly appears in each.
 ///
-/// [`friendly_name`] *is* implemented, because it needs nothing but the path.
+/// The Windows `Active`-state rule has a direct equivalent and it is kept:
+/// a configured UID that no live device claims is an **error the caller
+/// retries**, never a silent fall back to the default device. `capture` clears
+/// a Desktop Audio source against whatever the output device is, so a fallback
+/// could put the output back onto the endpoint that check just approved.
 #[cfg(target_os = "macos")]
 mod imp {
     use super::DeviceInfo;
+    use crate::audio::coreaudio::{self, Scope};
     use std::path::Path;
 
-    /// Stands in for a Core Audio `AudioDeviceID`. Nothing constructs one yet.
+    /// An opened device. A bare `AudioDeviceID`, which is all a Core Audio
+    /// `AudioUnit` needs to be pointed at one.
+    ///
+    /// Deliberately not `Clone`-into-storage anywhere: it is valid only for as
+    /// long as the device is present, which is why it is resolved from a UID at
+    /// every open rather than cached.
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
     pub struct Device(pub u32);
-
-    const UNBUILT: &str = "audio devices are not enumerated on macOS yet";
 
     /// Core Audio needs no per-thread initialization; COM's rule has no
     /// equivalent here.
     pub fn ensure_com_initialized() {}
 
+    fn devices_in(scope: Scope) -> Vec<DeviceInfo> {
+        coreaudio::all_devices()
+            .into_iter()
+            .filter(|&device| coreaudio::has_streams(device, scope))
+            .filter_map(coreaudio::describe)
+            .map(|(id, name)| DeviceInfo { id, name })
+            .collect()
+    }
+
     pub fn capture_devices() -> Vec<DeviceInfo> {
-        Vec::new()
+        devices_in(Scope::Input)
     }
 
     pub fn render_devices() -> Vec<DeviceInfo> {
-        Vec::new()
+        devices_in(Scope::Output)
     }
 
-    pub fn capture_device(_id: Option<&str>) -> Result<Device, String> {
-        Err(UNBUILT.to_string())
+    /// Resolves a UID to a device, checking it really is an input.
+    ///
+    /// The scope check is not pedantry. Core Audio is happy to hand back the
+    /// device for any UID, so a settings file naming an output-only device — or
+    /// a UID that used to be an interface and is now something else — would
+    /// otherwise open an input `AudioUnit` that never delivers a frame. Saying
+    /// so is what lets the supervisor report it and retry.
+    pub fn capture_device(id: Option<&str>) -> Result<Device, String> {
+        let Some(id) = id else {
+            return coreaudio::default_device(Scope::Input)
+                .map(Device)
+                .ok_or_else(|| "there is no default microphone".to_string());
+        };
+        open(id, Scope::Input, "microphone")
     }
 
-    pub fn render_device(_id: &str) -> Result<Device, String> {
-        Err(UNBUILT.to_string())
+    pub fn render_device(id: &str) -> Result<Device, String> {
+        open(id, Scope::Output, "output device")
+    }
+
+    fn open(uid: &str, scope: Scope, what: &str) -> Result<Device, String> {
+        let device = coreaudio::device_for_uid(uid)
+            .ok_or_else(|| format!("the configured {what} is not connected"))?;
+        if !coreaudio::has_streams(device, scope) {
+            return Err(format!(
+                "the configured {what} has no {} streams",
+                match scope {
+                    Scope::Input => "input",
+                    Scope::Output => "output",
+                }
+            ));
+        }
+        Ok(Device(device))
     }
 
     pub fn default_render_device_id() -> Option<String> {
-        None
+        coreaudio::default_device(Scope::Output).and_then(coreaudio::device_uid)
     }
 
     /// The name a Mac user recognises for a running executable: the enclosing
@@ -758,6 +800,26 @@ fn first_string(raw: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The invariant both pickers depend on: every row has an id that can be
+    /// stored and resolved again, and a name to show. A machine with no audio
+    /// hardware at all is allowed; a row with an empty id is not.
+    #[test]
+    fn every_listed_device_has_an_id_and_a_name() {
+        for device in capture_devices().into_iter().chain(render_devices()) {
+            assert!(!device.id.is_empty(), "{device:?}");
+            assert!(!device.name.is_empty(), "{device:?}");
+        }
+    }
+
+    /// A configured device that is not there must be an error rather than a
+    /// quiet fallback to the default one, on both platforms and for the reason
+    /// `render::output_render_device` gives.
+    #[test]
+    fn an_unknown_device_id_is_an_error() {
+        assert!(capture_device(Some("{not-a-real-device}")).is_err());
+        assert!(render_device("{not-a-real-device}").is_err());
+    }
 
     fn row(pid: u32, parent: u32, name: &str) -> ProcRow {
         (pid, (parent != 0).then_some(parent), name.to_string())
