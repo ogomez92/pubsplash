@@ -158,6 +158,42 @@ objc2-core-audio-types = "0.3"
 # and copied out. Already in the tree under `objc2-core-audio`; named here
 # because this crate uses it directly.
 objc2-core-foundation = "0.3"
+# The local system voice: `AVSpeechSynthesizer` and the `AVAudioPCMBuffer`s its
+# `write(_:toBufferCallback:)` hands back, which is the slot SAPI fills on
+# Windows. Same objc2 family as the Core Audio bindings above, so no second FFI
+# stack.
+objc2-avf-audio = "0.3"
+# The three pieces that API needs beyond the framework binding itself: `objc2`
+# for `Retained` and the message sends, `objc2-foundation` for the `NSString`
+# the utterance is built from, and `block2` for the buffer callback -- the API
+# is block-based and there is no other way to receive the audio.
+objc2 = "0.6"
+objc2-foundation = "0.3"
+block2 = "0.6"
+# `AVSpeechSynthesizer` delivers its buffers only through the *main* run loop --
+# measured, not assumed -- so the speech worker starts each utterance on the main
+# queue and waits on its own thread. This is the only thing in the tree that
+# dispatches, and `tts/sapi_mac.rs` documents why at length.
+dispatch2 = "0.3"
+# `ui/help.rs`: the screen-reader announcement (`NSAccessibilityAnnouncement-
+# Requested`), the app-wide key monitor that replaces the Windows low-level
+# keyboard hook, and the key-window checks that gate both. wxdragon already
+# builds against this, so it is the same copy.
+objc2-app-kit = "0.3"
+# `ui/global_keys.rs` only: the `CGEventTap` that lets a binding marked *global*
+# fire while another application is in front. It is the one thing in the app that
+# needs the Accessibility permission, and it is asked for lazily -- see that
+# file's header.
+objc2-core-graphics = "0.3"
+# Desktop Audio: `SCStream` with `capturesAudio` and, crucially,
+# `excludesCurrentProcessAudio` -- Apple's supported "everything the machine is
+# playing except me" flag. It replaced a Core Audio process tap built with
+# `CATapDescription(excludingProcesses:)`, whose exclusion did not bind
+# reliably; `audio/screen_audio.rs` carries the measurement that decided it.
+objc2-screen-capture-kit = "0.3"
+# The `CMSampleBuffer` ScreenCaptureKit delivers its audio in. Only
+# `audio/screen_audio.rs` names it.
+objc2-core-media = "0.3"
 
 [dev-dependencies]
 # `test-util` gives `#[tokio::test(start_paused = true)]`, which lets the
