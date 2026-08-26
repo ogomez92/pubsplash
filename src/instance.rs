@@ -239,23 +239,55 @@ mod tests {
     use super::*;
     use std::sync::atomic::{AtomicU32, Ordering};
 
+    /// A test's claim name, which cleans up after itself.
+    ///
     /// Tests run in parallel threads of one process, and the claim namespace is
     /// shared by all of them, so every test needs a name no other test can
     /// collide with.
-    fn unique_name() -> String {
-        static NEXT: AtomicU32 = AtomicU32::new(0);
-        let unique = format!(
-            "Pubsplash-test-{}-{}",
-            std::process::id(),
-            NEXT.fetch_add(1, Ordering::Relaxed)
-        );
-        // A kernel object name on Windows, a file name in the data directory on
-        // macOS. Neither may be the real claim, or a test would turn the
-        // developer's running copy away.
-        if cfg!(windows) {
-            format!(r"Local\{unique}")
-        } else {
-            format!("{unique}.lock")
+    ///
+    /// It has to remove the claim as well as name it, and that is the macOS
+    /// half: a claim there is a real file in the user's data directory, and
+    /// releasing the lock closes the descriptor without deleting the file. The
+    /// app wants exactly that — one `single-instance.lock` that outlives every
+    /// run — but a test makes a *new* name every time, so left alone the suite
+    /// drops a file into `~/Library/Application Support/pubsplash` on every run
+    /// and never picks one up. Same rule as keeping the suite out of the login
+    /// keychain: the tests may use the real machine, but they may not leave
+    /// anything on it. On Windows the name is a kernel object and there is
+    /// nothing on disk to remove.
+    struct TestClaim(String);
+
+    impl TestClaim {
+        fn new() -> Self {
+            static NEXT: AtomicU32 = AtomicU32::new(0);
+            let unique = format!(
+                "Pubsplash-test-{}-{}",
+                std::process::id(),
+                NEXT.fetch_add(1, Ordering::Relaxed)
+            );
+            // A kernel object name on Windows, a file name in the data directory
+            // on macOS. Neither may be the real claim, or a test would turn the
+            // developer's running copy away.
+            Self(if cfg!(windows) {
+                format!(r"Local\{unique}")
+            } else {
+                format!("{unique}.lock")
+            })
+        }
+
+        fn name(&self) -> &str {
+            &self.0
+        }
+    }
+
+    impl Drop for TestClaim {
+        fn drop(&mut self) {
+            #[cfg(target_os = "macos")]
+            {
+                // Best effort: a test that failed early is not made worse by a
+                // file that could not be removed.
+                let _ = std::fs::remove_file(crate::data_dir::root().join(&self.0));
+            }
         }
     }
 
@@ -265,10 +297,11 @@ mod tests {
 
     #[test]
     fn second_acquire_is_rejected() {
-        let name = unique_name();
-        let first = acquire_named(&name, Duration::ZERO);
+        let claim = TestClaim::new();
+        let name = claim.name();
+        let first = acquire_named(name, Duration::ZERO);
         assert!(is_held(&first), "the first instance should be let in");
-        let second = acquire_named(&name, Duration::ZERO);
+        let second = acquire_named(name, Duration::ZERO);
         assert!(
             !is_held(&second),
             "the second instance should be turned away"
@@ -279,17 +312,19 @@ mod tests {
     /// moment the holder is.
     #[test]
     fn releasing_lets_the_next_one_in() {
-        let name = unique_name();
-        let first = acquire_named(&name, Duration::ZERO);
+        let claim = TestClaim::new();
+        let name = claim.name();
+        let first = acquire_named(name, Duration::ZERO);
         assert!(is_held(&first));
         drop(first);
-        let second = acquire_named(&name, Duration::ZERO);
+        let second = acquire_named(name, Duration::ZERO);
         assert!(is_held(&second), "the claim should have been released");
     }
 
     #[test]
     fn grace_window_is_waited_out() {
-        let name = unique_name();
+        let claim = TestClaim::new();
+        let name = claim.name().to_string();
         let holder = acquire_named(&name, Duration::ZERO);
         assert!(is_held(&holder));
         // The waiter runs on the other thread rather than the holder, because
@@ -315,8 +350,10 @@ mod tests {
     /// than on the path: both files exist at once and both are held.
     #[test]
     fn different_names_do_not_contend() {
-        let first = acquire_named(&unique_name(), Duration::ZERO);
-        let second = acquire_named(&unique_name(), Duration::ZERO);
+        let one = TestClaim::new();
+        let two = TestClaim::new();
+        let first = acquire_named(one.name(), Duration::ZERO);
+        let second = acquire_named(two.name(), Duration::ZERO);
         assert!(is_held(&first) && is_held(&second));
     }
 }
