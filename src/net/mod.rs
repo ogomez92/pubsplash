@@ -5,6 +5,7 @@
 pub mod audiopub;
 pub mod icecast;
 pub mod sse;
+pub mod stats;
 
 use crate::secret::Secret;
 use audiopub::{AudioPubClient, EventsStream, StreamIdentity};
@@ -35,6 +36,10 @@ pub enum ServiceProfile {
         mount: String,
         username: String,
         password: Secret,
+        /// Where to count listeners, when they do not listen on the mount we
+        /// publish to. Empty counts `mount` itself. See [`stats::stats_target`]
+        /// for the forms this accepts.
+        listener_url: String,
     },
 }
 
@@ -218,6 +223,7 @@ enum Connection {
         mount: String,
         username: String,
         password: Secret,
+        listener_url: String,
     },
 }
 
@@ -231,6 +237,11 @@ fn audiopub_client(connection: &Connection) -> Option<&AudioPubClient> {
 struct ActiveStream {
     stream_id: String,
     sse_task: Option<tokio::task::JoinHandle<()>>,
+    /// Polls the Icecast status document for listener counts. Only a direct
+    /// Icecast service has one: an Audio Pub stream is told over the same feed
+    /// that carries its chat, and asking Icecast as well would be a second,
+    /// worse answer to a question already answered.
+    stats_task: Option<tokio::task::JoinHandle<()>>,
     icecast_task: tokio::task::JoinHandle<()>,
     /// Rings the chat feed task to abandon what it is doing and reconnect now.
     ///
@@ -246,6 +257,9 @@ struct ActiveStream {
 impl ActiveStream {
     fn abort(&self) {
         if let Some(task) = &self.sse_task {
+            task.abort();
+        }
+        if let Some(task) = &self.stats_task {
             task.abort();
         }
         self.icecast_task.abort();
@@ -455,6 +469,7 @@ async fn net_loop(mut commands: tokio_mpsc::UnboundedReceiver<NetCommand>, event
                         mount,
                         username,
                         password,
+                        listener_url,
                     } => {
                         let armed = Connection::Icecast {
                             server,
@@ -462,6 +477,7 @@ async fn net_loop(mut commands: tokio_mpsc::UnboundedReceiver<NetCommand>, event
                             mount,
                             username,
                             password,
+                            listener_url,
                         };
                         let checked = match direct_icecast_target(&armed, "audio/mpeg") {
                             Ok(target) => resolve_icecast_host(&target.host)
@@ -1093,6 +1109,144 @@ fn spawn_icecast_sender(
     })
 }
 
+/// How often a direct Icecast mount's listener count is refreshed.
+///
+/// This is the one polled thing in `net`, and it is polled because Icecast
+/// offers nothing else: a source client's connection carries audio one way and
+/// the server never volunteers anything about who is listening. Audio Pub's
+/// counts arrive over SSE precisely because Audio Pub built a channel for them;
+/// a plain mount has only the status document.
+///
+/// Ten seconds is chosen against the **sound events** rather than the display.
+/// A listener arriving or leaving plays a cue (`StreamEvent::ListenerIncrease`
+/// and its siblings), and a cue that lands half a minute after the fact reads as
+/// a cue for nothing — while the Home tab's number is read on demand and would
+/// be happy with much less. The document is a couple of kilobytes.
+const LISTENER_POLL_INTERVAL: Duration = Duration::from_secs(10);
+
+/// Bounds one status request, well inside the interval so a wedged read cannot
+/// stack up behind the next one. A reading is only worth having while it is
+/// current, so a slow answer is better dropped than waited for.
+const LISTENER_POLL_TIMEOUT: Duration = Duration::from_secs(8);
+
+/// How many consecutive readings may omit the mount before the log says so.
+///
+/// Not one: at the moment a stream starts, the mount genuinely is not up yet —
+/// and when the count is being taken on a *relay*, that relay has to notice the
+/// source and connect before it appears at all, which is seconds at best. A
+/// minute of silence separates "still coming up" from "that mount name is
+/// wrong", which is the misconfiguration this whole field invites.
+const LISTENER_MISSING_GRACE: u32 = 6;
+
+/// Owns the listener-count poll for one direct Icecast stream.
+///
+/// Failures are the log's business and nothing else's: this reports a number
+/// beside a broadcast that is running perfectly well, so an unreachable status
+/// document must not become a modal, a chat line, or a stream state. The same
+/// `reported` flag the chat feed and the Icecast sender carry keeps that to one
+/// line per outage rather than one every ten seconds for the whole show.
+fn spawn_listener_poll(
+    target: stats::StatsTarget,
+    events: EventSender,
+) -> tokio::task::JoinHandle<()> {
+    tokio::spawn(async move {
+        let client = match reqwest::Client::builder()
+            .timeout(LISTENER_POLL_TIMEOUT)
+            .build()
+        {
+            Ok(client) => client,
+            Err(e) => {
+                log::warn!("Listener counts: no HTTP client ({e}); the count will stay at zero");
+                return;
+            }
+        };
+        let counting = match &target.mount {
+            Some(mount) => mount.clone(),
+            None => "every mount on the server".to_string(),
+        };
+        log::info!(
+            "Listener counts: reading {} every {}s, counting {counting}",
+            target.status_url,
+            LISTENER_POLL_INTERVAL.as_secs()
+        );
+
+        let mut reported = false;
+        // Stock Icecast's *public* status document carries no peak, so the
+        // high-water mark is ours to keep. The UI takes a max of its own, but
+        // doing it here as well means the number this task reports is true on
+        // its own terms rather than only after the pump has seen it.
+        let mut high_water = 0u32;
+        let mut missing = 0u32;
+        let mut said_missing = false;
+
+        loop {
+            match read_counts(&client, &target).await {
+                Ok(counts) => {
+                    if reported {
+                        reported = false;
+                        log::info!("Listener counts: {} is answering again", target.status_url);
+                    }
+                    if counts.matched {
+                        missing = 0;
+                        if said_missing {
+                            said_missing = false;
+                            log::info!("Listener counts: {counting} is up; counting it again");
+                        }
+                    } else {
+                        missing = missing.saturating_add(1);
+                        if missing >= LISTENER_MISSING_GRACE && !said_missing {
+                            said_missing = true;
+                            log::warn!(
+                                "Listener counts: {} does not list {counting}. Check the \
+                                 listener count URL for this service; the count stays at zero \
+                                 until that mount appears.",
+                                target.status_url
+                            );
+                        }
+                    }
+                    high_water = high_water.max(counts.listeners);
+                    let _ = events.send(NetEvent::Listeners {
+                        active: counts.listeners,
+                        peak: counts.peak.max(high_water),
+                    });
+                }
+                Err(reason) => {
+                    if !reported {
+                        reported = true;
+                        log::warn!(
+                            "Listener counts: could not read {} ({reason})",
+                            target.status_url
+                        );
+                    }
+                }
+            }
+            tokio::time::sleep(LISTENER_POLL_INTERVAL).await;
+        }
+    })
+}
+
+/// One reading of a status document.
+async fn read_counts(
+    client: &reqwest::Client,
+    target: &stats::StatsTarget,
+) -> Result<stats::Counts, String> {
+    let response = client
+        .get(&target.status_url)
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    let status = response.status();
+    if !status.is_success() {
+        // Read before the body is touched: a 404 here is the likeliest single
+        // failure — a server old enough or locked down enough to have no JSON
+        // status document — and its body is an HTML error page that would only
+        // muddy the message.
+        return Err(format!("the server answered {status}"));
+    }
+    let body = response.text().await.map_err(|e| e.to_string())?;
+    stats::parse_counts(&body, target.mount.as_deref())
+}
+
 async fn start_stream(
     conn: &Connection,
     title: &str,
@@ -1171,11 +1325,20 @@ async fn start_stream(
             Ok(ActiveStream {
                 stream_id,
                 sse_task: Some(sse_task),
+                // Audio Pub counts listeners itself and says so over the feed
+                // above; nothing to poll.
+                stats_task: None,
                 icecast_task,
                 chat_reconnect,
             })
         }
-        Connection::Icecast { mount, .. } => {
+        Connection::Icecast {
+            server,
+            port,
+            mount,
+            listener_url,
+            ..
+        } => {
             let target = direct_icecast_target(conn, content_type)?;
             let icecast = IcecastConnection::connect(&target)
                 .await
@@ -1190,9 +1353,23 @@ async fn start_stream(
                 stream_id: stream_id.clone(),
             });
 
+            // Counts are worth having and are not worth a broadcast. The field
+            // is validated in `service_profile_from_site`, so this can only fail
+            // on a service edited between Connect and Start — in which case the
+            // Home tab reads zero listeners and the log says why, rather than
+            // Start streaming failing over a number.
+            let stats_task = match stats::stats_target(server, *port, mount, listener_url) {
+                Ok(target) => Some(spawn_listener_poll(target, events.clone())),
+                Err(reason) => {
+                    log::warn!("Listener counts: {reason} The count will stay at zero.");
+                    None
+                }
+            };
+
             Ok(ActiveStream {
                 stream_id,
                 sse_task: None,
+                stats_task,
                 // Never rung: a direct Icecast mount has no chat feed at all.
                 chat_reconnect: tokio_mpsc::unbounded_channel().0,
                 icecast_task,
@@ -1556,6 +1733,109 @@ mod chat_feed_tests {
 }
 
 #[cfg(test)]
+mod listener_poll_tests {
+    use super::*;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    /// Serves one canned status document per connection, and reports back the
+    /// path each request asked for.
+    fn status_server(
+        body: &'static str,
+    ) -> (
+        String,
+        tokio::sync::mpsc::UnboundedReceiver<String>,
+        tokio::task::JoinHandle<()>,
+    ) {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        listener.set_nonblocking(true).unwrap();
+        let addr = listener.local_addr().unwrap();
+        let listener = tokio::net::TcpListener::from_std(listener).unwrap();
+        let (path_tx, path_rx) = tokio::sync::mpsc::unbounded_channel();
+        let server = tokio::spawn(async move {
+            loop {
+                let Ok((mut sock, _)) = listener.accept().await else {
+                    return;
+                };
+                let mut buf = vec![0u8; 2048];
+                let read = sock.read(&mut buf).await.unwrap_or(0);
+                let request = String::from_utf8_lossy(&buf[..read]).to_string();
+                let path = request
+                    .split_whitespace()
+                    .nth(1)
+                    .unwrap_or_default()
+                    .to_string();
+                let _ = path_tx.send(path);
+                let response = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\
+                     Connection: close\r\n\r\n{body}",
+                    body.len()
+                );
+                let _ = sock.write_all(response.as_bytes()).await;
+                let _ = sock.shutdown().await;
+            }
+        });
+        (addr.to_string(), path_rx, server)
+    }
+
+    const THREE_MOUNTS: &str = r#"{"icestats":{"source":[
+        {"mount":"/live.mp3","listeners":0},
+        {"mount":"/stream.mp3","listeners":5}]}}"#;
+
+    /// The end-to-end shape of the feature: the source holds `/live.mp3`, the
+    /// audience is on the relay's `/stream.mp3`, and the count the UI is handed
+    /// is the relay's.
+    #[tokio::test]
+    async fn the_poll_reports_the_relay_mount_not_the_source_mount() {
+        let (addr, mut paths, server) = status_server(THREE_MOUNTS);
+        let (host, port) = icecast::split_host_port(&addr).unwrap();
+        let target = stats::stats_target(&host, port.unwrap(), "live.mp3", "stream.mp3").unwrap();
+
+        let (event_tx, event_rx) = crossbeam_channel::unbounded();
+        let task = spawn_listener_poll(target, EventSender(event_tx));
+
+        let event = tokio::task::spawn_blocking(move || {
+            event_rx.recv_timeout(Duration::from_secs(10)).unwrap()
+        })
+        .await
+        .unwrap();
+        task.abort();
+        server.abort();
+
+        // The status document, not the mount, is what was fetched.
+        assert_eq!(paths.recv().await.unwrap(), "/status-json.xsl");
+        match event {
+            NetEvent::Listeners { active, peak } => {
+                assert_eq!(active, 5, "the relay mount's audience, not the source's");
+                assert_eq!(peak, 5, "with no published peak, our own high-water mark");
+            }
+            other => panic!("expected a listener count, got {other:?}"),
+        }
+    }
+
+    /// A server that answers but does not list the mount is a count of zero,
+    /// not a broken poll: it must go on reporting, so the number recovers by
+    /// itself the moment the relay comes up.
+    #[tokio::test]
+    async fn a_mount_that_is_not_up_still_reports() {
+        let (addr, _paths, server) = status_server(r#"{"icestats":{}}"#);
+        let (host, port) = icecast::split_host_port(&addr).unwrap();
+        let target = stats::stats_target(&host, port.unwrap(), "live.mp3", "stream.mp3").unwrap();
+
+        let (event_tx, event_rx) = crossbeam_channel::unbounded();
+        let task = spawn_listener_poll(target, EventSender(event_tx));
+        let event = tokio::task::spawn_blocking(move || {
+            event_rx.recv_timeout(Duration::from_secs(10)).unwrap()
+        })
+        .await
+        .unwrap();
+        task.abort();
+        server.abort();
+
+        assert!(matches!(event, NetEvent::Listeners { active: 0, peak: 0 }));
+    }
+}
+
+#[cfg(test)]
 mod host_tests {
     use super::*;
 
@@ -1582,6 +1862,7 @@ mod host_tests {
             mount: "/live".to_string(),
             username: "dj".to_string(),
             password: Secret::new("secret"),
+            listener_url: String::new(),
         };
         let target = direct_icecast_target(&conn, "audio/aac").unwrap();
         assert_eq!(target.host, "ice.example.org:9000");
@@ -1602,6 +1883,7 @@ mod host_tests {
             mount: "live.mp3".to_string(),
             username: "source".to_string(),
             password: Secret::new("secret"),
+            listener_url: String::new(),
         };
         let target = direct_icecast_target(&conn, "audio/mpeg").unwrap();
         assert_eq!(target.host, "gomsen.com:8000");
@@ -1618,6 +1900,7 @@ mod host_tests {
             mount: "live".to_string(),
             username: "dj".to_string(),
             password: Secret::new("secret"),
+            listener_url: String::new(),
         };
         let target = direct_icecast_target(&conn, "audio/mpeg").unwrap();
         assert_eq!(target.host, "ice.example.org:9000");
@@ -1631,6 +1914,7 @@ mod host_tests {
             mount: "live".to_string(),
             username: String::new(),
             password: Secret::new("secret"),
+            listener_url: String::new(),
         };
         let target = direct_icecast_target(&conn, "audio/mpeg").unwrap();
         assert_eq!(target.username, "source");
@@ -1644,6 +1928,7 @@ mod host_tests {
             mount: "/".to_string(),
             username: "source".to_string(),
             password: Secret::new("secret"),
+            listener_url: String::new(),
         };
         let target = direct_icecast_target(&conn, "audio/mpeg").unwrap();
         assert_eq!(target.mount, "/");

@@ -73,6 +73,12 @@ file = "src/ui/connect_dialog.rs"
 message = "Type the email address you use to log in to the selected Audiopub service."
 
 [[control]]
+id = "dialog.connect.icecastListeners"
+label = "Listener count URL for the selected service"
+file = "src/ui/connect_dialog.rs"
+message = "Optional. Type where your listeners actually are, if that is not the mount you publish to. Leave this blank to count the mount point above. Type a mount name such as stream.mp3 to count a different mount on the same server, or a full listen URL such as http://radio.example.com:8000/stream.mp3 to count one somewhere else. A server with no mount after it counts everyone on that server. Use this when a relay, such as Liquidsoap, takes your mount and republishes it under another name."
+
+[[control]]
 id = "dialog.connect.icecastMount"
 label = "Icecast mount point for the selected service"
 file = "src/ui/connect_dialog.rs"

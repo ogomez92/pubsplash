@@ -13,7 +13,10 @@ const NO_SERVICES: &str = "No services";
 pub fn show(app: &Rc<App>, frame: &Frame) {
     let dialog = Dialog::builder(frame, "Setup streaming services")
         .with_style(DialogStyle::DefaultDialogStyle | DialogStyle::ResizeBorder)
-        .with_size(560, 640)
+        // Grown by one label-and-field row when the listener count URL was
+        // added: the services list is the only thing here with a proportion, so
+        // anything else that appears comes straight out of it.
+        .with_size(560, 700)
         .build();
     let panel = Panel::builder(&dialog).build();
     let sizer = BoxSizer::builder(Orientation::Vertical).build();
@@ -122,6 +125,16 @@ pub fn show(app: &Rc<App>, frame: &Frame) {
         "dialog.connect.icecastMount",
         "Icecast mount point for the selected service",
     );
+    let listeners_label = StaticText::builder(&panel)
+        .with_label("Listener count URL (optional)")
+        .build();
+    let listeners_input = TextCtrl::builder(&panel).build();
+    super::set_accessible_name(&listeners_input, "Listener count URL (optional)");
+    super::help::tag(
+        &listeners_input,
+        "dialog.connect.icecastListeners",
+        "Listener count URL for the selected service",
+    );
     let username_label = StaticText::builder(&panel)
         .with_label("Icecast username")
         .build();
@@ -176,6 +189,8 @@ pub fn show(app: &Rc<App>, frame: &Frame) {
     sizer.add(&password_input, 0, SizerFlag::Expand | SizerFlag::All, 4);
     sizer.add(&mount_label, 0, SizerFlag::All, 4);
     sizer.add(&mount_input, 0, SizerFlag::Expand | SizerFlag::All, 4);
+    sizer.add(&listeners_label, 0, SizerFlag::All, 4);
+    sizer.add(&listeners_input, 0, SizerFlag::Expand | SizerFlag::All, 4);
     sizer.add(&username_label, 0, SizerFlag::All, 4);
     sizer.add(&username_input, 0, SizerFlag::Expand | SizerFlag::All, 4);
     sizer.add(&icecast_password_label, 0, SizerFlag::All, 4);
@@ -225,6 +240,10 @@ pub fn show(app: &Rc<App>, frame: &Frame) {
             port_input.show(true);
             mount_label.show(!audiopub);
             mount_input.show(!audiopub);
+            // Audiopub counts its own listeners and reports them over the live
+            // events feed, so this only applies to a direct Icecast service.
+            listeners_label.show(!audiopub);
+            listeners_input.show(!audiopub);
             username_label.show(!audiopub);
             username_input.show(!audiopub);
             icecast_password_label.show(!audiopub);
@@ -314,6 +333,7 @@ pub fn show(app: &Rc<App>, frame: &Frame) {
             server_input.set_value("");
             port_input.set_value("");
             mount_input.set_value("");
+            listeners_input.set_value("");
             username_input.set_value("");
             icecast_password_input.set_value("");
         }
@@ -347,6 +367,7 @@ pub fn show(app: &Rc<App>, frame: &Frame) {
                 server_input.set_value(&server);
                 port_input.set_value(&port.to_string());
                 mount_input.set_value(&service.icecast_mount);
+                listeners_input.set_value(&service.icecast_listener_url);
                 username_input.set_value(&service.icecast_username);
                 icecast_password_input.set_value(service.icecast_password.as_str());
             }
@@ -454,6 +475,10 @@ pub fn show(app: &Rc<App>, frame: &Frame) {
             service.icecast_server = server.clone();
             service.icecast_port = port;
             service.icecast_mount = mount_input.get_value().trim().to_string();
+            // Stored verbatim, like the server field above: anything that will
+            // not resolve is kept as typed for `service_profile_from_site` to
+            // refuse with a message, rather than being silently mangled here.
+            service.icecast_listener_url = listeners_input.get_value().trim().to_string();
             service.icecast_username = username_input.get_value().trim().to_string();
             service.icecast_password = Secret::new(icecast_password_input.get_value());
             let id = service.id.clone();

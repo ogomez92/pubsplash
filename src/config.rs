@@ -293,6 +293,16 @@ pub struct SiteConfig {
     pub icecast_mount: String,
     pub icecast_username: String,
     pub icecast_password: Secret,
+    /// Where to count listeners, for a direct Icecast service whose audience is
+    /// not on the mount we publish to — a Liquidsoap or Icecast relay that
+    /// consumes the raw mount and republishes a processed one, which is the
+    /// usual reason. Empty counts the mount in `icecast_mount`, which is what
+    /// every profile written before this field existed does.
+    ///
+    /// Takes a whole listen URL, a `host[:port]/mount`, or a bare mount name;
+    /// [`crate::net::stats::stats_target`] documents the forms and is the only
+    /// thing that interprets it.
+    pub icecast_listener_url: String,
 }
 
 impl Default for SiteConfig {
@@ -309,6 +319,7 @@ impl Default for SiteConfig {
             icecast_mount: String::new(),
             icecast_username: "source".to_string(),
             icecast_password: Secret::default(),
+            icecast_listener_url: String::new(),
         }
     }
 }

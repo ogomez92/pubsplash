@@ -4,6 +4,10 @@
 
 ### Additions
 
+- **Direct Icecast services now report listener counts.** The Home tab's Listeners and Listener peak rows are filled in for an Icecast service the same way they already were for Audiopub, and the listener sound events fire from them.
+
+- **A Listener count URL box on Setup streaming services**, for an Icecast service whose audience is not on the mount it publishes to — a Liquidsoap or Icecast relay that takes the raw mount and republishes it under another name. Leave it blank to count the mount point above it. It accepts a bare mount name (`stream.mp3`), a `host:port/mount`, a whole listen URL, a server with no mount after it (which counts everyone on that server), or an Icecast status document URL.
+
 ### Fixes
 
 ### Changes

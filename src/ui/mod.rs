@@ -2142,14 +2142,23 @@ pub fn service_profile_from_site(site: &SiteConfig) -> Result<ServiceProfile, St
             if site.icecast_password.is_empty() {
                 return Err("Enter the Icecast password.".to_string());
             }
+            let mount = site.icecast_mount.trim().to_string();
+            let listener_url = site.icecast_listener_url.trim().to_string();
+            // Checked here, where the dialog holding the field is still open and
+            // the user is waiting for an answer. The stream start resolves it
+            // again and merely logs a failure, because by then a bad listener
+            // URL is no reason to refuse to broadcast — but it is every reason
+            // to refuse to *connect* quietly and let it be found later.
+            crate::net::stats::stats_target(&server, port, &mount, &listener_url)?;
             Ok(ServiceProfile::Icecast {
                 id: site.id.clone(),
                 nickname,
                 server,
                 port,
-                mount: site.icecast_mount.trim().to_string(),
+                mount,
                 username: site.icecast_username(),
                 password: site.icecast_password.clone(),
+                listener_url,
             })
         }
     }
