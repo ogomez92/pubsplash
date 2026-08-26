@@ -327,6 +327,10 @@ pub struct Runtime {
     /// Identity names (`SourceConfig.name`) of sources whose capture thread is
     /// currently failing and retrying. Drives the "(reconnecting)" labels.
     pub failing: HashSet<String>,
+    /// Identity names of sources that cannot run on this build at all. Drives
+    /// the "(unavailable)" labels, which say the opposite of "(reconnecting)":
+    /// do not wait, change something.
+    pub unavailable: HashSet<String>,
     /// Whether the outgoing audio connection is down and being retried.
     ///
     /// Deliberately *not* a [`StreamState`] variant. During a reconnect the
@@ -676,6 +680,7 @@ impl Default for Runtime {
             encoder_failed: false,
             apps: HashMap::new(),
             failing: HashSet::new(),
+            unavailable: HashSet::new(),
             // Seeded from the catalog prewarmed before the UI was built, so the
             // labels start out agreeing with it and the first pump tick has no
             // phantom refresh to do.
@@ -1457,7 +1462,13 @@ impl App {
     pub fn name_context(&self, sources: &[crate::config::SourceConfig]) -> NameContext {
         let media = self.media.statuses();
         let run = self.run.borrow();
-        NameContext::build(sources, run.apps.clone(), run.failing.clone(), media)
+        NameContext::build(
+            sources,
+            run.apps.clone(),
+            run.failing.clone(),
+            run.unavailable.clone(),
+            media,
+        )
     }
 
     /// Re-enumerates the processes behind every scene's Application sources —
@@ -3450,7 +3461,17 @@ fn pump_events(app: &Rc<App>) {
                 labels_dirty |= app.run.borrow_mut().failing.insert(name);
             }
             crate::audio::EngineEvent::SourceRecovered { name } => {
-                labels_dirty |= app.run.borrow_mut().failing.remove(&name);
+                let mut run = app.run.borrow_mut();
+                labels_dirty |= run.failing.remove(&name);
+                labels_dirty |= run.unavailable.remove(&name);
+            }
+            // A warning rather than a debug line: nothing is retrying behind
+            // this, so the log is where the reason lives for good. Not a modal,
+            // by the rule for notices that can arrive unbidden -- this one fires
+            // at launch, before the user has done anything.
+            crate::audio::EngineEvent::SourceUnavailable { name, message } => {
+                log::warn!("Source {name:?} cannot run: {message}");
+                labels_dirty |= app.run.borrow_mut().unavailable.insert(name);
             }
             // The recording lifecycle. All four report through the log and the
             // Home tab's status line, never a modal: these can fire while the

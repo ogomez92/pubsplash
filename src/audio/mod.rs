@@ -18,6 +18,13 @@ pub mod mixer;
 pub mod monitor;
 pub mod recorder;
 pub mod render;
+/// Desktop Audio on macOS, which is a ScreenCaptureKit stream rather than a
+/// Core Audio tap -- see the module header for the measurement that decided it.
+#[cfg(target_os = "macos")]
+pub mod screen_audio;
+/// Core Audio process taps: Desktop Audio and Application sources.
+#[cfg(target_os = "macos")]
+pub mod tap;
 
 use fx_chain::FxChain;
 
@@ -214,6 +221,10 @@ pub enum EngineEvent {
     SourceError { name: String, message: String },
     /// A capture source that had reported `SourceError` is running again.
     SourceRecovered { name: String },
+    /// A capture source cannot run on this build at all. Unlike `SourceError`
+    /// there is no retry behind it and no `SourceRecovered` will follow, so the
+    /// UI must say something the user can act on rather than "reconnecting".
+    SourceUnavailable { name: String, message: String },
     /// The recording is running and the file exists. The UI waits for this
     /// rather than assuming the command worked: creating the file or the
     /// encoder can fail, and a broadcaster who is told a recording is running
@@ -945,6 +956,19 @@ fn engine_loop(
                         continue;
                     }
                     EngineEvent::SourceError {
+                        name: report.name,
+                        message,
+                    }
+                }
+                capture::CaptureState::Unavailable(message) => {
+                    // Tracked in the same set as a failure so that retiring the
+                    // source clears its label by the existing route below; the
+                    // thread itself has already ended and will never report
+                    // again.
+                    if !failing.insert(report.name.clone()) {
+                        continue;
+                    }
+                    EngineEvent::SourceUnavailable {
                         name: report.name,
                         message,
                     }

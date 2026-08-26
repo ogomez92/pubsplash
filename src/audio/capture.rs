@@ -1,16 +1,39 @@
 //! Capture threads: each audio source that reads from the OS runs one of
 //! these, producing interleaved stereo f32 at 48 kHz into a ring buffer the
 //! mixer drains.
-// Items below are reached only from the Windows `imp` in this file (or from the
-// subsystem it belongs to). They are not dead in the codebase, only unreached
-// while the macOS side of this seam is unbuilt, and each will be wanted again
-// the moment it is -- so this is scoped to the file rather than being a
-// crate-wide allow, and comes off with the last stub here.
+//!
+//! **Which side of the ring drives is where the two platforms differ**, exactly
+//! as in [`crate::audio::monitor`], and it decides the shape of each `imp`. On
+//! Windows the app owns the loop: it waits on a WASAPI event, drains every
+//! packet the device has, and leans on [`StallGuard`] to tell a normal timeout
+//! from a wait that has stopped waiting. On macOS the HAL owns the thread and
+//! calls *us*, so there is no loop and no wait to guard — only a callback, and a
+//! supervising thread watching a pulse the callback bumps. Hence two
+//! ring-filling functions rather than one, [`push_f32`] and [`push_samples`],
+//! which are the same discard rule written for a thread the app owns and for a
+//! real-time thread it does not.
+// Items below are reached only from the Windows `imp` in this file. They are not
+// dead in the codebase, only unreached on macOS, and each is wanted the moment
+// the other platform is built -- so this is scoped to the file rather than being
+// a crate-wide allow.
+//
+// Two groups, and they come off at different times. `StallGuard` and its three
+// constants are Windows' way of noticing a device that has stopped working, and
+// have no macOS counterpart at all: there the HAL owns the thread, so the `imp`
+// below watches a callback pulse instead (see its header). `push_f32`,
+// `silence_appended` and `would_capture_pubsplash` are waiting on the process-tap
+// work -- `would_capture_pubsplash` in particular is called only from the Desktop
+// Audio paths, which macOS does not have yet.
 #![cfg_attr(not(windows), allow(dead_code))]
 
 
 use crate::audio::device;
 use crate::audio::health::CaptureStats;
+use crate::audio::mixer::CHANNELS;
+// Only the WASAPI side asks the device for a format; Core Audio's client
+// format is set in `coreaudio::engine_format`.
+#[cfg(windows)]
+use crate::audio::mixer::SAMPLE_RATE;
 use rtrb::Producer;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -40,6 +63,15 @@ pub enum CaptureState {
     /// The device could not be opened, or stopped working. The thread is
     /// retrying; the string says which step failed.
     Failed(String),
+    /// This source cannot run on this build at all, so no retry is scheduled and
+    /// the thread has ended. The string says why, in the user's terms.
+    ///
+    /// **Distinct from [`Self::Failed`] because the two ask the user for
+    /// opposite things.** A failure is worth waiting out; this is not, and a
+    /// source that says "reconnecting" forever is worse than one that says what
+    /// is wrong -- it sends somebody looking for a flapping device that was
+    /// never there.
+    Unavailable(String),
 }
 
 /// One report from a capture thread. `epoch` is the source-set generation the
@@ -160,6 +192,15 @@ pub fn spawn(
                     state,
                 });
             };
+            // Asked once, before any attempt: whether this source kind can run
+            // on this build at all. A configuration the platform does not
+            // support is not a device that might come back, so it is reported
+            // and the thread ends rather than backing off forever.
+            if let Some(why) = imp::unsupported(&kind) {
+                log::error!("Capture source {name:?} cannot run: {why}");
+                report(CaptureState::Unavailable(why));
+                return;
+            }
             // Counts consecutive failures, so a device that flaps does not
             // flood the log and a device that recovers gets a fast retry again.
             let mut failures: u32 = 0;
@@ -250,6 +291,15 @@ mod imp {
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::time::Duration;
     use wasapi::{AudioClient, Direction, SampleType, StreamMode, WaveFormat};
+
+    /// Why this source kind cannot run here, or `None` if it can.
+    ///
+    /// Always `None` on Windows: every source kind the app offers has a WASAPI
+    /// form, so a failure here is always a device that might come back. The
+    /// macOS twin is where this earns its keep.
+    pub fn unsupported(_kind: &CaptureKind) -> Option<String> {
+        None
+    }
 
     /// How a device is waited on between reads.
     ///
@@ -537,13 +587,14 @@ mod imp {
     }
 }
 
-/// Core Audio capture. **Not built yet** — the seam standing open, not a design.
+/// Core Audio capture.
 ///
-/// The three source kinds map onto three different macOS mechanisms, and only
-/// the first is straightforward:
+/// The three source kinds map onto two different macOS mechanisms, and only the
+/// first is built here:
 ///
-/// - a **microphone** is an ordinary input `AudioUnit` on a chosen device, and
-///   needs the `NSMicrophoneUsageDescription` prompt;
+/// - a **microphone** is an ordinary input `AudioUnit` on a chosen device, which
+///   is what this module is, and needs the `NSMicrophoneUsageDescription`
+///   prompt;
 /// - **Desktop Audio** is a Core Audio process tap created with
 ///   `CATapDescription(excludingProcesses:)`, which is very nearly a direct
 ///   translation of today's default — capture everything except Pubsplash's own
@@ -554,32 +605,323 @@ mod imp {
 ///   descendants" flag, so `choose_pid`'s walk to the root becomes an explicit
 ///   enumeration of the tree.
 ///
-/// All of it needs macOS 14.4 and the audio-capture TCC consent, and none of it
-/// works under the App Sandbox.
+/// The tap work needs macOS 14.4 and the audio-capture TCC consent, and none of
+/// it works under the App Sandbox. Until it exists those two kinds report a
+/// plain failure, which the supervisor above already knows how to show: the
+/// source appears in the mixer and says why it is not running, rather than
+/// pretending to be live and sending silence.
 ///
-/// Until then a source reports a plain failure, which the supervisor above
-/// already knows how to show: the source appears in the mixer and says why it is
-/// not running, rather than pretending to be live and sending silence.
+/// **The callback allocates, locks and logs nothing.** It runs on the HAL's
+/// real-time thread: it renders into a buffer allocated when the source opened,
+/// pushes what it got into the ring, and bumps counters.
 #[cfg(target_os = "macos")]
 mod imp {
-    use super::CaptureKind;
-    use crate::audio::health::CaptureStats;
+    use super::{CHANNELS, CaptureKind, device, push_samples};
+    use crate::audio::coreaudio as ca;
+    use crate::audio::tap as ca_tap;
+    use crate::audio::health::{CaptureStats, DeviceTimeline};
+    use objc2_audio_toolbox::AudioUnitRenderActionFlags;
+    use objc2_core_audio_types::{AudioBufferList, AudioTimeStamp};
     use rtrb::Producer;
-    use std::sync::atomic::AtomicBool;
+    use std::ffi::c_void;
+    use std::ptr::NonNull;
+    use std::sync::atomic::{AtomicBool, AtomicPtr, AtomicU64, Ordering};
+    use std::time::{Duration, Instant};
 
-    pub fn run(
-        _kind: &CaptureKind,
-        _producer: &mut Producer<f32>,
-        _stop: &AtomicBool,
-        _stats: &CaptureStats,
-        _started: impl FnOnce(),
-    ) -> Result<(), String> {
-        Err("audio capture is not implemented on macOS yet".to_string())
+    /// What the input callback reaches through.
+    ///
+    /// The three pointers are the source's own state, parked here for the life
+    /// of the unit. They are raw rather than references because this state moves
+    /// to the HAL's thread while the unit runs: `run` hands it over before
+    /// starting the unit and does not touch it again until the unit is dropped,
+    /// which is both the single-producer discipline `rtrb` requires and what
+    /// makes the `&mut`s sound. The unit is created after this struct and
+    /// dropped before it, and `Unit::drop` stops the callback before returning.
+    struct Input {
+        /// Filled in after `open_input` returns and before `start`, because the
+        /// callback needs the very unit it is being installed on in order to
+        /// fetch the audio — and cannot run until `start`.
+        unit: AtomicPtr<c_void>,
+        producer: *mut Producer<f32>,
+        scratch: *mut ca::Scratch,
+        timeline: *mut DeviceTimeline,
+        stats: *const CaptureStats,
+        /// The device's pulse; see [`Self::cycles`]'s use in `run`.
+        cycles: AtomicU64,
     }
 
-    /// Answers "cannot rule it out" until the real check exists, which is the
-    /// safe direction: the fallback for a collision is to capture more than was
-    /// asked for, never to broadcast our own audio.
+    /// # Safety
+    /// `ref_con` is the `Input` passed to `open_input`, alive for the life of
+    /// the unit. `io_data` is null on the input path — the audio is fetched
+    /// rather than handed over.
+    unsafe extern "C-unwind" fn capture(
+        ref_con: NonNull<c_void>,
+        flags: NonNull<AudioUnitRenderActionFlags>,
+        time: NonNull<AudioTimeStamp>,
+        _bus: u32,
+        frames: u32,
+        _io_data: *mut AudioBufferList,
+    ) -> i32 {
+        // SAFETY: `Input` outlives the unit, by the contract above.
+        let input = unsafe { &*ref_con.as_ptr().cast::<Input>() };
+        input.cycles.fetch_add(1, Ordering::Relaxed);
+
+        let unit = input.unit.load(Ordering::Acquire);
+        if unit.is_null() {
+            return 0;
+        }
+        // SAFETY: this state belongs to this thread while the unit runs.
+        let (scratch, producer, timeline) = unsafe {
+            (
+                &mut *input.scratch,
+                &mut *input.producer,
+                &mut *input.timeline,
+            )
+        };
+        let stats = unsafe { &*input.stats };
+
+        // Read before the render, which borrows the scratch for the rest of the
+        // cycle. `mSampleTime` is the device's own frame counter and counts
+        // *device* frames, so it is restated at our rate before being
+        // differenced against a client-rate sample count -- see
+        // [`ca::Scratch::client_index`]. It is the same instrumentation Windows
+        // reads out of `BufferInfo.index`, so a Mac's health line separates a
+        // slipping clock from a dropped buffer the same way.
+        //
+        // SAFETY: `time` is the HAL's timestamp for this cycle.
+        let index = scratch.client_index(unsafe { time.as_ref() }.mSampleTime);
+
+        // SAFETY: `unit` is the live input unit this callback is installed on,
+        // and `flags`/`time` are the HAL's for this cycle.
+        let samples = match unsafe { scratch.render(unit.cast(), flags, time, frames) } {
+            Ok(samples) => samples,
+            // Nothing to log from here and nowhere to report it: a failed render
+            // is a lost cycle, and a run of them is what the pulse in `run`
+            // notices. Counting it as a gap keeps the health line honest.
+            Err(_) => {
+                stats.add_gap_frames(u64::from(frames));
+                return 0;
+            }
+        };
+
+        let captured = (samples.len() / CHANNELS) as u64;
+        stats.add_frames(captured);
+        let gap = timeline.observe(index, captured, Instant::now());
+        if gap > 0 {
+            stats.add_gap_frames(gap);
+        }
+        stats.set_index_usable(timeline.index_usable());
+        if let Some(rate) = timeline.rate_millihz() {
+            stats.set_rate_millihz(rate);
+        }
+        stats.add_dropped_samples(push_samples(samples, producer) as u64);
+        0
+    }
+
+    /// Why Desktop Audio does not run on macOS, despite being written.
+    ///
+    /// A Desktop Audio source is a **global tap excluding Pubsplash's own
+    /// process**, and that exclusion does not bind reliably. Measured across
+    /// about forty runs: a tap built exactly the same way twice captures the
+    /// app's own output roughly a quarter of the time, and when it does it does
+    /// so for that tap's whole life. Four things were tried and each helped
+    /// without fixing it — refusing an empty exclusion list, holding a silent
+    /// output stream open so the app is always "playing" when the tap binds,
+    /// waiting a dozen render cycles for the audio server to notice that stream,
+    /// and verifying a finished tap by playing a probe tone through our own
+    /// output and listening for it on the tap.
+    ///
+    /// It is off rather than best-effort because of **what** leaks. Every spoken
+    /// chat message, every cue and every sound Pubsplash plays would go into the
+    /// broadcast, silently and for the whole session — the single failure the
+    /// Windows half of this file is most carefully built to avoid, and one a
+    /// broadcaster would hear only as feedback from their own listeners.
+    ///
+    /// **Application sources are unaffected and are enabled.** They are an
+    /// *inclusion* tap: it captures exactly the processes named and can only
+    /// ever hear Pubsplash if the user picks Pubsplash. There is no exclusion,
+    /// so there is nothing to bind unreliably.
+    const DESKTOP_AUDIO_UNSAFE: &str =
+        "capturing desktop audio is not available on macOS yet: macOS cannot yet be relied on \
+         to keep Pubsplash's own speech and sounds out of the capture. Capture the app you \
+         want with an Application source instead.";
+
+    /// Why this source kind cannot run here, or `None` if it can.
+    ///
+    /// **Both Desktop Audio shapes are permanently unavailable on macOS**, and
+    /// saying so once is the whole point of this function. `open_tap` already
+    /// refuses them, but a refusal from *there* arrives as an ordinary failed
+    /// attempt: the supervisor backs off and tries again, for ever, and the
+    /// mixer strip reads "Desktop Audio (reconnecting)" for the life of the
+    /// session. That is a lie about a fixable problem. Asked here instead, the
+    /// answer is given once, the thread ends, and the strip says the source is
+    /// unavailable and why.
+    pub fn unsupported(kind: &CaptureKind) -> Option<String> {
+        match kind {
+            // The Windows "pin Desktop Audio to one endpoint" form. A screen
+            // capture is per-machine rather than per-device, so this is not the
+            // same mechanism and is not built -- and it is the *less* safe of
+            // the two anyway, being the form that can capture our own output.
+            CaptureKind::DesktopAudio { device_id: Some(_) } => Some(
+                "capturing one playback device is not supported on macOS; clear the device \
+                 and Desktop Audio will capture everything except Pubsplash itself"
+                    .to_string(),
+            ),
+            CaptureKind::DesktopAudio { device_id: None }
+            | CaptureKind::Microphone { .. }
+            | CaptureKind::Application { .. } => None,
+        }
+    }
+
+    /// Creates the process tap an Application source needs.
+    ///
+    /// The two shapes are the two ways `CATapDescription` can be built, and they
+    /// line up with the Windows forms almost exactly — see
+    /// [`crate::audio::tap`]. What does *not* line up is the process tree: a tap
+    /// names processes and has no "and its descendants" flag, so an Application
+    /// source enumerates the whole tree here.
+    pub fn open_tap(kind: &CaptureKind) -> Result<ca_tap::ProcessTap, String> {
+        match kind {
+            // Desktop Audio is a ScreenCaptureKit stream, not a tap -- see
+            // [`crate::audio::screen_audio`] -- and the pinned form is refused
+            // by `unsupported` before any attempt is made.
+            CaptureKind::DesktopAudio { .. } => {
+                unreachable!("desktop audio does not go through a tap on macOS")
+            }
+            CaptureKind::Application { pid } => {
+                let tree = ca_tap::tree_of(*pid, &device::process_parents());
+                let objects: Vec<_> = tree
+                    .iter()
+                    .filter_map(|pid| ca_tap::process_object_for_pid(*pid))
+                    .collect();
+                ca_tap::ProcessTap::including(&objects)
+            }
+            CaptureKind::Microphone { .. } => {
+                unreachable!("a microphone does not need a tap")
+            }
+        }
+    }
+
+    /// How long the HAL may go without delivering before the device is declared
+    /// gone. [`crate::audio::monitor`]'s reasoning, and the same figure: far
+    /// longer than any scheduling hiccup, short enough that the reopen happens
+    /// while the user is still wondering why the source went quiet.
+    const SILENT_LIMIT: Duration = Duration::from_secs(1);
+
+    /// How often the pulse is checked. Also how promptly a retiring thread
+    /// releases the device, which is why it is well under
+    /// [`super::WAIT_MS`]'s budget.
+    const TICK: Duration = Duration::from_millis(50);
+
+    pub fn run(
+        kind: &CaptureKind,
+        producer: &mut Producer<f32>,
+        stop: &AtomicBool,
+        stats: &CaptureStats,
+        started: impl FnOnce(),
+    ) -> Result<(), String> {
+        // Desktop Audio is the one kind that is not an `AudioDeviceID` at all:
+        // it is a screen-capture stream, for the reasons its module gives.
+        if matches!(kind, CaptureKind::DesktopAudio { .. }) {
+            return crate::audio::screen_audio::run(producer, stop, stats, started);
+        }
+        // A tap, if this source needs one. Held for the whole run: dropping it
+        // destroys the aggregate device the unit below is reading from, so it
+        // must outlive the unit -- which is why it is bound here and not inside
+        // `open_for`.
+        let tap;
+        let device = match kind {
+            CaptureKind::Microphone { device_id } => device::capture_device(device_id.as_deref())?.0,
+            other => {
+                tap = open_tap(other)?;
+                tap.device()
+            }
+        };
+        run_on_device(device, producer, stop, stats, started)
+    }
+
+    /// The device half of [`run`], once the source kind has been resolved to an
+    /// `AudioDeviceID`. Split out because a microphone and a process tap differ
+    /// only in how that id is obtained.
+    pub fn run_on_device(
+        device: u32,
+        producer: &mut Producer<f32>,
+        stop: &AtomicBool,
+        stats: &CaptureStats,
+        started: impl FnOnce(),
+    ) -> Result<(), String> {
+
+        // Asked of the device before anything is created, because it decides
+        // both how the unit is opened and how `Scratch` is sized, and those two
+        // must agree. A device that will not say falls back to stereo, which is
+        // what an aggregate built around a tap reports.
+        let channels = ca::channels_in(device, ca::Scope::Input).unwrap_or(CHANNELS);
+        let device_rate = ca::nominal_rate(device).unwrap_or(f64::from(ca::SAMPLE_RATE));
+        // Worth a line for the same reason the Windows half logs its mix format:
+        // the converter in the way is a suspect whenever a source sounds wrong
+        // and nothing else in the log moves, and it is invisible from anywhere
+        // else.
+        if channels == CHANNELS && device_rate == f64::from(ca::SAMPLE_RATE) {
+            log::debug!("Capture device is {device_rate} Hz, {channels} channels (no conversion)");
+        } else {
+            log::info!(
+                "Capture device is {device_rate} Hz, {channels} channel(s); converting to \
+                 {} Hz, {CHANNELS} channels",
+                ca::SAMPLE_RATE
+            );
+        }
+        let mut scratch = ca::Scratch::for_device(channels, device_rate);
+        let mut timeline = DeviceTimeline::new();
+        let input = Input {
+            unit: AtomicPtr::new(std::ptr::null_mut()),
+            producer: std::ptr::from_mut(producer),
+            scratch: std::ptr::from_mut(&mut scratch),
+            timeline: std::ptr::from_mut(&mut timeline),
+            stats: std::ptr::from_ref(stats),
+            cycles: AtomicU64::new(0),
+        };
+        // SAFETY: `input` is declared first and so outlives `unit`, and
+        // `Unit::drop` stops the callback before returning.
+        let unit = unsafe {
+            ca::open_input(
+                device,
+                channels,
+                Some(capture),
+                std::ptr::from_ref(&input) as *mut c_void,
+            )?
+        };
+        // Before `start`, which is the only thing that can make the callback run.
+        input.unit.store(unit.raw().cast(), Ordering::Release);
+        unit.start()?;
+        started();
+
+        let mut seen = 0;
+        let mut last_pulse = Instant::now();
+        while !stop.load(Ordering::Relaxed) {
+            std::thread::sleep(TICK);
+            let cycles = input.cycles.load(Ordering::Relaxed);
+            if cycles != seen {
+                seen = cycles;
+                last_pulse = Instant::now();
+            } else if last_pulse.elapsed() >= SILENT_LIMIT {
+                // Dropped before the `Err`, so the device is released before the
+                // supervisor's backoff starts trying to open it again.
+                drop(unit);
+                return Err("the capture device stopped delivering audio".to_string());
+            }
+        }
+        drop(unit);
+        Ok(())
+    }
+
+    /// Whether a Desktop Audio source pinned to `device_id` would capture
+    /// Pubsplash's own output.
+    ///
+    /// **Always yes on macOS, and that is an answer rather than a placeholder.**
+    /// A pinned Desktop Audio source is the one form `open_tap` refuses, so the
+    /// only honest answer for a device id is "this would capture us" — which is
+    /// what makes the dialog steer the user to the unpinned form, the one that
+    /// excludes Pubsplash by construction rather than by checking.
     pub fn would_capture_pubsplash(_device_id: &str) -> bool {
         true
     }
@@ -637,10 +979,284 @@ fn push_f32(bytes: &mut std::collections::VecDeque<u8>, producer: &mut Producer<
     dropped
 }
 
+/// Moves `samples` into the ring, dropping what will not fit and reporting how
+/// many that was.
+///
+/// The Core Audio half of [`push_f32`], and the same rule: **capture must never
+/// block**, so a full ring is answered by discarding rather than waiting, and
+/// the count is what makes that visible in the health line instead of silent.
+/// See [`crate::audio::health`] for why that number matters.
+///
+/// Kept apart from `push_f32` for the reason [`crate::audio::monitor`]'s two
+/// ring functions are: this one runs on the HAL's real-time thread, so it takes
+/// f32 straight from the device and touches no byte queue.
+///
+/// Portable and tested here, because a discard rule exercised only by a real
+/// sound card is a rule nobody checks.
+pub fn push_samples(samples: &[f32], producer: &mut Producer<f32>) -> usize {
+    if samples.is_empty() {
+        return 0;
+    }
+    // One chunk rather than a `push` per sample; see `push_f32` for the cost.
+    let take = producer.slots().min(samples.len());
+    if take > 0
+        && let Ok(mut chunk) = producer.write_chunk_uninit(take)
+    {
+        let (first, second) = chunk.as_mut_slices();
+        let mut source = samples.iter();
+        for slot in first.iter_mut().chain(second.iter_mut()) {
+            // `take` is at most `samples.len()`, so the iterator cannot run out.
+            slot.write(*source.next().unwrap());
+        }
+        // SAFETY: every slot in both slices was just written.
+        unsafe { chunk.commit_all() };
+    }
+    samples.len() - take
+}
+
+/// Opens an input unit on `device` and pumps it until `stop`.
+///
+/// The device half of a capture, exposed because [`crate::audio::tap`] uses it
+/// to *check* a tap before handing it over — see `exclusion_holds`. The app's
+/// own sources always go through [`spawn`].
+#[cfg(target_os = "macos")]
+pub fn run_on_device(
+    device: u32,
+    producer: &mut Producer<f32>,
+    stop: &AtomicBool,
+    stats: &CaptureStats,
+    started: impl FnOnce(),
+) -> Result<(), String> {
+    imp::run_on_device(device, producer, stop, stats, started)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::collections::VecDeque;
+
+    #[test]
+    fn push_samples_moves_everything_a_ring_will_take() {
+        let (mut producer, mut consumer) = rtrb::RingBuffer::<f32>::new(8);
+
+        assert_eq!(push_samples(&[1.0, -1.0, 0.5], &mut producer), 0);
+        assert_eq!(consumer.slots(), 3);
+        assert_eq!(consumer.pop(), Ok(1.0));
+    }
+
+    /// A full ring is the mixer not draining this source as fast as the device
+    /// fills it. Capture may not block, so the remainder is dropped -- and the
+    /// count is the whole point, because it is the difference between a source
+    /// that works and one that crackles.
+    #[test]
+    fn push_samples_drops_what_the_ring_cannot_hold_and_says_how_much() {
+        let (mut producer, consumer) = rtrb::RingBuffer::<f32>::new(2);
+
+        let dropped = push_samples(&[1.0, 2.0, 3.0, 4.0, 5.0], &mut producer);
+
+        assert_eq!(dropped, 3);
+        assert_eq!(consumer.slots(), 2, "what fitted is still there");
+    }
+
+    #[test]
+    fn push_samples_into_a_full_ring_drops_all_of_them() {
+        let (mut producer, _consumer) = rtrb::RingBuffer::<f32>::new(2);
+        producer.push(1.0).unwrap();
+        producer.push(2.0).unwrap();
+
+        assert_eq!(push_samples(&[3.0, 4.0], &mut producer), 2);
+    }
+
+    #[test]
+    fn push_samples_of_nothing_is_nothing() {
+        let (mut producer, _consumer) = rtrb::RingBuffer::<f32>::new(4);
+
+        assert_eq!(push_samples(&[], &mut producer), 0);
+    }
+
+    /// The ring is circular, so a write that wraps is handed out as two slices.
+    /// Filling only the first would corrupt every buffer that straddled the end.
+    #[test]
+    fn push_samples_fills_a_write_that_wraps() {
+        let (mut producer, mut consumer) = rtrb::RingBuffer::<f32>::new(4);
+        for value in [1.0, 2.0, 3.0] {
+            producer.push(value).unwrap();
+        }
+        for _ in 0..3 {
+            consumer.pop().unwrap();
+        }
+
+        assert_eq!(push_samples(&[4.0, 5.0, 6.0], &mut producer), 0);
+
+        let got: Vec<f32> = (0..3).map(|_| consumer.pop().unwrap()).collect();
+        assert_eq!(got, vec![4.0, 5.0, 6.0]);
+    }
+
+    /// Runs the whole microphone path for two seconds and reports what arrived.
+    ///
+    /// Ignored because it needs a real input device and the macOS microphone
+    /// consent prompt. Run it with
+    /// `cargo test the_microphone_delivers -- --include-ignored --nocapture`
+    /// and talk while it runs.
+    ///
+    /// `MIC_UID` picks a device other than the default, which is how the three
+    /// conversion paths are told apart: a device already at 48 kHz stereo
+    /// exercises none of them, a built-in Mac microphone is mono at 48 kHz, and
+    /// a Bluetooth headset is mono at 24 kHz and so exercises both. All three
+    /// were run when the conversion was written -- and only the third of them
+    /// fails if the frame count handed to `AudioUnitRender` is wrong.
+    ///
+    /// The assertion is only that frames arrived: a peak level cannot be
+    /// asserted, because a muted or absent microphone is a legitimate state of
+    /// the machine and not a bug in this code. The peak is printed instead, so
+    /// the run says whether the audio is real or a flat zero — which is the
+    /// difference between a unit that opened and one that is actually wired to
+    /// the device.
+    #[cfg(target_os = "macos")]
+    #[test]
+    #[ignore = "needs a microphone and its permission prompt"]
+    fn the_microphone_delivers_audio() {
+        use crate::audio::mixer::SAMPLE_RATE;
+
+        let rate = SAMPLE_RATE as usize;
+        let (producer, mut consumer) = rtrb::RingBuffer::<f32>::new(rate * CHANNELS / 4);
+        let stop = Arc::new(AtomicBool::new(false));
+        let stats = Arc::new(CaptureStats::new());
+        let (reports, _rx) = crossbeam_channel::unbounded();
+        let thread = spawn(
+            "Microphone 1".to_string(),
+            0,
+            CaptureKind::Microphone {
+                device_id: std::env::var("MIC_UID").ok(),
+            },
+            producer,
+            Arc::clone(&stop),
+            reports,
+            Arc::clone(&stats),
+        );
+
+        // Drained the way the mixer drains it, so the ring does not simply fill
+        // and start dropping -- which would make the `dropped` count below
+        // meaningless.
+        let mut peak = 0.0f32;
+        let deadline = std::time::Instant::now() + Duration::from_secs(2);
+        while std::time::Instant::now() < deadline {
+            while let Ok(sample) = consumer.pop() {
+                peak = peak.max(sample.abs());
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+
+        stop.store(true, Ordering::Relaxed);
+        thread.join().expect("the capture thread should not panic");
+
+        let counters = stats.snapshot();
+        println!(
+            "frames: {}  dropped: {}  gaps: {}  rate: {} mHz  peak: {peak:.4}",
+            counters.frames, counters.dropped_samples, counters.gap_frames, counters.rate_millihz,
+        );
+        assert!(
+            counters.frames > 0,
+            "the microphone delivered nothing in two seconds"
+        );
+        assert_eq!(
+            counters.dropped_samples, 0,
+            "a ring drained every 10 ms should never overflow"
+        );
+    }
+
+    /// Unpinned Desktop Audio runs on macOS, so it must not be refused before
+    /// it is tried. It is a ScreenCaptureKit stream rather than a tap -- see
+    /// [`crate::audio::screen_audio`].
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn desktop_audio_is_available() {
+        assert!(
+            imp::unsupported(&CaptureKind::DesktopAudio { device_id: None }).is_none(),
+            "desktop audio must not be refused up front on macOS"
+        );
+    }
+
+    /// Pinning Desktop Audio to one device is the form macOS has no mechanism
+    /// for, and it must say so rather than retry.
+    ///
+    /// The reason is not a detail: a source that quietly did nothing would look
+    /// like a broken microphone, where this points at the setting to change.
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn a_pinned_desktop_audio_source_says_what_to_do() {
+        let refusal = imp::unsupported(&CaptureKind::DesktopAudio {
+            device_id: Some("some-device".to_string()),
+        })
+        .expect("a pinned desktop audio source cannot run on macOS");
+
+        assert!(
+            refusal.contains("clear the device"),
+            "the refusal has to point somewhere: {refusal}"
+        );
+    }
+
+
+    /// Captures one running application and reports what arrived.
+    ///
+    /// **An Application source is an *inclusion* tap**, which is why it has none
+    /// of the exclusion trouble above: it captures exactly the processes named
+    /// and can only ever hear Pubsplash if the user picks Pubsplash. The thing
+    /// worth checking here is the other half — that naming the root of a process
+    /// tree reaches the child that is actually playing, which is what
+    /// `tap::tree_of` exists for.
+    ///
+    /// Ignored, and needs an argument: the executable name of something that is
+    /// playing audio right now.
+    /// `cargo test application_capture -- --include-ignored --nocapture`
+    #[cfg(target_os = "macos")]
+    #[test]
+    #[ignore = "needs a named app to be playing audio"]
+    fn application_capture_reaches_the_process_that_plays() {
+        use crate::audio::mixer::SAMPLE_RATE;
+
+        let Ok(name) = std::env::var("PUBSPLASH_TEST_APP") else {
+            println!("set PUBSPLASH_TEST_APP to a running app's name to run this");
+            return;
+        };
+        let Some(pid) = device::find_process(&name) else {
+            panic!("no running process called {name:?}");
+        };
+        println!("{name} -> pid {pid}");
+
+        let rate = SAMPLE_RATE as usize;
+        let (producer, mut consumer) = rtrb::RingBuffer::<f32>::new(rate * CHANNELS / 4);
+        let stop = Arc::new(AtomicBool::new(false));
+        let stats = Arc::new(CaptureStats::new());
+        let (reports, rx) = crossbeam_channel::unbounded();
+        let thread = spawn(
+            "Application 1".to_string(),
+            0,
+            CaptureKind::Application { pid },
+            producer,
+            Arc::clone(&stop),
+            reports,
+            Arc::clone(&stats),
+        );
+
+        let mut peak = 0.0f32;
+        let deadline = std::time::Instant::now() + Duration::from_secs(3);
+        while std::time::Instant::now() < deadline {
+            while let Ok(sample) = consumer.pop() {
+                peak = peak.max(sample.abs());
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        stop.store(true, Ordering::Relaxed);
+        thread.join().expect("the capture thread should not panic");
+
+        for report in rx.try_iter() {
+            println!("state: {:?}", report.state);
+        }
+        let counters = stats.snapshot();
+        println!("frames: {}  peak: {peak:.4}", counters.frames);
+        assert!(counters.frames > 0, "the application tap delivered nothing");
+    }
 
     /// The first retry has to be quick — the bug this exists for is a USB
     /// interface a few hundred milliseconds late to enumerate at launch — and
@@ -851,3 +1467,4 @@ mod tests {
         assert!(start.elapsed() >= Duration::from_millis(150));
     }
 }
+
