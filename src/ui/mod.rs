@@ -2948,7 +2948,7 @@ fn build_menu(app: &Rc<App>, frame: &Frame) {
 /// an unlucky machine, runs something else entirely.
 fn launch_sound_pack_manager() -> Result<(), String> {
     let exe = std::env::current_exe().map_err(|e| format!("current_exe failed: {e}"))?;
-    let manager = exe.with_file_name("pubsplash-soundpack.exe");
+    let manager = exe.with_file_name(crate::data_dir::binary_name("pubsplash-soundpack"));
     if !manager.is_file() {
         return Err(format!(
             "The Sound Pack Manager ({}) is missing. Reinstall Pubsplash to restore it.",

@@ -76,6 +76,26 @@ fn resolved() -> &'static Root {
 }
 
 /// The folder every other path in the app hangs off.
+/// The file name of a sibling helper binary, with the extension this platform
+/// gives an executable.
+///
+/// Pubsplash ships three helpers beside itself — the plugin scanner, the Sound
+/// Pack Manager and the updater — and every one is found by name next to
+/// `current_exe`. Spelling `.exe` at the call sites made all three unfindable on
+/// macOS, and the symptom was not obvious: the scanner reported itself
+/// *missing*, which reads as a broken install rather than as a wrong file name.
+///
+/// Here rather than beside its callers because this is the module that already
+/// answers "where do Pubsplash's files live", and because it depends on nothing
+/// but `std` — which is what lets the standalone binaries `#[path]`-include it.
+pub fn binary_name(stem: &str) -> String {
+    if cfg!(windows) {
+        format!("{stem}.exe")
+    } else {
+        stem.to_string()
+    }
+}
+
 pub fn root() -> &'static Path {
     &resolved().path
 }
@@ -209,6 +229,20 @@ fn copy_dir(from: &Path, to: &Path) -> std::io::Result<()> {
 
 #[cfg(test)]
 mod tests {
+    use super::binary_name;
+
+    /// The helpers are found by name next to the running executable, so the
+    /// extension has to follow the platform rather than the developer's.
+    #[test]
+    fn a_helper_binary_takes_this_platforms_extension() {
+        let scanner = binary_name("pubsplash-scan");
+        if cfg!(windows) {
+            assert_eq!(scanner, "pubsplash-scan.exe");
+        } else {
+            assert_eq!(scanner, "pubsplash-scan");
+        }
+    }
+
     use super::*;
 
     /// A scratch directory that cleans itself up, so these tests leave nothing

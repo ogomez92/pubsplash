@@ -120,7 +120,31 @@ fn bundle_candidate(bundle: &Path, discovery: &mut Discovery, seen: &mut HashSet
     let Some(file_name) = bundle_binary_name(bundle) else {
         return;
     };
-    let binary = bundle.join("Contents").join(ARCH_DIR).join(&file_name);
+    let binary = bundle
+        .join("Contents")
+        .join(ARCH_DIR)
+        .join(&file_name);
+    let binary = if binary.is_file() {
+        binary
+    } else {
+        // The convention is that the binary is named after the bundle, and
+        // almost every plugin follows it -- but not all. Three of the 87
+        // installed on the machine this was written on (iZotope's Trash, Neutron
+        // and VocalSynth) call theirs `PluginHooksVST3` instead, and under the
+        // name rule alone they were invisible: not rejected, not counted as
+        // another architecture, simply never seen.
+        //
+        // The bundle format's real answer is `CFBundleExecutable` in
+        // `Contents/Info.plist`, which would mean a plist parser for a
+        // one-line question. The architecture folder holds exactly one file in
+        // every bundle checked, so taking it when the name does not match is the
+        // same answer without the dependency, and it degrades to "no candidate"
+        // rather than to a wrong one.
+        match sole_binary_in(&bundle.join("Contents").join(ARCH_DIR)) {
+            Some(binary) => binary,
+            None => binary,
+        }
+    };
     if binary.is_file() {
         file_candidate(
             &binary,
@@ -202,6 +226,20 @@ fn bundle_binary_name(bundle: &Path) -> Option<OsString> {
     bundle.file_stem().map(ToOwned::to_owned)
 }
 
+/// The one file in `dir`, if there is exactly one.
+///
+/// Used only when the by-name lookup missed; see its call site. Deliberately
+/// `None` for an empty or crowded folder, so an ambiguous bundle is skipped
+/// rather than guessed at.
+fn sole_binary_in(dir: &Path) -> Option<PathBuf> {
+    let mut files = std::fs::read_dir(dir).ok()?.flatten().filter_map(|entry| {
+        let path = entry.path();
+        path.is_file().then_some(path)
+    });
+    let only = files.next()?;
+    files.next().is_none().then_some(only)
+}
+
 /// Whether a file is really a plugin of `format` this build can load.
 ///
 /// On Windows this is a PE header read, and it is doing two jobs: plugin
@@ -252,6 +290,35 @@ fn accepts(path: &Path, format: PluginFormat) -> Accepted {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Walks this machine's real plugin folders and reports what it found.
+    ///
+    /// The check that discovery works on macOS at all, and the one that caught
+    /// the bundles whose binary is not named after them — see `sole_binary_in`.
+    /// Ignored because it depends on what is installed.
+    #[cfg(target_os = "macos")]
+    #[test]
+    #[ignore = "depends on the plugins installed on this machine"]
+    fn finds_the_plugins_installed_here() {
+        let folders = crate::vst::default_folders();
+        println!("folders: {folders:?}");
+        let found = discover(&folders, &AtomicBool::new(false));
+        println!(
+            "candidates: {}  skipped (other arch): {}",
+            found.candidates.len(),
+            found.skipped_other_arch
+        );
+        for name in ["Trash", "Neutron 3 Elements", "VocalSynth 2"] {
+            let seen = found.candidates.iter().any(|c| {
+                c.bundle
+                    .as_deref()
+                    .and_then(std::path::Path::file_stem)
+                    .is_some_and(|stem| stem == name)
+            });
+            println!("  {name}: {}", if seen { "found" } else { "MISSED" });
+            assert!(seen, "{name} was not discovered");
+        }
+    }
 
     fn no_cancel() -> AtomicBool {
         AtomicBool::new(false)

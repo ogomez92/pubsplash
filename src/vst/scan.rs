@@ -93,7 +93,7 @@ pub fn start_scan(
 
 fn helper_path() -> Result<PathBuf, String> {
     let exe = std::env::current_exe().map_err(|e| format!("current_exe failed: {e}"))?;
-    let helper = exe.with_file_name("pubsplash-scan.exe");
+    let helper = exe.with_file_name(crate::data_dir::binary_name("pubsplash-scan"));
     if helper.is_file() {
         Ok(helper)
     } else {
