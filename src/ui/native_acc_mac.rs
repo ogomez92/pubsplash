@@ -46,12 +46,17 @@ pub fn install(_list: &ListBox, _name: &str) {}
 /// As [`install`], for a checkable list.
 pub fn install_check_list(_list: &CheckListBox, _name: &str) {}
 
-/// Radio items take their names from their own titles under Cocoa.
+/// Radio items take their names from their own titles under Cocoa, so there is
+/// no accessibility object to install.
 ///
-/// Arrow-key traversal inside the group *is* missing on macOS, but it is a
-/// keyboard-handling job rather than an accessibility-object one, so it lives
-/// with the other key handling rather than here.
-pub fn install_radio_box(_radio: &RadioBox, _name: &str) {}
+/// Arrow-key traversal inside the group *is* missing, and that is a keyboard
+/// behaviour rather than a naming one — so it lives in
+/// [`super::mac_ui::install_radio_arrows`], which this calls. Called from here
+/// because this is the function every radio box in the app already goes through,
+/// which is what keeps the call sites identical on both platforms.
+pub fn install_radio_box(radio: &RadioBox, _name: &str) {
+    super::mac_ui::install_radio_arrows(radio);
+}
 
 /// A dialog's own title is its accessible name on macOS.
 pub fn install_in_dialog(_dialog: &dyn WxWidget, _name: &str) {}

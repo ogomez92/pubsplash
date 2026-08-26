@@ -17,6 +17,19 @@ mod home;
 mod keybinds;
 mod keybinds_ui;
 mod list;
+/// Translating macOS key codes into the Windows VK codes a chord is stored as.
+/// macOS-only, but its table and tests are plain data and compile anywhere the
+/// module is built.
+#[cfg(target_os = "macos")]
+mod mac_keys;
+/// The two keyboard behaviours wxWidgets does not give a macOS user: ENTER on a
+/// dialog's confirm button, and arrow traversal inside a radio group.
+#[cfg(target_os = "macos")]
+mod mac_ui;
+/// The `CGEventTap` a *global* keybinding needs on macOS, and the only thing in
+/// the app that asks for the Accessibility permission.
+#[cfg(target_os = "macos")]
+mod global_keys;
 mod logging_ui;
 mod mastodon_post;
 mod mastodon_prefs;
@@ -2385,6 +2398,8 @@ pub fn ok_button(parent: &dyn WxWidget, label: &str) -> Button {
         .with_label(label)
         .build();
     button.set_default();
+    #[cfg(target_os = "macos")]
+    mac_ui::set_enter_activates(&button);
     button
 }
 
@@ -2401,6 +2416,8 @@ pub fn dismiss_button(parent: &dyn WxWidget, label: &str) -> Button {
         .with_label(label)
         .build();
     button.set_default();
+    #[cfg(target_os = "macos")]
+    mac_ui::set_enter_activates(&button);
     button
 }
 

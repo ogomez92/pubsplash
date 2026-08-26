@@ -9,14 +9,16 @@
 //! wants raw keys (the chat input, a mixer slider) eats them first. Worse, a
 //! **global** binding is not something wx can express at all.
 //!
-//! So both capture and dispatch ride the app-wide low-level keyboard hook that
+//! So both capture and dispatch ride the app-wide keyboard hook that
 //! [`super::help`] already installs for F1 — that file is explicit that it is
 //! "the one hook installed for the whole life of the app", and it already hosts
-//! the F6 arm for [`super::panes`]. `help::keyboard_hook` calls into here in a
-//! fixed order: capture first (while the Add-binding dialog's shortcut box has
-//! focus, keys belong to it and nothing else), then F1, then F6, then dispatch.
-//! F1 and F6 are consequently refused as bindings by the dialog rather than
-//! being accepted and then silently shadowed.
+//! the F6 arm for [`super::panes`]. The hook calls into here in a fixed order:
+//! capture first (while the Add-binding dialog's shortcut box has focus, keys
+//! belong to it and nothing else), then F1, then F6, then dispatch. F1 and F6
+//! are consequently refused as bindings by the dialog rather than being accepted
+//! and then silently shadowed. That order is the same on both platforms, and for
+//! the same reason; only the hook underneath differs — a `WH_KEYBOARD_LL` hook
+//! on Windows, an `NSEvent` local monitor on macOS.
 //!
 //! Riding the hook is also what makes the capture box work at all: ESC, ENTER,
 //! TAB, the arrows and CTRL+letter are all swallowed by `::IsDialogMessage`
@@ -33,7 +35,7 @@
 //! rings the idle doorbell, and returns; [`pump`] does the real work on the UI
 //! thread from the 100 ms pump. Same shape as `panes.rs`.
 //!
-//! ## Chords are Windows virtual-key codes
+//! ## Chords are Windows virtual-key codes, on both platforms
 //!
 //! Not wx key codes, and not scan codes — the settings file stores raw VK
 //! numbers, and has since before there was a second platform. That is why the
@@ -41,18 +43,25 @@
 //! crate: it makes the format explicit instead of implicit, and it means the
 //! matching logic compiles anywhere.
 //!
-//! It also means macOS needs a decision rather than an implementation. A
-//! `CGEventTap` reports a `CGKeyCode`, which is a *positional* code with no
-//! relation to a VK number, so either the model becomes a portable key enum with
-//! a migration for existing settings, or the macOS hook translates into VK
-//! space. Neither is written yet; see `imp` below.
-// Items below are reached only from the Windows `imp` in this file (or from the
-// subsystem it belongs to). They are not dead in the codebase, only unreached
-// while the macOS side of this seam is unbuilt, and each will be wanted again
-// the moment it is -- so this is scoped to the file rather than being a
-// crate-wide allow, and comes off with the last stub here.
-#![cfg_attr(not(windows), allow(dead_code))]
-
+//! macOS reports something else entirely — an `NSEvent.keyCode` is a *position*
+//! on the keyboard, with no arithmetic relation to a VK number — and **the
+//! decision taken was to translate at the hook rather than to change the
+//! model.** [`super::mac_keys`] is that translation and explains why: the number
+//! is a wire format, a settings file has to mean the same thing on either
+//! machine, and translating at the one point where a real keystroke enters the
+//! app leaves this file, [`crate::keybind`] and all their tests portable and
+//! untouched. The alternative — a portable key enum — would have meant migrating
+//! every existing settings file to buy nothing a user could see.
+//!
+//! ## What a `global` binding does on macOS
+//!
+//! An `NSEvent` local monitor sees only events sent to this app, which is
+//! exactly right for every binding except a global one. **A binding marked
+//! global therefore behaves like a non-global one there**: it works while
+//! Pubsplash is in front and does nothing while another app is. Reaching keys
+//! meant for another application needs a `CGEventTap` and the Accessibility
+//! permission, which is the remaining piece; the gating in [`hook_key`] is
+//! already written for it, so the tap has only to call the same function.
 
 use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
@@ -98,6 +107,13 @@ pub fn reload(config: &Config) {
     // Poisoning here would mean a panic inside the hook; keep running with what
     // we have rather than taking the app down over a shortcut table.
     *snapshot().lock().unwrap_or_else(|e| e.into_inner()) = binds;
+
+    // The tap that reaches keys meant for other applications exists exactly
+    // while some binding is global, so a user who sets none is never asked for
+    // the Accessibility permission. Windows needs nothing here: its one
+    // low-level hook is already global.
+    #[cfg(target_os = "macos")]
+    super::global_keys::refresh(config.keybinds.binds.iter().any(|b| b.global));
 }
 
 // --- capture ---------------------------------------------------------------
@@ -441,27 +457,74 @@ mod imp {
     }
 }
 
-/// **Neither question is answered on macOS yet**, and both are downstream of the
-/// hook that would ask them — `help::install_hook` is a no-op there, so nothing
-/// in this file is reached at runtime.
+/// The two questions the hook asks about the world around a keystroke.
 ///
-/// When the hook is built, these are the two pieces that go with it.
-/// `modifiers` is `CGEventSource.flagsState` or `NSEvent.modifierFlags`, either
-/// of which reports the physical state the same way `GetAsyncKeyState` does.
-/// `focus_is_text_entry` has no class-name equivalent — the honest form is to
-/// ask the accessibility API for the focused element's role and compare against
-/// `AXTextField`/`AXTextArea`/`AXComboBox`, which needs the same Accessibility
-/// permission the tap does and so costs nothing extra.
-///
-/// The answers below are the safe ones for a hook that is not running:
-/// no modifiers held, and no text entry focused.
+/// **Neither uses the accessibility API, and that is the point**: both are
+/// answered out of AppKit, so nothing here needs the Accessibility permission.
+/// The seam originally guessed `focus_is_text_entry` would have to ask the AX
+/// API for the focused element's role; it does not, because the app can simply
+/// look at its own first responder — which is both cheaper and available with no
+/// prompt at all.
 #[cfg(target_os = "macos")]
 mod imp {
+    use objc2_app_kit::{
+        NSApplication, NSComboBox, NSEvent, NSEventModifierFlags, NSSearchField, NSText,
+        NSTextField, NSTextView,
+    };
+    use objc2_foundation::MainThreadMarker;
+
+    /// Which of CTRL, ALT and SHIFT are physically held.
+    ///
+    /// `NSEvent::modifierFlags` is a *class* method reporting the current state
+    /// of the hardware, which is what `GetAsyncKeyState` gives the Windows side
+    /// — not the flags of some queued event. That distinction matters for the
+    /// same reason it does there: what is wanted is what the user is holding
+    /// now.
+    ///
+    /// ALT is macOS's Option key, which is what the Windows `VK_MENU` maps onto.
+    /// Command is deliberately not folded into any of the three: it is a
+    /// distinct modifier, and reporting it as CTRL would make ⌘M fire a binding
+    /// set for CTRL+M.
     pub fn modifiers() -> (bool, bool, bool) {
-        (false, false, false)
+        let flags = NSEvent::modifierFlags_class();
+        (
+            flags.contains(NSEventModifierFlags::Control),
+            flags.contains(NSEventModifierFlags::Option),
+            flags.contains(NSEventModifierFlags::Shift),
+        )
     }
 
+    /// Whether the user is typing into a text field.
+    ///
+    /// This is what stops a plain-character binding — the `O` a new Media Player
+    /// is given, say — from firing while somebody types a stream title. The
+    /// Windows side answers it by window class name; here it is the first
+    /// responder's class.
+    ///
+    /// **`NSTextView` is the important one, not `NSTextField`.** A focused text
+    /// field does not become first responder itself: the window hands focus to a
+    /// shared *field editor*, an `NSTextView` it owns, and leaves the field as
+    /// that editor's delegate. So a check for `NSTextField` alone would answer
+    /// "no" for every ordinary text box in the app. The others are listed
+    /// because a control can be first responder in its own right before its
+    /// editor is installed, and answering "yes" too often costs a binding that
+    /// the user can still reach by moving focus, where answering "no" too often
+    /// corrupts what they are typing.
     pub fn focus_is_text_entry() -> bool {
-        false
+        let Some(mtm) = MainThreadMarker::new() else {
+            return false;
+        };
+        let app = NSApplication::sharedApplication(mtm);
+        let Some(window) = app.keyWindow() else {
+            return false;
+        };
+        let Some(responder) = window.firstResponder() else {
+            return false;
+        };
+        responder.downcast_ref::<NSTextView>().is_some()
+            || responder.downcast_ref::<NSText>().is_some()
+            || responder.downcast_ref::<NSTextField>().is_some()
+            || responder.downcast_ref::<NSComboBox>().is_some()
+            || responder.downcast_ref::<NSSearchField>().is_some()
     }
 }

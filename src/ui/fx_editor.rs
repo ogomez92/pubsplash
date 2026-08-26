@@ -128,23 +128,47 @@ mod imp {
     }
 }
 
-/// **The F6 escape hatch is not built on macOS yet**, and it is the one thing
-/// in this file that has no wx spelling.
+/// The F6 escape hatch, macOS side.
 ///
-/// The equivalent is a `CGEventTap` or a global `NSEvent` monitor, both of which
-/// need the Accessibility permission in System Settings — an ordinary onboarding
-/// step, and the same permission `ui::keybinds` needs for user keybindings, so
-/// the two are one piece of work and should be built together rather than each
-/// asking separately.
+/// **There is no hook to install here**, which is why both functions are empty:
+/// [`super::help`] already runs one `NSEvent` monitor for the whole life of the
+/// app, and it needs no permission because it is *local* — an editor's keys are
+/// this app's keys. So instead of a second hook, help's F6 arm asks
+/// [`escape_requested`] first, and this file only has to answer whether the
+/// window taking keys is one of ours.
 ///
-/// Until then a plugin editor can still be left: the toolbar is reached with
-/// the VoiceOver cursor rather than by Tab, and Escape on any toolbar button
-/// closes the frame. Losing F6 is a degraded escape, not a trap.
+/// The Windows side installs and removes a `WH_KEYBOARD_LL` hook around the life
+/// of the editors because there it is a *global* hook, and leaving one running
+/// with nothing to do is a cost paid by every application on the machine.
 #[cfg(target_os = "macos")]
 mod imp {
     pub fn install_hook() {}
 
     pub fn uninstall_hook_if_idle() {}
+}
+
+/// Whether F6 was pressed while a plugin editor is the window taking keys, and
+/// if so, remembers which so [`pump`] can move focus to its toolbar.
+///
+/// Called from [`super::help`]'s key monitor **before** its own F6 arm, so an
+/// open editor wins: the point of the key is to get out of the plugin's own
+/// interface, and the pane switch would leave the user still inside it.
+#[cfg(target_os = "macos")]
+pub fn escape_requested() -> bool {
+    let Some(key_window) = super::mac_ui::key_window_id() else {
+        return false;
+    };
+    let Ok(handles) = EDITOR_HWNDS.lock() else {
+        return false;
+    };
+    let Some(&handle) = handles
+        .iter()
+        .find(|handle| super::mac_ui::window_id_of(**handle) == Some(key_window))
+    else {
+        return false;
+    };
+    ESCAPE_TO.store(handle, Ordering::Relaxed);
+    true
 }
 
 /// A window's native id, used only as an identity to match an editor frame by.
