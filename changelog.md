@@ -4,9 +4,41 @@
 
 ### Additions
 
-- Pubsplash now builds and runs its test suite on macOS. This is the platform groundwork only: the window opens, but audio, the local voice, plugin hosting and the F1/keybind hooks are not implemented there yet.
+- **Pubsplash now runs on macOS**, and ships there as a disk image: open it and drag Pubsplash to your Applications folder. It needs macOS 14.4 or newer on an Apple-silicon Mac. Microphone and Application sources, monitoring, audio playback, the media player, the local system voice, VST3 effects, chat, recording, the keyboard and VoiceOver announcements all work. Updating in place is still Windows-only, and a source that cannot run says so rather than looking like a device that has come unplugged.
+
+- **Desktop Audio works on macOS.** It captures everything your Mac is playing except Pubsplash itself, so your own speech and sound effects never go back out on the stream. macOS asks for the **Screen Recording** permission the first time you add one: that is the permission its system-audio capture lives behind, and Pubsplash captures only the sound, never a picture of your screen. Pinning a Desktop Audio source to a single playback device is still Windows-only; on a Mac, clear the device and it captures everything.
+
+- **macOS asks for each permission only when you reach for the feature that needs it**, and never at launch: the microphone when you add a microphone source, System Audio Recording when you add an Application source, Screen Recording when you add a Desktop Audio source, and Accessibility only if you mark one of your own shortcuts Global. Refusing one costs you that feature and nothing else — a refused Accessibility permission leaves global shortcuts working while Pubsplash is in front, which is what they do anyway until it is granted.
+
+- macOS lists the machine's playback and recording devices in Preferences > Audio, and plays sound effects, cues and voice previews out of the chosen one.
+
+- **Microphone sources capture on macOS**, with the same health reporting as Windows: the log line for a source reports its frame count, dropped samples, gaps and measured device rate there too.
+
+- **Monitoring plays on macOS.** A playback device that is unplugged or stops responding mid-session is reopened on the same backoff schedule as Windows, rather than leaving monitoring silently ended.
+
+- **The keyboard works on macOS**: F1 context help, F6 pane switching, and user keybinds all fire, and pressing F1 speaks the control's help through VoiceOver. Shortcuts are stored the same way on both platforms, so a settings file carries its keybinds between them.
+
+- **Global shortcuts fire on macOS while another app is in front**, so a microphone can be muted without leaving the game or the browser being streamed. They keep the key from reaching the app underneath, exactly as on Windows.
+
+- **ENTER now activates a dialog's confirm button on macOS**, and the arrow keys move between the items of a radio group.
+
+- **VST3 plugins load, process and open their editors on macOS**, found in the two standard folders (`/Library/Audio/Plug-Ins/VST3` and the same under your home folder). F6 still leaves a plugin's own window for Pubsplash's toolbar.
+
+- **Application sources capture on macOS**, through a Core Audio process tap. Naming an application captures every process it runs, so browsers and Electron apps — which play their audio from a hidden child process — are captured correctly.
+
+- **The local system voice speaks on macOS**, through the Mac's own installed voices. It appears in the engine picker as **System voice** rather than SAPI 5, and its voice list, rate, pitch and volume work as they do on Windows. A settings file moves between the two platforms unchanged.
 
 ### Fixes
+
+- **Microphones and application audio captured nothing at all on macOS.** Any input device not already running at exactly 48 kHz in stereo — which is every built-in Mac microphone, every headset, and every Bluetooth earbud — opened, started, reported itself running and then delivered silence, with nothing in the log to say why. Sources are now captured at whatever rate and channel count the device actually has and converted to what the mixer needs, so a mono microphone reaches both ears and a 24 kHz Bluetooth headset streams and records normally. macOS also never asked for microphone permission, because the app never got as far as really opening the device; it asks now.
+
+- **A Desktop Audio source on macOS said "reconnecting" for ever.** It cannot run there at all, so there was nothing to reconnect to — but it was reported as a device that had failed, retried every few seconds for the life of the session, and read as a microphone that had come unplugged. A source that cannot run now says **"unavailable"** once and stops, with the reason in the log.
+
+- **Plugins whose bundle names its binary something other than the bundle are found again.** Three of the plugins installed on the machine this was tested on — iZotope's Trash, Neutron and VocalSynth — were invisible to the scan: not rejected, not reported, simply never seen.
+
+- **The plugin scanner and the Sound Pack Manager are found on macOS.** Both were looked for by their Windows file name, so scanning reported the scanner missing, which reads as a broken install rather than a wrong name.
+
+- On macOS the test suite left a lock file behind in the Pubsplash data folder on every run, and never removed one.
 
 - A schedule set for a local time that does not exist, or across a daylight-saving change, now converts using the full timezone rules for that date rather than only the machine's current pair of offsets.
 
