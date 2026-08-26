@@ -2994,20 +2994,41 @@ fn open_data_dir() -> Result<(), String> {
 
 /// Finds a documentation file that ships with Pubsplash.
 ///
-/// Both the installer (everything lands in `$INSTDIR`) and the portable ZIP put
-/// the docs directly beside `pubsplash.exe`, so the sibling check covers every
-/// shipped layout. Walking on up the exe's ancestors additionally picks up a
-/// source checkout, where the generated HTML sits at the repository root and the
-/// exe is down in `target/<profile>`. Resolved from the exe, never the working
-/// directory, which a shortcut's "Start in" can point anywhere.
+/// Resolved from the exe, never the working directory, which a shortcut's
+/// "Start in" can point anywhere. Where to look is [`doc_dirs`]; a miss is not
+/// an error, because [`open_doc`] falls back to the copy on the web.
 fn find_doc(name: &str) -> Option<PathBuf> {
     let exe = std::env::current_exe().ok()?;
-    doc_in(exe.parent()?.ancestors().take(4), name)
+    doc_in(doc_dirs(exe.parent()?).into_iter(), name)
+}
+
+/// The directories a shipped document may be in, nearest first.
+///
+/// Both the Windows installer (everything lands in `$INSTDIR`) and the portable
+/// ZIP put the docs directly beside `pubsplash.exe`, so the sibling check covers
+/// every shipped layout there. Walking on up the exe's ancestors additionally
+/// picks up a source checkout, where the generated HTML sits at the repository
+/// root and the exe is down in `target/<profile>`.
+///
+/// **A macOS bundle needs one more, and no ancestor of the exe is it.** The exe
+/// is at `Pubsplash.app/Contents/MacOS/pubsplash` and cargo-packager puts the
+/// packaged resources in `Contents/Resources` — a *sibling* of the directory
+/// holding the exe, so the ancestor walk passes it by and Help > Readme silently
+/// opened the web copy instead of the one that shipped.
+fn doc_dirs(exe_dir: &Path) -> Vec<PathBuf> {
+    let mut dirs: Vec<PathBuf> = exe_dir.ancestors().take(4).map(PathBuf::from).collect();
+    if cfg!(target_os = "macos")
+        && let Some(contents) = exe_dir.parent()
+    {
+        dirs.push(contents.join("Resources"));
+    }
+    dirs
 }
 
 /// The pure half of [`find_doc`], split out so it can be tested.
-fn doc_in<'a>(dirs: impl Iterator<Item = &'a Path>, name: &str) -> Option<PathBuf> {
-    dirs.map(|dir| dir.join(name)).find(|path| path.is_file())
+fn doc_in<P: AsRef<Path>>(dirs: impl Iterator<Item = P>, name: &str) -> Option<PathBuf> {
+    dirs.map(|dir| dir.as_ref().join(name))
+        .find(|path| path.is_file())
 }
 
 /// Opens a file path or URL with whatever the user has it associated with.
@@ -4216,6 +4237,22 @@ mod doc_tests {
             super::doc_in([root].into_iter(), "no-such-doc.html"),
             None,
             "a doc that does not exist must not resolve"
+        );
+    }
+
+    /// The bundle layout is the one the ancestor walk cannot reach on its own:
+    /// `Contents/Resources` is a sibling of the directory holding the exe, not
+    /// an ancestor of it.
+    #[test]
+    #[cfg(target_os = "macos")]
+    fn a_bundles_resources_folder_is_searched() {
+        let exe_dir = std::path::Path::new("/Applications/Pubsplash.app/Contents/MacOS");
+        assert!(
+            super::doc_dirs(exe_dir)
+                .contains(&std::path::PathBuf::from(
+                    "/Applications/Pubsplash.app/Contents/Resources"
+                )),
+            "a bundled copy must find the readme that shipped with it"
         );
     }
 

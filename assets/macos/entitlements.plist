@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Entitlements for the hardened runtime, which notarization requires.
+
+  Deliberately **not sandboxed**. Core Audio process taps do not work under the
+  App Sandbox, which is what put Pubsplash on Developer ID + notarization rather
+  than the Mac App Store; see the port notes in CLAUDE.md.
+
+  Two of these are load-bearing rather than precautionary:
+
+  * `device.audio-input` is the microphone, and without it a hardened build
+    cannot open one at all.
+  * `cs.disable-library-validation` is what lets Pubsplash host **third-party
+    VST3 plugins**. The hardened runtime otherwise refuses to load any library
+    not signed by the same team, which is every plugin a user has installed —
+    so without it the plugin feature is not degraded, it is gone.
+-->
+<plist version="1.0">
+<dict>
+	<key>com.apple.security.device.audio-input</key>
+	<true/>
+
+	<key>com.apple.security.cs.disable-library-validation</key>
+	<true/>
+
+	<!-- Some plugin bundles ship unsigned helper code and JIT their UI. -->
+	<key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+	<true/>
+
+	<!-- The "already running" alert, matching NSAppleEventsUsageDescription. -->
+	<key>com.apple.security.automation.apple-events</key>
+	<true/>
+</dict>
+</plist>

@@ -1,4 +1,5 @@
-# Cuts a GitHub Release (NSIS installer + portable ZIP) on any v* tag push.
+# Cuts a GitHub Release on any v* tag push: an NSIS installer and portable ZIP
+# from Windows, and a signed, notarized DMG from macOS.
 #
 # Can also be started by hand from the Actions tab ("Run workflow") against any
 # branch, to test packaging without cutting a release: those runs skip the
@@ -17,23 +18,23 @@ permissions:
   contents: write
 
 jobs:
-  build:
-    runs-on: windows-latest
+  # The tag check is its own job because *both* platform jobs must be gated by
+  # it. Left inside the Windows job it only stopped Windows: the macOS job runs
+  # in parallel, so a tag that disagrees with Cargo.toml or a changelog still
+  # holding entries under Unreleased would have failed the Windows half and gone
+  # on to notarize and publish a DMG for a release that was never cut.
+  #
+  # A tag is the only thing that publishes, so it is the only thing that has to
+  # agree with the tree. The tag names the artifacts (see the Zip and upload
+  # steps) while the About box and the installer take their version from
+  # Cargo.toml -- so a mismatch ships binaries that disagree with their own file
+  # names. Manual runs have no tag and skip the check, which leaves this job a
+  # checkout and nothing else.
+  validate:
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
 
-      - uses: dtolnay/rust-toolchain@stable
-
-      - uses: Swatinem/rust-cache@v2
-
-      - name: Install Ninja
-        run: choco install ninja -y
-
-      # A tag is the only thing that publishes, so it is the only thing that
-      # has to agree with the tree. The tag names the artifacts (see the Zip and
-      # upload steps) while the About box and the installer take their version
-      # from Cargo.toml -- so a mismatch ships binaries that disagree with their
-      # own file names. Manual runs have no tag and skip this.
       - name: Check the tag against Cargo.toml and the changelog
         if: startsWith(github.ref, 'refs/tags/')
         shell: bash
@@ -66,6 +67,19 @@ jobs:
             exit 1
           fi
           echo "Releasing $version"
+
+  build:
+    needs: validate
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install Ninja
+        run: choco install ninja -y
 
       # Before packaging, not after: a release that fails its own test suite
       # should never reach the packaging step, let alone the Releases page.
@@ -279,3 +293,126 @@ jobs:
             latest.json
           body_path: release-notes.md
           generate_release_notes: true
+
+  # macOS. A separate job rather than a matrix leg because almost nothing is
+  # shared: no NSIS, no portable layout (macOS has one data location -- see
+  # CLAUDE.md), no updater, and a signing and notarization dance Windows has no
+  # equivalent of.
+  #
+  # `macos-14` is the first arm64 runner, and arm64 is what Pubsplash needs: the
+  # Core Audio process taps an Application source is built on arrived in 14.4.
+  macos:
+    needs: validate
+    runs-on: macos-14
+    # At job level, not per step. A step's own `env:` is not yet in scope when
+    # its `if:` is evaluated, so `if: env.APPLE_CERTIFICATE != ''` on a step that
+    # defines it would always be false -- signing would silently never run.
+    env:
+      APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+      APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+      APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install Ninja
+        run: brew install ninja
+
+      - name: Run tests
+        run: cargo test
+
+      - name: Install cargo-packager
+        run: cargo install cargo-packager --locked
+
+      # Both are bundled as packager resources (see Cargo.toml) and so must
+      # exist before packaging, exactly as on Windows.
+      - name: Convert docs to HTML
+        run: |
+          npm install -g marked
+          marked README.md -o readme.html
+          marked changelog.md -o changelog.html
+
+      # The certificate is imported into a throwaway keychain rather than the
+      # login one, so nothing survives the runner and no prompt can appear.
+      # Skipped entirely when the secret is absent: a fork should still be able
+      # to build a bundle, it just gets an unsigned one.
+      - name: Import the signing certificate
+        if: env.APPLE_CERTIFICATE != ''
+        run: |
+          set -euo pipefail
+          KEYCHAIN="$RUNNER_TEMP/signing.keychain-db"
+          PASSWORD="$(uuidgen)"
+          security create-keychain -p "$PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$PASSWORD" "$KEYCHAIN"
+          echo "$APPLE_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" -k "$KEYCHAIN" \
+            -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: \
+            -s -k "$PASSWORD" "$KEYCHAIN" > /dev/null
+          security list-keychain -d user -s "$KEYCHAIN" login.keychain-db
+          rm -f "$RUNNER_TEMP/cert.p12"
+
+      # cargo-packager reads the signing identity and the notarization
+      # credentials from the environment; see assets/macos/README.md for what
+      # each secret is. With none of them set it builds an unsigned bundle and
+      # says so, which is what keeps packaging testable on a fork.
+      - name: Package app and DMG
+        run: cargo packager --release --formats app,dmg --verbose
+
+      # Proof rather than hope. An unsigned or wrongly-entitled bundle packages
+      # perfectly happily and then fails on a user's machine, so the two things
+      # that would do that are asserted here: the hardened runtime, without which
+      # notarization is refused, and library validation being off, without which
+      # no third-party VST3 plugin can load at all.
+      - name: Check the bundle
+        run: |
+          set -euo pipefail
+          APP=target/release/pubsplash.app
+          codesign -dv --entitlements - "$APP" 2>&1 | tee /tmp/sig.txt
+          if [[ -n "${APPLE_SIGNING_IDENTITY:-}" ]]; then
+            grep -q "flags=.*runtime" /tmp/sig.txt \
+              || { echo "::error::the bundle is not hardened; notarization would refuse it"; exit 1; }
+            grep -q "com.apple.security.cs.disable-library-validation" /tmp/sig.txt \
+              || { echo "::error::library validation is on; VST3 plugins would not load"; exit 1; }
+            spctl --assess --type execute --verbose "$APP"
+          else
+            echo "::warning::No signing identity: this bundle is unsigned and cannot be distributed."
+          fi
+
+      # Stapling puts the notarization ticket inside the DMG, so Gatekeeper can
+      # check it with no network. Without it a first launch on a machine that is
+      # offline -- or behind a captive portal -- is refused.
+      - name: Staple the notarization ticket
+        if: env.APPLE_ID != ''
+        run: xcrun stapler staple target/release/*.dmg
+
+      - name: Name the DMG for the release
+        shell: bash
+        run: |
+          set -euo pipefail
+          # One stable name beside the versioned one, for the same reason the
+          # Windows artifacts get one: releases/latest/download/<name> has to
+          # resolve forever.
+          cp target/release/*.dmg "pubsplash-${GITHUB_REF_NAME:-dev}-macos-arm64.dmg"
+          cp target/release/*.dmg pubsplash-macos-arm64.dmg
+
+      - name: Upload artifacts
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: pubsplash-macos-${{ github.ref_name }}
+          path: pubsplash*-macos-arm64.dmg
+
+      - name: Add the DMG to the release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            pubsplash*-macos-arm64.dmg

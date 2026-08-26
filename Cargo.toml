@@ -235,8 +235,15 @@ debug = "line-tables-only"
 [package.metadata.packager]
 before-packaging-command = "cargo build --release --bin pubsplash --bin pubsplash-scan --bin pubsplash-soundpack --bin pubsplash-update --bin soundpack"
 identifier = "com.github.ironcross32.pubsplash"
+# Windows' format. macOS is packaged with `cargo packager --formats app,dmg`
+# (see the release workflow's macOS job), because this key is not per-platform
+# and NSIS is what a bare `cargo packager` should still mean on the shipping
+# platform.
 formats = ["nsis"]
-icons = ["assets/icon/pubsplash.ico"]
+# Both are listed: cargo-packager picks the `.ico` for NSIS and the `.icns` for
+# the app bundle. The `.icns` is generated from the same artwork -- see
+# `assets/macos/README.md` for the one command that rebuilds it.
+icons = ["assets/icon/pubsplash.ico", "assets/icon/pubsplash.icns"]
 # Extra files copied next to the exe in the install directory, which is where
 # the Help menu looks for them. Both are generated from the Markdown sources at
 # package time (see the release workflow's "Convert docs to HTML" step) —
@@ -258,3 +265,18 @@ binaries = [
 # elevation prompted) at install time, instead of forcing the per-user default.
 [package.metadata.packager.nsis]
 installer-mode = "both"
+
+# macOS. Everything here is about being allowed to run at all rather than about
+# presentation -- see the two plists for what each key buys and what breaks
+# without it.
+[package.metadata.packager.macos]
+# Core Audio process taps, which an Application source is built on, arrived in
+# 14.4. Kept in step with LSMinimumSystemVersion in the Info.plist.
+minimum-system-version = "14.4"
+# Merged into the generated Info.plist. Carries the microphone and audio-capture
+# usage descriptions, without which macOS kills the app the moment it opens a
+# capture -- silently, and with nothing in Pubsplash's own log.
+info-plist-path = "assets/macos/Info.plist"
+# Hardened-runtime entitlements. `disable-library-validation` in particular is
+# what allows third-party VST3 plugins to be loaded at all.
+entitlements = "assets/macos/entitlements.plist"

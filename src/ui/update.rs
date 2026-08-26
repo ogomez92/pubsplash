@@ -250,9 +250,14 @@ fn offer(app: &Rc<App>, trigger: Trigger, manifest: crate::update::manifest::Man
     };
     let current = crate::update::version::current();
 
-    // A layout we do not recognise — a source build, or a copy someone has
-    // pulled files out of — must never overwrite itself. Say what is available
-    // and let the user decide what to do about it.
+    // A layout that cannot update itself in place. On Windows that means a
+    // layout we do not recognise — a source build, or a copy someone has pulled
+    // files out of — and overwriting it would be reckless. On macOS it is *every*
+    // copy: the app ships as a DMG the user drags to Applications, there is no
+    // installer and no portable folder, and replacing a running bundle is the
+    // system's job rather than ours. Same behaviour either way — say what is
+    // available and let the user decide — but not the same news, so not the same
+    // wording.
     if kind == install_kind::InstallKind::Unknown {
         if !trigger.reports_quiet_outcomes() {
             log::info!(
@@ -263,9 +268,14 @@ fn offer(app: &Rc<App>, trigger: Trigger, manifest: crate::update::manifest::Man
         let ask = MessageDialog::builder(
             owner.as_widget(),
             &format!(
-                "Pubsplash {} is available; you are running {current}. This copy was not \
-                 installed in a way Pubsplash can update on its own. Open the download page?",
-                manifest.version
+                "Pubsplash {} is available; you are running {current}. {} Open the download \
+                 page?",
+                manifest.version,
+                if cfg!(target_os = "macos") {
+                    "Pubsplash does not update itself on macOS."
+                } else {
+                    "This copy was not installed in a way Pubsplash can update on its own."
+                }
             ),
             "Update available",
         )
