@@ -705,6 +705,27 @@ pub fn list_processes() -> Vec<(u32, String, Option<PathBuf>)> {
         .collect()
 }
 
+/// Every running process as `(pid, parent pid)`.
+///
+/// For `audio::tap::tree_of`, which has to name each process of an application
+/// explicitly because a Core Audio tap has no "and its descendants" flag — see
+/// that module's header. Shares `SYSTEM` with the two functions above, so this
+/// costs a refresh and no second enumeration.
+#[cfg(target_os = "macos")]
+pub fn process_parents() -> Vec<(u32, Option<u32>)> {
+    let mut system = lock_system();
+    system.refresh_processes_specifics(
+        sysinfo::ProcessesToUpdate::All,
+        true,
+        sysinfo::ProcessRefreshKind::nothing(),
+    );
+    system
+        .processes()
+        .iter()
+        .map(|(pid, process)| (pid.as_u32(), process.parent().map(sysinfo::Pid::as_u32)))
+        .collect()
+}
+
 /// Finds the PID of a running process by executable name (case-insensitive,
 /// with or without `.exe`).
 pub fn find_process(name: &str) -> Option<u32> {

@@ -32,6 +32,25 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
 
+/// The Core Audio primitives, reached by `#[path]` rather than by naming the
+/// crate — this file may not do that (see the header).
+///
+/// The relative path works from both of the places this file is loaded from
+/// because a child module resolves against the directory holding the file that
+/// declares it, which is this one: `src/audio/` when the crate loads it, and
+/// `src/bin/../audio/` when the soundpack manager does. Those are two spellings
+/// of one directory, so `coreaudio.rs` finds the same file either way. (The
+/// same is not true one level down — a child of `ca` would resolve against a
+/// directory named after `ca` itself — so `coreaudio.rs` must stay a leaf.)
+///
+/// The cost is that `coreaudio.rs` is compiled twice in the main binary, once
+/// here and once as `audio::coreaudio` — the same trade `soundpack.rs` already
+/// makes with `convert.rs`, and for the same reason.
+#[cfg(target_os = "macos")]
+#[allow(clippy::duplicate_mod)]
+#[path = "coreaudio.rs"]
+mod ca;
+
 /// The handle an opened output endpoint is named by: a `wasapi::Device` on
 /// Windows, and a Core Audio device id on macOS.
 pub use imp::Device;
@@ -223,38 +242,151 @@ mod imp {
     }
 }
 
-/// Core Audio playback. **Not built yet** — this is the platform seam standing
-/// open, not a design.
+/// Core Audio playback, through a HAL output unit fed from a render callback.
 ///
-/// What goes here is an `AudioUnit` of subtype `HALOutput` bound to the chosen
-/// device, or an `AudioQueue`, fed from a render callback; device resolution is
-/// `AudioObjectGetPropertyData` with `kAudioHardwarePropertyDefaultOutputDevice`
-/// for the `None` case and a `kAudioDevicePropertyDeviceUID` match for a
-/// configured one. The `Active`-state rule the Windows side documents has a
-/// direct equivalent worth keeping: a device whose UID no longer resolves must
-/// be an error, never a fall back to the default, for exactly the feedback
-/// reason given above.
+/// The Windows side writes into the device's buffer from a loop it owns; Core
+/// Audio inverts that — the HAL calls us on its own real-time thread whenever it
+/// wants more. So the shape here is: park a cursor over the sample slice where
+/// the callback can reach it, start the unit, and sleep until the callback says
+/// it is done or the caller sets `stop`.
 ///
-/// Until then every cue and preview reports that it could not play. The callers
-/// all log rather than open a dialog, so this is a quiet line in the log per
-/// sound rather than an unusable app — and it is deliberately an `Err` and not a
-/// silent `Ok`, so that nothing later reads "the cue played" from this.
+/// **Nothing in the callback allocates, locks or logs.** It runs on a real-time
+/// thread with a deadline, and a priority inversion there is a glitch in the
+/// output. It reads a slice, writes a slice, and bumps two atomics.
 #[cfg(target_os = "macos")]
 mod imp {
-    use std::sync::atomic::AtomicBool;
+    use super::{DRAIN_AFTER_CUE, ca, output_device_id};
+    use objc2_audio_toolbox::AudioUnitRenderActionFlags;
+    use objc2_core_audio_types::{AudioBufferList, AudioTimeStamp};
+    use std::ffi::c_void;
+    use std::ptr::NonNull;
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+    use std::time::{Duration, Instant};
 
-    /// Stands in for a Core Audio `AudioDeviceID`. Nothing constructs one yet.
-    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-    pub struct Device(pub u32);
-
-    const UNBUILT: &str = "audio output is not implemented on macOS yet";
+    /// A Core Audio device id. Named `Device` so both platforms' callers read
+    /// alike.
+    pub type Device = u32;
 
     pub fn output_render_device() -> Result<Device, String> {
-        Err(UNBUILT.to_string())
+        match output_device_id() {
+            Some(uid) => {
+                let device = ca::device_for_uid(&uid)
+                    .ok_or("the configured playback device is not connected")?;
+                if !ca::has_streams(device, ca::Scope::Output) {
+                    return Err("the configured playback device has no outputs".to_string());
+                }
+                Ok(device)
+            }
+            None => ca::default_device(ca::Scope::Output)
+                .ok_or_else(|| "there is no default playback device".to_string()),
+        }
     }
 
-    pub fn play_samples_until(_samples: &[f32], _stop: &AtomicBool) -> Result<(), String> {
-        Err(UNBUILT.to_string())
+    /// What the render callback reads. Shared with the HAL's real-time thread,
+    /// so every field is either immutable for the unit's lifetime or an atomic.
+    struct Playback<'a> {
+        samples: &'a [f32],
+        /// How far through `samples` the callback has got.
+        cursor: AtomicUsize,
+        /// Set by the callback once it has handed over the last sample, so the
+        /// waiting thread knows to start the drain.
+        finished: AtomicBool,
+    }
+
+    /// The HAL's render callback. Real-time thread; see the module header.
+    ///
+    /// # Safety
+    /// `ref_con` is the `Playback` passed to `open_output`, alive for the life
+    /// of the unit. `io_data` is the HAL's buffer list for this cycle.
+    unsafe extern "C-unwind" fn render(
+        ref_con: NonNull<c_void>,
+        _flags: NonNull<AudioUnitRenderActionFlags>,
+        _time: NonNull<AudioTimeStamp>,
+        _bus: u32,
+        frames: u32,
+        io_data: *mut AudioBufferList,
+    ) -> i32 {
+        // SAFETY: both pointers are the HAL's and ours respectively, and both
+        // outlive this call by the contract above.
+        let playback = unsafe { &*ref_con.as_ptr().cast::<Playback>() };
+        let Some(out) = (unsafe { ca::hal_buffer(io_data, frames) }) else {
+            return 0;
+        };
+
+        // Everything below is bounded by `out.len()`, never by `frames`. The two
+        // are normally the same, but `ca::hal_buffer` deliberately shortens the
+        // slice when the HAL's own two accounts of the buffer disagree, and a
+        // panic here would unwind into a real-time C callback.
+        let start = playback.cursor.load(Ordering::Relaxed);
+        let available = playback.samples.len().saturating_sub(start);
+        let taken = available.min(out.len());
+        out[..taken].copy_from_slice(&playback.samples[start..start + taken]);
+        // Whatever is left of the cycle is silence. The HAL does not zero the
+        // buffer for us, and handing back the previous cycle's contents is a
+        // loud buzz rather than a quiet end.
+        out[taken..].fill(0.0);
+
+        let cursor = start + taken;
+        playback.cursor.store(cursor, Ordering::Relaxed);
+        // The end of the samples, not a short cycle: a cycle can come up short
+        // for the buffer reason above with audio still to play, and taking that
+        // for the end would start the drain early and clip the cue's tail.
+        if cursor == playback.samples.len() {
+            playback.finished.store(true, Ordering::Relaxed);
+        }
+        0
+    }
+
+    pub fn play_samples_until(samples: &[f32], stop: &AtomicBool) -> Result<(), String> {
+        let device = output_render_device()?;
+        let playback = Playback {
+            samples,
+            cursor: AtomicUsize::new(0),
+            finished: AtomicBool::new(false),
+        };
+        // SAFETY: `playback` outlives `unit` -- it is declared first and `unit`
+        // is dropped at the end of this scope, and `Unit::drop` stops the
+        // callback before returning.
+        let unit = unsafe {
+            ca::open_output(
+                device,
+                Some(render),
+                std::ptr::from_ref(&playback) as *mut c_void,
+            )?
+        };
+        unit.start()?;
+
+        // Polled rather than woken, which is the one place this file does that
+        // and is deliberate. The Windows side above waits on a real WASAPI event
+        // because the app owns the writing thread there; here the HAL owns it,
+        // and the only thing that knows a cue has ended is the callback. Having
+        // it signal a `Condvar` would put a mutex on a real-time thread, and the
+        // moment this thread held that mutex the audio thread would block on a
+        // normal-priority one — the priority inversion the module header exists
+        // to forbid, paid for as a glitch in the output. A 10 ms tick on a
+        // thread that is otherwise asleep is the cheaper side of that trade: the
+        // callback does the work, this only notices when it stopped.
+        const TICK: Duration = Duration::from_millis(10);
+        let mut finished_at: Option<Instant> = None;
+        loop {
+            if stop.load(Ordering::Relaxed) {
+                // A stop deliberately skips the drain: that wait exists so a cue
+                // that reached its end is not cut off, and a stop is the user
+                // asking for exactly that cut-off.
+                break;
+            }
+            if playback.finished.load(Ordering::Relaxed) {
+                let since = *finished_at.get_or_insert_with(Instant::now);
+                if since.elapsed() >= DRAIN_AFTER_CUE {
+                    break;
+                }
+            }
+            std::thread::sleep(TICK);
+        }
+        // Explicit, so the order is visible: the unit stops (and with it the
+        // callback) before `playback` goes out of scope.
+        drop(unit);
+        Ok(())
     }
 }
 
@@ -323,9 +455,8 @@ mod tests {
     /// source against the endpoint this returns, and a fallback could put the
     /// output back onto the endpoint that check just approved.
     ///
-    /// Windows-only for now only because the macOS side is not built; when it
-    /// is, this test is one of the things it has to satisfy.
-    #[cfg(windows)]
+    /// Both platforms: a Core Audio UID that resolves to no device has to fail
+    /// for the same reason a WASAPI endpoint id does.
     #[test]
     fn an_unknown_output_device_is_an_error_not_the_default() {
         let previous = output_device_id();
@@ -338,5 +469,62 @@ mod tests {
             opened.is_err(),
             "an unknown endpoint id must not resolve to a device"
         );
+    }
+
+    /// A configured device must resolve to *that* device. The other half of the
+    /// test above: refusing an unknown id is only right if a known one is
+    /// honoured, and the two paths through `output_render_device` — follow the
+    /// system default, or match a saved UID — are otherwise unrelated code.
+    ///
+    /// Machine-independent because it asks for the default device by its own
+    /// UID, so the two paths must agree on a device this machine really has.
+    /// Skips itself where there is no output device at all, which is what CI is.
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn a_configured_device_resolves_to_that_device() {
+        let previous = output_device_id();
+
+        set_output_device(None);
+        let Ok(default) = output_render_device() else {
+            return;
+        };
+        let uid = ca::device_uid(default).expect("a live device should have a UID");
+
+        set_output_device(Some(uid.clone()));
+        let configured = output_render_device();
+
+        set_output_device(previous);
+        assert_eq!(
+            configured,
+            Ok(default),
+            "asking for {uid} should reach the device it names"
+        );
+    }
+
+    /// Plays a second of a 440 Hz tone out of the default device.
+    ///
+    /// Ignored because it makes a noise, and there is nothing here to assert
+    /// against: whether the HAL unit is wired up correctly is a question about
+    /// pitch, channel count and clicks that only an ear can answer. Run it with
+    /// `cargo test plays_a_tone -- --include-ignored --nocapture`. A tone at the
+    /// wrong pitch means the sample rate is not being negotiated; hearing it in
+    /// one ear means the format went across as non-interleaved; a click at the
+    /// end means the drain is too short.
+    #[test]
+    #[ignore = "plays audio"]
+    fn plays_a_tone_out_of_the_default_device() {
+        let frames = SAMPLE_RATE as usize;
+        let mut samples = Vec::with_capacity(frames * CHANNELS);
+        for frame in 0..frames {
+            let t = frame as f32 / SAMPLE_RATE as f32;
+            // Faded in and out over 20 ms, so a click at either end is the
+            // device's doing rather than the test's.
+            let fade = (t / 0.02).min((1.0 - t) / 0.02).clamp(0.0, 1.0);
+            let value = (t * 440.0 * std::f32::consts::TAU).sin() * 0.2 * fade;
+            samples.push(value);
+            samples.push(value);
+        }
+
+        play_samples(&samples).expect("the default device should play a tone");
     }
 }
