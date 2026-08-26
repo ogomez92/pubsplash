@@ -4,16 +4,21 @@
 
 pub mod audiopub;
 pub mod icecast;
+pub mod rtmp;
 pub mod sse;
 pub mod stats;
+pub mod youtube;
 
 use crate::secret::Secret;
 use audiopub::{AudioPubClient, EventsStream, StreamIdentity};
 use icecast::{IcecastConnection, IcecastError, IcecastTarget};
+use rtmp::{RtmpError, RtmpProcess, RtmpTarget};
 use sse::{LiveEvent, SseParser};
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc as tokio_mpsc;
+use youtube::ChannelRef;
 
 /// A configured streaming service, snapshotted by the UI before it is sent to
 /// the network thread.
@@ -41,6 +46,28 @@ pub enum ServiceProfile {
         /// for the forms this accepts.
         listener_url: String,
     },
+    /// An RTMP ingest, published to through ffmpeg. YouTube by default; the URL
+    /// is editable, so any RTMP server works.
+    ///
+    /// Everything ffmpeg needs is resolved by the UI *before* this is built —
+    /// the binary is located and probed at Connect, where the user is waiting
+    /// for an answer — so the network thread never has to decide what to do
+    /// about a missing encoder halfway into a broadcast.
+    Youtube {
+        id: String,
+        nickname: String,
+        ffmpeg: PathBuf,
+        url: String,
+        key: Secret,
+        image: Option<PathBuf>,
+        video_bitrate_kbps: u32,
+        h264: &'static str,
+        aac: &'static str,
+        /// Which broadcast to read chat from. `None` leaves the service with no
+        /// chat at all, which is the right answer for an RTMP target that is not
+        /// YouTube.
+        chat: Option<ChannelRef>,
+    },
 }
 
 /// Commands from the UI to the network runtime.
@@ -54,8 +81,17 @@ pub enum NetCommand {
         description: String,
         archive: bool,
         content_type: String,
-        /// Encoded audio produced by the audio engine.
+        /// What the audio engine is putting on `audio`, which depends on the
+        /// service: MP3 for Icecast (Audio Pub included), and raw interleaved
+        /// 16-bit PCM for an RTMP target, whose ffmpeg does its own encoding.
+        /// The UI chooses this and the matching `EngineCommand` together; see
+        /// `ui::begin_stream`.
         audio: tokio_mpsc::Receiver<Vec<u8>>,
+        /// The configured audio bitrate. Already applied to the MP3 encoder by
+        /// the time this arrives, and needed here only because an RTMP target's
+        /// encoding happens on this side of the channel rather than in the
+        /// engine.
+        audio_bitrate_kbps: u32,
     },
     StopStream,
     SendChat(String),
@@ -225,12 +261,30 @@ enum Connection {
         password: Secret,
         listener_url: String,
     },
+    Youtube {
+        target: RtmpTarget,
+        chat: Option<ChannelRef>,
+    },
 }
 
 fn audiopub_client(connection: &Connection) -> Option<&AudioPubClient> {
     match connection {
         Connection::Audiopub { client, .. } => Some(client),
-        Connection::Icecast { .. } => None,
+        Connection::Icecast { .. } | Connection::Youtube { .. } => None,
+    }
+}
+
+/// What a service calls the thing it sends, for the one message that has to name
+/// it. Chat is Audiopub's alone — a direct Icecast mount has no chat channel at
+/// all, and YouTube's needs a signed-in account (see [`youtube`]).
+fn chat_unavailable(connection: &Connection) -> &'static str {
+    match connection {
+        Connection::Audiopub { .. } => "chat is available",
+        Connection::Icecast { .. } => "chat is only available for Audiopub and YouTube services",
+        Connection::Youtube { .. } => {
+            "Pubsplash can read YouTube chat but not post to it. Sending needs a signed-in \
+             Google account, which YouTube only offers through its quota-limited API"
+        }
     }
 }
 
@@ -500,6 +554,55 @@ async fn net_loop(mut commands: tokio_mpsc::UnboundedReceiver<NetCommand>, event
                             }
                         }
                     }
+                    ServiceProfile::Youtube {
+                        id,
+                        nickname,
+                        ffmpeg,
+                        url,
+                        key,
+                        image,
+                        video_bitrate_kbps,
+                        h264,
+                        aac,
+                        chat,
+                    } => {
+                        let target = RtmpTarget {
+                            ffmpeg,
+                            url,
+                            key,
+                            image,
+                            // The real value comes from Preferences at Start
+                            // streaming, where the user may have changed it
+                            // since; this is only a placeholder so the target is
+                            // complete. See `start_stream`.
+                            audio_bitrate_kbps: 128,
+                            video_bitrate_kbps,
+                            h264,
+                            aac,
+                        };
+                        // Nothing is dialled here. RTMP has no cheap "is anyone
+                        // there" exchange — the handshake claims the stream key
+                        // and starts a broadcast, which is precisely what
+                        // Connect must not do. The checks that *can* be made
+                        // without one (the binary exists, it has the encoders,
+                        // the fields are filled in) all happened in
+                        // `ui::service_profile_from_site`, with the dialog still
+                        // open in front of the user.
+                        log::info!(
+                            "YouTube service {nickname:?} publishes to {} using {} and {}",
+                            target.describe(),
+                            target.h264,
+                            target.aac
+                        );
+                        if let Some(chat) = &chat {
+                            log::info!("YouTube service {nickname:?} reads chat from its {}", chat.describe());
+                        }
+                        connection = Some(Connection::Youtube { target, chat });
+                        let _ = events.send(NetEvent::Connected {
+                            service_id: id,
+                            display_name: nickname,
+                        });
+                    }
                 }
             }
             NetCommand::Disconnect => {
@@ -520,6 +623,7 @@ async fn net_loop(mut commands: tokio_mpsc::UnboundedReceiver<NetCommand>, event
                 archive,
                 content_type,
                 audio,
+                audio_bitrate_kbps,
             } => {
                 if connection.is_none() {
                     let _ = events.send(NetEvent::StreamError {
@@ -542,10 +646,13 @@ async fn net_loop(mut commands: tokio_mpsc::UnboundedReceiver<NetCommand>, event
                 };
                 match start_stream(
                     conn,
-                    &title,
-                    &description,
-                    archive,
-                    &content_type,
+                    StreamRequest {
+                        title: &title,
+                        description: &description,
+                        archive,
+                        content_type: &content_type,
+                        audio_bitrate_kbps,
+                    },
                     audio,
                     events.clone(),
                 )
@@ -580,7 +687,7 @@ async fn net_loop(mut commands: tokio_mpsc::UnboundedReceiver<NetCommand>, event
                 };
                 let Some(client) = audiopub_client(conn) else {
                     let _ = events.send(NetEvent::ChatSendFailed {
-                        message: "chat is only available for Audiopub services".into(),
+                        message: chat_unavailable(conn).into(),
                     });
                     continue;
                 };
@@ -602,9 +709,26 @@ async fn net_loop(mut commands: tokio_mpsc::UnboundedReceiver<NetCommand>, event
                     }));
                     continue;
                 };
-                if audiopub_client(conn).is_none() {
+                // Reading is what the button is for, so a YouTube service with a
+                // channel configured gets it even though it cannot send: its
+                // feed is a poll loop that can wedge on a stale continuation in
+                // exactly the way the Audiopub feed wedges on a half-open
+                // socket, which is the case this button exists for.
+                let has_feed = match conn {
+                    Connection::Audiopub { .. } => true,
+                    Connection::Youtube { chat, .. } => chat.is_some(),
+                    Connection::Icecast { .. } => false,
+                };
+                if !has_feed {
                     let _ = events.send(NetEvent::ChatFeed(ChatFeedState::Interrupted {
-                        reason: "chat is only available for Audiopub services".into(),
+                        reason: match conn {
+                            Connection::Youtube { .. } => {
+                                "this service has no YouTube channel set, so there is no chat \
+                                 to reconnect"
+                                    .into()
+                            }
+                            _ => "chat is only available for Audiopub and YouTube services".into(),
+                        },
                     }));
                     continue;
                 }
@@ -687,22 +811,32 @@ enum Step {
 /// The retry policy, as a pure function so the ladder, the budget and the
 /// terminal/retryable split are all testable without a socket or a runtime.
 fn plan_retry(error: &IcecastError, attempt: usize, since_first_failure: Duration) -> Step {
+    plan_retry_for(error.retryable(), || error.explain(), attempt, since_first_failure)
+}
+
+/// [`plan_retry`] without the Icecast error type.
+///
+/// One policy for both outgoing transports rather than two that drift: the
+/// ladder, the four-minute budget and the "terminal failures give up at once"
+/// rule are properties of *this app's* idea of an outage, not of Icecast. The
+/// reason is a closure because building it can allocate and the common path —
+/// a retryable error with budget left — never needs it.
+fn plan_retry_for(
+    retryable: bool,
+    reason: impl Fn() -> String,
+    attempt: usize,
+    since_first_failure: Duration,
+) -> Step {
     // A wrong stream key or a banned account will answer the same way in four
     // minutes' time, so those give up at once rather than burning the budget.
-    if !error.retryable() {
-        return Step::GiveUp {
-            reason: error.explain(),
-        };
+    if !retryable {
+        return Step::GiveUp { reason: reason() };
     }
     let Some(left) = AUDIO_RECONNECT_BUDGET.checked_sub(since_first_failure) else {
-        return Step::GiveUp {
-            reason: error.explain(),
-        };
+        return Step::GiveUp { reason: reason() };
     };
     if left.is_zero() {
-        return Step::GiveUp {
-            reason: error.explain(),
-        };
+        return Step::GiveUp { reason: reason() };
     }
     // Never sleep past the budget: the last wait should land us on the deadline,
     // not well beyond it, so the give-up is announced when promised.
@@ -1109,6 +1243,358 @@ fn spawn_icecast_sender(
     })
 }
 
+/// How quickly an ffmpeg exit counts as "it never got going".
+///
+/// A refused RTMP handshake — a wrong stream key, a stream key for a broadcast
+/// that has been ended, an ingest URL with a typo in it — kills ffmpeg within a
+/// second or two, every time, with no status code to read: RTMP carries no such
+/// thing, and the only account of what went wrong is prose on stderr. A dropped
+/// *live* session, by contrast, is preceded by minutes of successful publishing.
+const RTMP_EARLY_EXIT: Duration = Duration::from_secs(6);
+
+/// How many consecutive early exits mean the settings are wrong rather than the
+/// network being bad.
+///
+/// Three, not one: a machine coming out of sleep, or a Wi-Fi link that has not
+/// finished associating, will refuse the first connection just as fast as a bad
+/// key does. Three in a row across the backoff ladder is seventeen seconds of
+/// the same instant refusal, which no transient outage looks like — and stopping
+/// there means a mistyped stream key is a message in twenty seconds instead of
+/// four minutes of a UI claiming to be reconnecting.
+const RTMP_EARLY_EXIT_LIMIT: u32 = 3;
+
+/// Sends PCM into one ffmpeg until it stops taking it.
+///
+/// Also watches for the child having exited, which the write alone does not
+/// catch: a pipe with room in its buffer accepts a write to a dead process, so a
+/// broadcast could go on being "sent" into a kernel buffer for as long as that
+/// buffer lasted. Not on every block — `try_wait` is a system call and the
+/// mixer produces a hundred blocks a second — but often enough that the outage
+/// is noticed in a fraction of a second.
+async fn pump_rtmp(process: &mut RtmpProcess, audio: &mut tokio_mpsc::Receiver<Vec<u8>>) -> RtmpExit {
+    const CHECK_EVERY: u32 = 25;
+    let mut since_check = 0u32;
+    while let Some(chunk) = audio.recv().await {
+        if let Err(error) = process.send(&chunk).await {
+            return RtmpExit::Dropped { error };
+        }
+        since_check += 1;
+        if since_check >= CHECK_EVERY {
+            since_check = 0;
+            if let Some(error) = process.exited() {
+                return RtmpExit::Dropped { error };
+            }
+        }
+    }
+    RtmpExit::Ended
+}
+
+/// Why [`pump_rtmp`] returned.
+enum RtmpExit {
+    /// The engine's channel closed: the stream is being stopped normally.
+    Ended,
+    Dropped { error: RtmpError },
+}
+
+/// Owns the ffmpeg publisher for one stream, restarting it for as long as the
+/// stream lives or the retry budget allows.
+///
+/// The sibling of [`spawn_icecast_sender`], and every rule there applies here
+/// for the same reason: **`audio` must not be dropped except on the terminal
+/// path** (dropping it closes the channel, which the engine reads as "stop
+/// producing" and answers permanently, so a successful restart would have
+/// nothing to send), the queued backlog is discarded before every restart
+/// (delivering it would put the broadcast permanently behind live), and the
+/// first process is handed in already started so a missing ffmpeg fails `Start
+/// streaming` loudly.
+///
+/// The one rule that is *not* shared is the early-exit rule above. Icecast
+/// answers a bad key with `401` and `IcecastError::retryable` can say so at
+/// once; RTMP answers with a closed socket that is indistinguishable from a
+/// network failure, so the same judgement has to be made from timing instead.
+fn spawn_rtmp_sender(
+    target: RtmpTarget,
+    first: RtmpProcess,
+    mut audio: tokio_mpsc::Receiver<Vec<u8>>,
+    events: EventSender,
+) -> tokio::task::JoinHandle<()> {
+    tokio::spawn(async move {
+        let mut process = first;
+        let mut said_halfway = false;
+        let mut first_failure: Option<Instant> = None;
+        let mut attempt: usize = 0;
+        let mut started_at = Instant::now();
+        let mut early_exits = 0u32;
+
+        // The same discard, for the same reason, as the Icecast sender's: the
+        // engine has been filling this channel since `StartRawFeed`, throughout
+        // ffmpeg's launch and its RTMP handshake. Sending it would open the
+        // broadcast several seconds behind live and leave it there.
+        while audio.try_recv().is_ok() {}
+
+        loop {
+            let mut error = match pump_rtmp(&mut process, &mut audio).await {
+                RtmpExit::Ended => {
+                    process.close().await;
+                    return;
+                }
+                RtmpExit::Dropped { error } => error,
+            };
+            // Whatever is left of it: its output is already gone, so there is
+            // nothing worth waiting to flush.
+            process.abandon().await;
+
+            if started_at.elapsed() < RTMP_EARLY_EXIT {
+                early_exits += 1;
+            } else {
+                early_exits = 0;
+            }
+            log::warn!("RTMP: {}", error.explain());
+
+            let started = *first_failure.get_or_insert_with(Instant::now);
+            let _ = events.send(NetEvent::AudioLink(AudioLinkState::Interrupted {
+                reason: error.explain(),
+            }));
+
+            loop {
+                if early_exits >= RTMP_EARLY_EXIT_LIMIT {
+                    let reason = error.explain();
+                    log::error!("RTMP: giving up after {early_exits} immediate failures ({reason})");
+                    let _ = events.send(NetEvent::StreamError {
+                        message: format!(
+                            "FFmpeg could not publish to {}. Check the stream key and the \
+                             ingest URL for this service. The broadcast has ended.\n\n{reason}",
+                            target.describe()
+                        ),
+                    });
+                    return;
+                }
+                match plan_retry_for(error.retryable(), || error.explain(), attempt, started.elapsed())
+                {
+                    Step::GiveUp { reason } => {
+                        log::error!("RTMP: giving up ({reason})");
+                        let _ = events.send(NetEvent::StreamError {
+                            message: format!(
+                                "The connection to {} could not be restored: {reason}. \
+                                 The broadcast has ended.",
+                                target.describe()
+                            ),
+                        });
+                        return;
+                    }
+                    Step::Retry(wait) => {
+                        log::info!("RTMP: restarting FFmpeg in {}s (attempt {attempt})", wait.as_secs());
+                        tokio::time::sleep(wait).await;
+                        attempt += 1;
+                    }
+                }
+
+                if !said_halfway && started.elapsed() >= AUDIO_HALFWAY_NOTICE {
+                    said_halfway = true;
+                    let _ = events.send(NetEvent::AudioLink(AudioLinkState::StillRetrying {
+                        remaining_seconds: AUDIO_RECONNECT_BUDGET
+                            .saturating_sub(started.elapsed())
+                            .as_secs(),
+                    }));
+                }
+
+                // Before the restart, so the discard covers the launch and the
+                // handshake as well as the outage itself.
+                while audio.try_recv().is_ok() {}
+
+                match RtmpProcess::start(&target).await {
+                    Ok(fresh) => {
+                        process = fresh;
+                        started_at = Instant::now();
+                        let gap_seconds = started.elapsed().as_secs();
+                        log::info!("RTMP: FFmpeg restarted after {gap_seconds}s");
+                        let _ = events.send(NetEvent::AudioLink(AudioLinkState::Restored {
+                            gap_seconds,
+                        }));
+                        said_halfway = false;
+                        first_failure = None;
+                        attempt = 0;
+                        break;
+                    }
+                    Err(e) => {
+                        log::warn!("RTMP: restart failed ({})", e.explain());
+                        // A launch failure is instant by definition, so it
+                        // counts towards the early-exit limit as well: three
+                        // attempts to run a binary that is not there is enough.
+                        early_exits += 1;
+                        error = e;
+                    }
+                }
+            }
+        }
+    })
+}
+
+/// Owns the YouTube chat poll for one broadcast.
+///
+/// Mirrors [`spawn_chat_feed`] — the `reported` flag that keeps the log to one
+/// line per outage, the reconnect doorbell, the backoff ladder — with two
+/// differences that come from what it is reading.
+///
+/// The first is that **the start-up window is not an outage.** A YouTube
+/// broadcast does not exist as a watch page the moment ffmpeg's RTMP session is
+/// accepted; YouTube takes the better part of a minute to promote it, and until
+/// then the channel's `/live` page answers "nothing is live" and the chat is
+/// switched off. Reporting each of those as an interruption would fill the log
+/// with failures during the most normal thing that happens. So nothing is
+/// reported as an outage until the feed has worked at least once.
+///
+/// The second is that this feed is also the only thing that can say whether
+/// YouTube is *serving* the broadcast — the RTMP session says only that the
+/// ingest took the bytes, exactly as an open Icecast socket says only that
+/// Icecast did. Resolving the video to a live watch page is the equivalent of
+/// Audio Pub's `active`, and is what this reports.
+fn spawn_youtube_chat(
+    reference: ChannelRef,
+    events: EventSender,
+    mut reconnect: tokio_mpsc::UnboundedReceiver<()>,
+) -> tokio::task::JoinHandle<()> {
+    tokio::spawn(async move {
+        let client = match youtube::client() {
+            Ok(client) => client,
+            Err(e) => {
+                log::warn!("YouTube chat: no HTTP client ({e}); this stream will have no chat");
+                return;
+            }
+        };
+        let described = reference.describe();
+        let mut reported = false;
+        let mut owed_an_answer = false;
+        // Until this is set, a "not live yet" is the expected answer rather than
+        // a failure. See the doc comment.
+        let mut ever_opened = false;
+        let mut attempt: usize = 0;
+
+        loop {
+            match youtube::Chat::open(client.clone(), &reference).await {
+                Ok(mut chat) => {
+                    if reported || owed_an_answer {
+                        log::info!("YouTube chat: reconnected to {}", chat.video_id);
+                        let _ = events.send(NetEvent::ChatFeed(ChatFeedState::Restored));
+                    } else {
+                        log::info!(
+                            "YouTube chat: reading {} ({})",
+                            youtube::watch_url(&chat.video_id),
+                            described
+                        );
+                    }
+                    reported = false;
+                    owed_an_answer = false;
+                    ever_opened = true;
+                    attempt = 0;
+                    // The broadcast has a live watch page, which is the only
+                    // evidence available that YouTube is serving it.
+                    let _ = events.send(NetEvent::ServerStreamState {
+                        state: "active".to_string(),
+                    });
+
+                    match read_youtube_chat(&mut chat, &events, &mut reconnect).await {
+                        FeedExit::Forced => {
+                            log::info!("YouTube chat: reconnecting at the user's request");
+                            owed_an_answer = true;
+                            continue;
+                        }
+                        FeedExit::Closed | FeedExit::Finished => return,
+                        FeedExit::Dropped { reason } => {
+                            log::warn!("YouTube chat: {reason}");
+                            reported = true;
+                            let _ = events
+                                .send(NetEvent::ChatFeed(ChatFeedState::Interrupted { reason }));
+                        }
+                    }
+                }
+                Err(e) if !e.retryable() => {
+                    // Only a reference that cannot be parsed reaches here, and
+                    // it will not parse in a minute either.
+                    log::warn!("YouTube chat: {e}; this stream will have no chat");
+                    let _ = events.send(NetEvent::ChatFeed(ChatFeedState::Interrupted {
+                        reason: e.to_string(),
+                    }));
+                    return;
+                }
+                Err(e) => {
+                    if !ever_opened {
+                        // The start-up window. Logged, because a stream that
+                        // never gets chat needs an explanation somewhere, but
+                        // not announced as an interruption of something that has
+                        // not started.
+                        log::info!("YouTube chat: waiting for {described} ({e})");
+                    } else {
+                        let reason = e.to_string();
+                        log::warn!("YouTube chat: {reason}");
+                        if !reported || owed_an_answer {
+                            reported = true;
+                            owed_an_answer = false;
+                            let _ = events
+                                .send(NetEvent::ChatFeed(ChatFeedState::Interrupted { reason }));
+                        }
+                    }
+                }
+            }
+
+            let wait = chat_backoff(attempt);
+            attempt = attempt.saturating_add(1);
+            match wait_or_reconnect(&mut reconnect, wait).await {
+                Wake::Closed => return,
+                Wake::User => owed_an_answer = true,
+                Wake::Timer => {}
+            }
+        }
+    })
+}
+
+/// Polls one open chat until it stops answering.
+///
+/// The wait between polls is the server's own `timeoutMs`, not a rate of our
+/// choosing — YouTube's chat panel is told how often to come back and so are we.
+/// The reconnect doorbell is checked in the same `select!` for the same reason
+/// the Audiopub feed checks it: a continuation that has gone stale answers
+/// forever without ever erroring, and the button exists for exactly that.
+async fn read_youtube_chat(
+    chat: &mut youtube::Chat,
+    events: &EventSender,
+    reconnect: &mut tokio_mpsc::UnboundedReceiver<()>,
+) -> FeedExit {
+    loop {
+        let batch = match chat.poll().await {
+            Ok(batch) => batch,
+            Err(e) => {
+                return FeedExit::Dropped {
+                    reason: e.to_string(),
+                };
+            }
+        };
+        for item in batch.messages {
+            let _ = events.send(NetEvent::Chat(item.into_message()));
+        }
+        if let Some(active) = batch.viewers {
+            // No peak of YouTube's own, so the count is its own high-water mark
+            // and the pump takes the maximum from there.
+            let _ = events.send(NetEvent::Listeners {
+                active,
+                peak: active,
+            });
+        }
+        // `biased` so a waiting reconnect request wins over the timer.
+        tokio::select! {
+            biased;
+            request = reconnect.recv() => match request {
+                Some(()) => {
+                    drain(reconnect);
+                    return FeedExit::Forced;
+                }
+                None => return FeedExit::Closed,
+            },
+            _ = tokio::time::sleep(batch.wait) => {}
+        }
+    }
+}
+
 /// How often a direct Icecast mount's listener count is refreshed.
 ///
 /// This is the one polled thing in `net`, and it is polled because Icecast
@@ -1247,15 +1733,35 @@ async fn read_counts(
     stats::parse_counts(&body, target.mount.as_deref())
 }
 
+/// What one [`NetCommand::StartStream`] asks for, minus the channels.
+///
+/// Grouped because these travel together and mean nothing apart: a stream's
+/// title, its description and whether to archive it are one decision the user
+/// made in the Set stream info dialog, and the two encoder fields describe the
+/// same bytes from either end. Passing them as one borrowed struct also keeps
+/// [`start_stream`] readable now that a third service type reads a different
+/// subset of them than the other two.
+struct StreamRequest<'a> {
+    title: &'a str,
+    description: &'a str,
+    archive: bool,
+    content_type: &'a str,
+    audio_bitrate_kbps: u32,
+}
+
 async fn start_stream(
     conn: &Connection,
-    title: &str,
-    description: &str,
-    archive: bool,
-    content_type: &str,
+    request: StreamRequest<'_>,
     audio: tokio_mpsc::Receiver<Vec<u8>>,
     events: EventSender,
 ) -> Result<ActiveStream, String> {
+    let StreamRequest {
+        title,
+        description,
+        archive,
+        content_type,
+        audio_bitrate_kbps,
+    } = request;
     match conn {
         Connection::Audiopub {
             client,
@@ -1373,6 +1879,82 @@ async fn start_stream(
                 // Never rung: a direct Icecast mount has no chat feed at all.
                 chat_reconnect: tokio_mpsc::unbounded_channel().0,
                 icecast_task,
+            })
+        }
+        Connection::Youtube { target, chat } => {
+            // The bitrate is the only part of the target the user could have
+            // changed between Connect and Start, because it lives in
+            // Preferences rather than on the service.
+            let mut target = target.clone();
+            target.audio_bitrate_kbps = audio_bitrate_kbps;
+
+            let began = Instant::now();
+            // Started here rather than inside the sender for the same reason the
+            // first Icecast connect is: an ffmpeg that will not run at all
+            // should fail `Start streaming` at once, with a reason, rather than
+            // becoming four minutes of quiet retrying behind a UI claiming to be
+            // live. What it cannot catch is a refused RTMP handshake — that
+            // happens after the process exists, and `spawn_rtmp_sender`'s
+            // early-exit rule is what turns it into a fast answer.
+            let process = RtmpProcess::start(&target)
+                .await
+                .map_err(|e| e.explain())?;
+            log::info!(
+                "Stream start: FFmpeg publishing to {} in {} ms",
+                target.describe(),
+                began.elapsed().as_millis()
+            );
+            let stream_id = chat
+                .as_ref()
+                .and_then(|reference| match reference {
+                    ChannelRef::Video(id) => Some(youtube::stream_id(id)),
+                    ChannelRef::Channel(_) => None,
+                })
+                .unwrap_or_else(|| "youtube".to_string());
+            let icecast_task = spawn_rtmp_sender(target, process, audio, events.clone());
+
+            // Before the chat task, exactly as the Audiopub arm announces before
+            // its feed: the pump's `StreamStarted` arm resets `server_stream` to
+            // `Pending`, and the chat task's first act is to report `active` the
+            // moment YouTube is serving the broadcast. The other order would
+            // overwrite that with `Pending` and leave it there for good.
+            let _ = events.send(NetEvent::StreamStarted {
+                stream_id: stream_id.clone(),
+            });
+
+            let (chat_reconnect, reconnect_rx) = tokio_mpsc::unbounded_channel();
+            let sse_task = match chat {
+                Some(reference) => Some(spawn_youtube_chat(
+                    reference.clone(),
+                    events.clone(),
+                    reconnect_rx,
+                )),
+                None => {
+                    // Nothing can say whether the ingest is being served, so the
+                    // Home tab is told so rather than being left reading
+                    // "waiting for the server to accept the stream" for the whole
+                    // broadcast. The same answer a direct Icecast mount gets, for
+                    // the same reason.
+                    log::info!(
+                        "No YouTube channel is set for this service, so there is no chat and \
+                         no way to tell when YouTube starts serving the broadcast"
+                    );
+                    let _ = events.send(NetEvent::ServerStreamState {
+                        state: "unknown".to_string(),
+                    });
+                    None
+                }
+            };
+
+            Ok(ActiveStream {
+                stream_id,
+                sse_task,
+                // YouTube's viewer count arrives on the chat feed when it
+                // arrives at all, the way Audio Pub's does; there is nothing
+                // separate to poll.
+                stats_task: None,
+                icecast_task,
+                chat_reconnect,
             })
         }
     }

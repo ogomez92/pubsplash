@@ -133,6 +133,18 @@ file = "src/ui/connect_dialog.rs"
 message = "Rename the selected service profile. The main Audiopub service cannot be renamed."
 
 [[control]]
+id = "dialog.connect.rtmpKey"
+label = "RTMP stream key for the selected service"
+file = "src/ui/connect_dialog.rs"
+message = "Type the stream key for this service. YouTube shows it in YouTube Studio, under Go live, beside the stream URL. Treat it like a password: anyone who has it can broadcast to your channel."
+
+[[control]]
+id = "dialog.connect.rtmpUrl"
+label = "RTMP ingest URL for the selected service"
+file = "src/ui/connect_dialog.rs"
+message = "Type the RTMP address to publish to, without the stream key. YouTube's is rtmp://a.rtmp.youtube.com/live2, and its backup is rtmp://b.rtmp.youtube.com/live2?backup=1. Pubsplash adds the stream key below onto the end for you. Any other RTMP server works here too."
+
+[[control]]
 id = "dialog.connect.serviceType"
 label = "Service type selector"
 file = "src/ui/connect_dialog.rs"
@@ -151,10 +163,40 @@ file = "src/ui/connect_dialog.rs"
 message = "Type the full Audiopub service URL, starting with http or https. The main Audiopub service keeps its built-in URL."
 
 [[control]]
+id = "dialog.connect.youtubeChannel"
+label = "YouTube channel or video to read chat from"
+file = "src/ui/connect_dialog.rs"
+message = "Optional. Type your YouTube channel handle, such as @yourchannel, and Pubsplash will read the chat of whatever you have live. A channel address, a video address, or a video id works too, but a handle is the one to use: it never changes, so it keeps working for every broadcast. Leave this blank if this is not a YouTube service or you do not want chat. Chat can only be read, not sent."
+
+[[control]]
+id = "dialog.connect.youtubeImage"
+label = "Still image sent as the video track"
+file = "src/ui/connect_dialog.rs"
+message = "Optional. Type or choose a picture to send as the video. YouTube will not accept a stream with no video at all, so Pubsplash sends a still picture alongside your audio. Leave this blank to send a plain dark frame instead."
+
+[[control]]
+id = "dialog.connect.youtubeImageBrowse"
+label = "Choose still image button"
+file = "src/ui/connect_dialog.rs"
+message = "Opens a file picker to choose the still picture sent as the video. The picture is centred on a 1280 by 720 frame, so any size or shape will do."
+
+[[control]]
 id = "dialog.desktopAudioSource.device"
 label = "Capture from combo box"
 file = "src/ui/scenes.rs"
 message = """Chooses where this Desktop Audio source gets its sound from. "All output devices (Pubsplash excluded)" is the usual choice: it captures everything your computer plays, on every device at once, apart from Pubsplash's own speech, sound cues and monitoring. Picking a single output device instead captures only what is played to that one device, but it captures everything on it with nothing left out, so it cannot be the device Pubsplash itself plays out of. If you pick that one, Pubsplash will say so and leave this window open so you can choose another; you can change which device Pubsplash plays out of on the Audio tab in Preferences."""
+
+[[control]]
+id = "dialog.ffmpeg.progress"
+label = "FFmpeg download progress bar"
+file = "src/ui/ffmpeg_prefs.rs"
+message = "How much of FFmpeg has been downloaded, as a percentage. The download is about 110 megabytes."
+
+[[control]]
+id = "dialog.ffmpeg.status"
+label = "FFmpeg download status text"
+file = "src/ui/ffmpeg_prefs.rs"
+message = "What the download is doing now. Read only; it does not read itself out as it changes, so check it here when you want to know."
 
 [[control]]
 id = "dialog.fxEditor.bypass"
@@ -371,6 +413,30 @@ id = "dialog.preferences.archive.recordingFolder"
 label = "Recording folder path input"
 file = "src/ui/preferences.rs"
 message = "Type the path where you'd like your local recordings to be saved to, or use the browse button to pick a folder using a standard Windows folder picker."
+
+[[control]]
+id = "dialog.preferences.audio.ffmpegBrowse"
+label = "Choose FFmpeg button"
+file = "src/ui/ffmpeg_prefs.rs"
+message = "Opens a file picker to choose ffmpeg.exe. Use this if you already have FFmpeg somewhere Pubsplash does not find on its own."
+
+[[control]]
+id = "dialog.preferences.audio.ffmpegDownload"
+label = "Download FFmpeg button"
+file = "src/ui/ffmpeg_prefs.rs"
+message = "Downloads FFmpeg from gyan.dev, the Windows build ffmpeg.org points at, and checks it against the checksum published beside it. About 110 megabytes. Clear the FFmpeg location box first, or the file it names is used instead. Closing Preferences cancels the download."
+
+[[control]]
+id = "dialog.preferences.audio.ffmpegPath"
+label = "FFmpeg location box"
+file = "src/ui/ffmpeg_prefs.rs"
+message = "Optional. Type or choose the full path to ffmpeg.exe if you want a particular copy used. Leave this blank and Pubsplash searches the copy it downloaded, then your PATH, which is where an FFmpeg installed by winget, Chocolatey or Scoop ends up."
+
+[[control]]
+id = "dialog.preferences.audio.ffmpegStatus"
+label = "FFmpeg status text"
+file = "src/ui/ffmpeg_prefs.rs"
+message = "Which FFmpeg Pubsplash will use, and whether it can do the job. FFmpeg is needed only for streaming to YouTube, because YouTube takes H.264 video and AAC audio and Pubsplash produces neither on its own. Read only."
 
 [[control]]
 id = "dialog.preferences.audio.outputDevice"

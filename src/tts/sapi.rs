@@ -35,28 +35,114 @@ const SPCAT_VOICES: &str = r"HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Speech\Voices
 const SPDFID_WAVEFORMATEX: GUID = GUID::from_u128(0xC31ADBAE_527F_4FF5_A230_F62BB61FF70C);
 const WAVE_FORMAT_PCM: u16 = 1;
 
+/// Where SAPI 5 registers its voice tokens. One key per voice; the key's
+/// *default* value is the display name SAPI reports for it.
+const VOICE_TOKENS_KEY: &str = r"SOFTWARE\Microsoft\Speech\Voices\Tokens";
+
 /// Installed SAPI voice display names.
+///
+/// Read straight out of the registry rather than by parsing `reg.exe`, which is
+/// what this did until it was found returning **nothing at all on any Windows
+/// that is not in English**. `reg query` prints the default value under a
+/// localised caption — `(Predeterminado)` on a Spanish install, `(Standard)` on
+/// a German one — and the parser matched the literal `(Default)`, so every voice
+/// was silently dropped and the Speech tab offered an empty list on machines
+/// with five voices installed.
+///
+/// Two smaller things went with it. `reg.exe` is a console program, and a
+/// release build has no console (`windows_subsystem = "windows"`), so every call
+/// flashed a window and took focus — from a screen-reader user, mid-session.
+/// And the parse also had to guess at where the value ended, since a voice whose
+/// name contains `REG_SZ` or leading spaces would have come back mangled.
+///
+/// No COM here on purpose: this is called from the TTS catalog worker as well as
+/// from the apartment thread, and the registry needs no apartment.
 pub fn voice_names() -> Vec<String> {
-    let mut voices = Vec::new();
-    let output = std::process::Command::new("reg")
-        .args([
-            "query",
-            r"HKLM\SOFTWARE\Microsoft\Speech\Voices\Tokens",
-            "/s",
-            "/ve",
-        ])
-        .output();
-    if let Ok(output) = output {
-        let text = String::from_utf8_lossy(&output.stdout);
-        for line in text.lines() {
-            let line = line.trim();
-            if let Some(rest) = line.strip_prefix("(Default)") {
-                let value = rest.trim().trim_start_matches("REG_SZ").trim();
-                if !value.is_empty() && !voices.contains(&value.to_string()) {
-                    voices.push(value.to_string());
-                }
-            }
+    use windows::Win32::Foundation::{ERROR_SUCCESS, MAX_PATH};
+    use windows::Win32::System::Registry::{
+        HKEY, HKEY_LOCAL_MACHINE, KEY_READ, RRF_RT_REG_SZ, RegCloseKey, RegEnumKeyExW,
+        RegGetValueW, RegOpenKeyExW,
+    };
+    use windows::core::{PCWSTR, PWSTR};
+
+    let mut voices: Vec<String> = Vec::new();
+    let subkey: Vec<u16> = VOICE_TOKENS_KEY.encode_utf16().chain([0]).collect();
+    let mut tokens = HKEY::default();
+    // SAFETY: `subkey` is a NUL-terminated wide string that outlives the call,
+    // and `tokens` is only read below when the call reports success.
+    let opened = unsafe {
+        RegOpenKeyExW(
+            HKEY_LOCAL_MACHINE,
+            PCWSTR(subkey.as_ptr()),
+            None,
+            KEY_READ,
+            &mut tokens,
+        )
+    };
+    if opened != ERROR_SUCCESS {
+        log::warn!("No SAPI voices: {VOICE_TOKENS_KEY} could not be opened ({opened:?})");
+        return voices;
+    }
+
+    for index in 0.. {
+        // Reset per iteration: `RegEnumKeyExW` both reads this as the buffer's
+        // capacity and writes back the length it used, so carrying it over would
+        // shrink the buffer to the previous name's length and fail with
+        // ERROR_MORE_DATA on the first longer one.
+        let mut name = [0u16; MAX_PATH as usize];
+        let mut length = name.len() as u32;
+        // SAFETY: `name`/`length` are a matching buffer and capacity, and every
+        // optional argument we do not want is `None`.
+        let step = unsafe {
+            RegEnumKeyExW(
+                tokens,
+                index,
+                Some(PWSTR(name.as_mut_ptr())),
+                &mut length,
+                None,
+                None,
+                None,
+                None,
+            )
+        };
+        if step != ERROR_SUCCESS {
+            break;
         }
+        let token = String::from_utf16_lossy(&name[..length as usize]);
+        let path: Vec<u16> = format!("{VOICE_TOKENS_KEY}\\{token}")
+            .encode_utf16()
+            .chain([0])
+            .collect();
+        let mut buffer = [0u16; 512];
+        let mut size = std::mem::size_of_val(&buffer) as u32;
+        // The default value, which is what `PCWSTR::null()` asks for.
+        // SAFETY: `path` is NUL-terminated, and `size` describes `buffer` in
+        // bytes as the call expects.
+        let read = unsafe {
+            RegGetValueW(
+                HKEY_LOCAL_MACHINE,
+                PCWSTR(path.as_ptr()),
+                PCWSTR::null(),
+                RRF_RT_REG_SZ,
+                None,
+                Some(buffer.as_mut_ptr().cast()),
+                Some(&mut size),
+            )
+        };
+        if read != ERROR_SUCCESS {
+            continue;
+        }
+        // `size` is bytes and counts the terminating NUL.
+        let chars = (size as usize / 2).saturating_sub(1).min(buffer.len());
+        let display = String::from_utf16_lossy(&buffer[..chars]).trim().to_string();
+        if !display.is_empty() && !voices.contains(&display) {
+            voices.push(display);
+        }
+    }
+
+    // SAFETY: opened above and not used again.
+    unsafe {
+        let _ = RegCloseKey(tokens);
     }
     voices
 }
@@ -314,6 +400,15 @@ mod tests {
         }
     }
 
+    /// This is a real regression test, not a smoke test.
+    ///
+    /// It failed for a year on any Windows that is not in English, because
+    /// [`voice_names`] parsed `reg.exe` output for the literal caption
+    /// `(Default)` and a Spanish install prints `(Predeterminado)`. Every voice
+    /// was dropped and the Speech tab offered an empty list. Nothing about that
+    /// is visible from an English machine, which is exactly why the assertion
+    /// has to stay: it is the only thing standing between a locale-dependent
+    /// parse and a silently broken feature.
     #[test]
     fn voice_enumeration_finds_installed_voices() {
         let voices = voice_names();
@@ -321,5 +416,13 @@ mod tests {
             !voices.is_empty(),
             "expected at least one installed SAPI voice"
         );
+        for voice in &voices {
+            // Artifacts of the old text parse: a name that kept the value type,
+            // the caption, or the surrounding whitespace.
+            assert!(!voice.contains("REG_SZ"), "{voice:?} carries the value type");
+            assert!(!voice.contains('\0'), "{voice:?} carries a NUL");
+            assert_eq!(voice.trim(), voice, "{voice:?} is not trimmed");
+            assert!(!voice.is_empty());
+        }
     }
 }

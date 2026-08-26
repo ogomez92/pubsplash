@@ -98,6 +98,29 @@ pub struct ChatUser {
     display_name: String,
 }
 
+impl ChatMessage {
+    /// Builds a message that did not come off an Audiopub SSE feed.
+    ///
+    /// [`NetEvent::Chat`](super::NetEvent::Chat) is the UI's one chat contract —
+    /// the pump reads `user.display()` and `content` and nothing else — so a
+    /// second source of chat (see [`super::youtube`]) reports through this type
+    /// rather than growing a parallel event the Chat tab would have to learn.
+    /// The fields are private because the SSE payload is the shape they exist
+    /// for; this is the only other way in.
+    pub fn external(id: String, display_name: String, content: String, created_at: u64) -> Self {
+        Self {
+            id,
+            content,
+            created_at,
+            user: ChatUser {
+                id: String::new(),
+                name: String::new(),
+                display_name,
+            },
+        }
+    }
+}
+
 impl ChatUser {
     /// The name to show and speak: display name when set, else the plain name.
     pub fn display(&self) -> &str {

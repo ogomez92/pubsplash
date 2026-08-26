@@ -8,7 +8,23 @@
 
 - **A Listener count URL box on Setup streaming services**, for an Icecast service whose audience is not on the mount it publishes to — a Liquidsoap or Icecast relay that takes the raw mount and republishes it under another name. Leave it blank to count the mount point above it. It accepts a bare mount name (`stream.mp3`), a `host:port/mount`, a whole listen URL, a server with no mount after it (which counts everyone on that server), or an Icecast status document URL.
 
+- **New service type: YouTube.** Add one on Setup streaming services, paste the ingest URL and stream key from YouTube Studio, and Start streaming broadcasts to YouTube Live. Any other RTMP server works too — Twitch, Facebook, or your own — by pasting a different ingest URL.
+
+- YouTube will not accept a stream with no video in it, so Pubsplash sends a still picture alongside the audio. Choose one per service with **Choose image**, or leave the box blank to send a plain dark frame.
+
+- **YouTube live chat appears in the Chat tab**, read the same way Audiopub chat is: spoken, announced with the incoming-chat sound, and listed with relative times. Super Chats are shown with the amount in front of the message. Set the **YouTube channel for chat** box to your channel handle, such as `@yourchannel`, and it finds whatever you have live each time you broadcast; a video address or id works too. Leave it blank for no chat.
+
+- Pubsplash reads YouTube's unfiltered live chat rather than its ranked "Top chat", so nothing is hidden from you.
+
+- The Home tab's stream state says when YouTube starts serving the broadcast, which is a little after the stream key is accepted. It only knows this if a channel is set for chat; without one it says it cannot tell.
+
+- **FFmpeg settings on Preferences, Audio.** Streaming to YouTube needs FFmpeg, because YouTube takes H.264 video and AAC audio and Pubsplash produces neither on its own. Pubsplash uses one it finds on your PATH, one you point it at, or one it downloads for you — about 110 MB from gyan.dev, checked against the checksum published beside it. The status line names the copy in use and whether it can do the job.
+
+- YouTube chat can be read but not sent. Sending needs a signed-in Google account, so on a YouTube service the Chat tab's message box and Send button are greyed out and the button says why.
+
 ### Fixes
+
+- **The SAPI voice list was empty on any Windows that is not in English.** Pubsplash read the installed voices by parsing the output of `reg.exe`, which prints the value it needed under a translated caption — `(Predeterminado)` on a Spanish install, `(Standard)` on a German one — so every voice was dropped and the Speech tab offered nothing to choose from. The voices are now read from the registry directly. This also stops a console window flashing and stealing focus each time the list was refreshed.
 
 ### Changes
 

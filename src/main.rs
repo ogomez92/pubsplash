@@ -5,6 +5,7 @@ mod b64;
 mod config;
 mod crash;
 mod data_dir;
+mod ffmpeg;
 mod fx;
 mod instance;
 mod json_store;
@@ -139,6 +140,7 @@ fn main() {
             connect_ui: RefCell::new(None),
             plugins: RefCell::new(plugin_cache.clone()),
             scan: RefCell::new(None),
+            ffmpeg_download: RefCell::new(None),
             fx: RefCell::new(ui::FxRuntime::default()),
             orphaned_plugins: RefCell::new(Vec::new()),
             chain_library: RefCell::new(chain_library.clone()),

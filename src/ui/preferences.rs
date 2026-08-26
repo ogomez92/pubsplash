@@ -89,6 +89,14 @@ pub fn show(app: &Rc<App>, frame: &Frame) {
     // under the borrow first.
     let scan = app.scan.borrow_mut().take();
     drop(scan);
+    // Same rule, same reason, for an FFmpeg download: its progress window is a
+    // child of this dialog, and dropping the state raises the worker's cancel
+    // flag. The Download button's own text says a close cancels it.
+    let ffmpeg = app.ffmpeg_download.borrow_mut().take();
+    drop(ffmpeg);
+    // Both of the things above own a reason for the fast timer to be running,
+    // so this is where it comes down.
+    super::sync_fast_timer(app);
     // Same rule for the update check, which can still be in flight: from here on
     // its notices go back to the main frame, because this window is about to
     // stop existing.

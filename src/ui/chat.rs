@@ -9,7 +9,7 @@ use wxdragon::prelude::*;
 /// Shown when there are no messages. See [`super::list`].
 const NO_CHATS: &str = "No chats";
 
-pub fn build(app: &Rc<App>, panel: &Panel) -> (ListBox, TextCtrl, Button) {
+pub fn build(app: &Rc<App>, panel: &Panel) -> (ListBox, TextCtrl, Button, Button) {
     let sizer = BoxSizer::builder(Orientation::Vertical).build();
 
     let list_label = StaticText::builder(panel).with_label("Messages").build();
@@ -139,7 +139,46 @@ pub fn build(app: &Rc<App>, panel: &Panel) -> (ListBox, TextCtrl, Button) {
             .on_click(move |_| reconnect_chat(&app, &button));
     }
 
-    (chat_list, chat_input, reconnect_button)
+    (chat_list, chat_input, reconnect_button, send_button)
+}
+
+/// Greys out the outgoing half of the tab on a service that cannot be posted to.
+///
+/// Not every chat is two-way. A YouTube broadcast's chat can be *read* without
+/// an account (see `net::youtube`), but posting to it needs a signed-in Google
+/// account and the quota-limited Data API, so the box and the button would
+/// accept a message that could never go anywhere.
+///
+/// Disabling them rather than letting [`send_message`] refuse afterwards is the
+/// accessible answer: a screen reader announces a disabled control as
+/// unavailable when the user arrives on it, which is *before* they compose a
+/// message, whereas an error dialog arrives after. The label says why, because
+/// "unavailable" on its own invites the user to go looking for the setting that
+/// would enable it.
+pub fn refresh_send_availability(app: &App) {
+    let can_send = !matches!(
+        app.connected_service_type(),
+        Some(crate::config::StreamingServiceType::Youtube)
+    );
+    app.widgets(|w| {
+        w.chat_input.enable(can_send);
+        w.chat_send.enable(can_send);
+        let label = if can_send {
+            "Send"
+        } else {
+            "Send (not available for YouTube)"
+        };
+        // Only when it changed: `set_label` on a focused button is announced,
+        // and this runs on every stream-UI refresh.
+        if w.chat_send.get_label() != label {
+            w.chat_send.set_label(label);
+            super::set_accessible_name(&w.chat_input, if can_send {
+                "Send a message"
+            } else {
+                "Send a message (not available for YouTube)"
+            });
+        }
+    });
 }
 
 /// Drops the live-events connection and opens a new one. The stream itself is

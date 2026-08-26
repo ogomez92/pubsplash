@@ -58,7 +58,9 @@ crossbeam-channel = "0.5"
 
 # The network side runs on a single current-thread runtime, so `rt-multi-thread`
 # is deliberately absent; adding a need for it will fail the build loudly.
-tokio = { version = "1", features = ["rt", "net", "io-util", "time", "sync", "macros"] }
+# `process` is for the RTMP path only: a YouTube target publishes by driving
+# ffmpeg as a child, and its stdin is written from the network runtime.
+tokio = { version = "1", features = ["rt", "net", "io-util", "time", "sync", "macros", "process"] }
 reqwest = { version = "0.12", features = ["json", "cookies", "stream"] }
 # Only `StreamExt` is used; the default feature set pulls in far more.
 futures-util = { version = "0.3", default-features = false, features = ["std"] }

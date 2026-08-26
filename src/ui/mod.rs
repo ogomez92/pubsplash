@@ -9,6 +9,7 @@ mod buses;
 mod chat;
 mod connect_dialog;
 mod cue_feed;
+mod ffmpeg_prefs;
 mod fx;
 mod fx_editor;
 mod fx_params;
@@ -786,6 +787,9 @@ pub struct Widgets {
     pub chat_input: TextCtrl,
     #[allow(dead_code)]
     pub chat_reconnect: Button,
+    /// Held so [`chat::refresh_send_availability`] can grey it out on a service
+    /// that can be read but not posted to.
+    pub chat_send: Button,
     pub scenes_list: ListBox,
     pub sources_list: ListBox,
     pub bus_list: ListBox,
@@ -845,6 +849,10 @@ pub struct App {
     /// Plugins known from the last completed scan (vst_plugins.json).
     pub plugins: RefCell<crate::vst::PluginCache>,
     pub scan: RefCell<Option<ScanUi>>,
+    /// A running FFmpeg download, if any. Held here rather than in the dialog
+    /// so the pump can drive it; dropped by `preferences::show` on its way out,
+    /// which is what cancels the worker.
+    pub ffmpeg_download: RefCell<Option<ffmpeg_prefs::Download>>,
     /// Live plugin instances, mirroring `config.buses`.
     pub fx: RefCell<FxRuntime>,
     /// Plugin instances taken out of [`App::fx`] and not yet released. See
@@ -1305,6 +1313,14 @@ fn server_state_line(state: &str) -> String {
             .to_string(),
         "pending" => "The server has the stream but has not accepted the audio yet. It checks \
              the mount before serving anyone, so listeners hear nothing until that finishes."
+            .to_string(),
+        // Not a server's answer at all, and it must not read like one: this is
+        // an RTMP service with no YouTube channel set, where nothing can say
+        // whether the broadcast is being served. Saying "the server reports this
+        // stream as unknown" invites the user to go looking for a fault that
+        // does not exist, when the honest answer is that Pubsplash cannot tell.
+        "unknown" => "Pubsplash cannot tell whether the stream is being served. Set the \
+             YouTube channel for this service and it will say when the broadcast goes live."
             .to_string(),
         other => format!("The server reports this stream as {other}."),
     }
@@ -1852,7 +1868,7 @@ impl App {
             // schedule that is still waiting to go live.
             run.schedule = None;
         }
-        self.engine.send(EngineCommand::StopEncoding);
+        self.stop_outgoing_audio();
         self.engine.send(EngineCommand::StopRecording);
         {
             let mut run = self.run.borrow_mut();
@@ -1861,6 +1877,31 @@ impl App {
         }
         self.net.send(NetCommand::StopStream);
         self.refresh_stream_ui();
+    }
+
+    /// Closes whichever outgoing tap the engine has open.
+    ///
+    /// Both are sent rather than the one that matches the connected service,
+    /// because the two are not always the same fact: a user can switch services
+    /// while a stream is live (`net_loop`'s `Connect` arm ends the old stream and
+    /// says so), and by the time this runs the connection may already be the new
+    /// one. The engine ignores whichever it is not holding, so sending both is
+    /// free — and a tap left open is an engine that never parks and a channel
+    /// that fills for the rest of the session.
+    fn stop_outgoing_audio(&self) {
+        self.engine.send(EngineCommand::StopEncoding);
+        self.engine.send(EngineCommand::StopRawFeed);
+    }
+
+    /// The kind of service currently connected, if any.
+    ///
+    /// Read from config rather than remembered on `Runtime`, so it cannot go
+    /// stale against a service the user edited in the Setup dialog while
+    /// connected.
+    pub fn connected_service_type(&self) -> Option<StreamingServiceType> {
+        let run = self.run.borrow();
+        let id = run.connected_service.as_deref()?;
+        Some(self.config.borrow().connection.site(id)?.service_type)
     }
 
     /// Starts a standalone local recording (no streaming). The file name is
@@ -1949,6 +1990,11 @@ impl App {
     /// stream/record buttons.
     pub fn refresh_stream_ui(&self) {
         self.warn_if_the_server_has_not_accepted();
+        // Ahead of the borrow below, not folded into it: this reads both `run`
+        // and `config` for itself, and every connection change comes through
+        // here (both pump arms set `stream_ui_dirty`), which is exactly when the
+        // answer can have changed.
+        chat::refresh_send_availability(self);
         let run = self.run.borrow();
 
         // While a schedule is armed the button is the way to call it off, which
@@ -2101,7 +2147,23 @@ fn validate_site_url(raw: &str) -> Result<String, String> {
     Ok(trimmed.trim_end_matches('/').to_string())
 }
 
-pub fn service_profile_from_site(site: &SiteConfig) -> Result<ServiceProfile, String> {
+/// Turns a stored service into the snapshot the network thread runs on.
+///
+/// `ffmpeg_path` is app-wide config (`connection.ffmpeg_path`) rather than part
+/// of the service, and only an RTMP service reads it — which is why it is a
+/// parameter and this function stays free of `Config`.
+///
+/// **Every check that can be made without touching the network is made here**,
+/// which is the whole point of the split from `net`: Connect is the moment the
+/// dialog holding the wrong field is still open and the user is waiting for an
+/// answer. Locating ffmpeg and probing its encoders both belong to that moment —
+/// finding out at `Start streaming` that the binary has no H.264 means the
+/// answer arrives with no dialog to correct, and possibly with a scheduled
+/// broadcast behind it.
+pub fn service_profile_from(
+    site: &SiteConfig,
+    ffmpeg_path: &str,
+) -> Result<ServiceProfile, String> {
     let nickname = site.display_name();
     match site.service_type {
         StreamingServiceType::Audiopub => {
@@ -2159,6 +2221,67 @@ pub fn service_profile_from_site(site: &SiteConfig) -> Result<ServiceProfile, St
                 username: site.icecast_username(),
                 password: site.icecast_password.clone(),
                 listener_url,
+            })
+        }
+        StreamingServiceType::Youtube => {
+            let url = site.rtmp_url.trim();
+            if url.is_empty() {
+                return Err("Enter the RTMP ingest URL.".to_string());
+            }
+            if !url.starts_with("rtmp://") && !url.starts_with("rtmps://") {
+                return Err(format!(
+                    "{url:?} is not an RTMP address. It should begin with rtmp:// or rtmps://; \
+                     YouTube's is {}.",
+                    crate::config::DEFAULT_RTMP_URL
+                ));
+            }
+            if site.rtmp_key.is_empty() {
+                return Err(
+                    "Enter the stream key. YouTube shows it in Studio, under Go live, \
+                     beside the stream URL."
+                        .to_string(),
+                );
+            }
+            // Empty is a legitimate choice — an RTMP target that is not YouTube
+            // has no chat to read — so only a value that will not parse is an
+            // error, and it is one worth refusing here rather than leaving a
+            // service that silently never shows a message.
+            let chat = match site.youtube_channel.trim() {
+                "" => None,
+                text => Some(crate::net::youtube::ChannelRef::parse(text).map_err(|e| e.to_string())?),
+            };
+            let image = match site.youtube_image.trim() {
+                "" => None,
+                path => {
+                    let path = std::path::PathBuf::from(path);
+                    if !path.is_file() {
+                        return Err(format!(
+                            "The still image {} could not be found. Choose another, or clear \
+                             the box to send a plain frame instead.",
+                            path.display()
+                        ));
+                    }
+                    Some(path)
+                }
+            };
+            let ffmpeg = crate::ffmpeg::locate(ffmpeg_path)?;
+            let capabilities = crate::ffmpeg::probe(&ffmpeg)?;
+            log::info!(
+                "Using {} ({}) for {nickname:?}",
+                ffmpeg.display(),
+                capabilities.version
+            );
+            Ok(ServiceProfile::Youtube {
+                id: site.id.clone(),
+                nickname,
+                ffmpeg,
+                url: url.to_string(),
+                key: site.rtmp_key.clone(),
+                image,
+                video_bitrate_kbps: site.rtmp_video_bitrate_kbps,
+                h264: capabilities.h264,
+                aac: capabilities.aac,
+                chat,
             })
         }
     }
@@ -2224,10 +2347,23 @@ pub fn begin_stream(app: &Rc<App>) {
     // A new encoder is a clean slate; the last stream's failure must not stay
     // on this one's status line.
     app.run.borrow_mut().encoder_failed = false;
-    app.engine.send(EngineCommand::StartEncoding {
-        bitrate_kbps: bitrate,
-        out: tx,
-    });
+    // Which tap the engine opens has to agree with what the network side is
+    // about to do with the other end of this channel, so the two are decided
+    // together and from the same fact. An RTMP target encodes in ffmpeg, so it
+    // wants the samples; everything else wants the MP3 the engine already makes.
+    //
+    // 200 chunks holds about two seconds of PCM against nearer five of MP3 (see
+    // the note above), which is ample: the only thing between here and the first
+    // `recv` is spawning a process, and `net::spawn_rtmp_sender` discards
+    // whatever queued during it for the same reason the Icecast sender does.
+    if app.connected_service_type() == Some(StreamingServiceType::Youtube) {
+        app.engine.send(EngineCommand::StartRawFeed { out: tx });
+    } else {
+        app.engine.send(EngineCommand::StartEncoding {
+            bitrate_kbps: bitrate,
+            out: tx,
+        });
+    }
     if info.record {
         let desired = app
             .config
@@ -2254,6 +2390,7 @@ pub fn begin_stream(app: &Rc<App>) {
         archive: info.archive,
         content_type: "audio/mpeg".into(),
         audio: rx,
+        audio_bitrate_kbps: bitrate,
     });
     {
         let mut run = app.run.borrow_mut();
@@ -2422,7 +2559,7 @@ pub fn build(app: Rc<App>) {
     // Tabs fill in the Widgets struct.
     let (overview, stream_button, record_button, home_scene_list, mixer_panel) =
         home::build(&app, &home_panel);
-    let (chat_list, chat_input, chat_reconnect) = chat::build(&app, &chat_panel);
+    let (chat_list, chat_input, chat_reconnect, chat_send) = chat::build(&app, &chat_panel);
     let (scenes_list, sources_list) = scenes::build(&app, &scenes_panel);
     let (bus_list, fx_list, fx_bypass) = buses::build(&app, &buses_panel);
     let (usage_list, usage_refresh) = api::build(&app, &api_panel);
@@ -2441,6 +2578,7 @@ pub fn build(app: Rc<App>) {
         chat_list,
         chat_input,
         chat_reconnect,
+        chat_send,
         scenes_list,
         sources_list,
         bus_list,
@@ -2672,10 +2810,11 @@ pub fn build(app: Rc<App>) {
     // Auto-connect to the last used service.
     {
         let config = app.config.borrow();
+        let ffmpeg_path = config.connection.ffmpeg_path.clone();
         if let Some(service_id) = config.connection.last_used_site.clone()
             && let Some(site) = config.connection.site(&service_id)
         {
-            match service_profile_from_site(site) {
+            match service_profile_from(site, &ffmpeg_path) {
                 Ok(profile) => {
                     app.run.borrow_mut().connecting = true;
                     app.net.send(NetCommand::Connect { profile });
@@ -3022,7 +3161,9 @@ impl Drop for App {
 /// pairs, is what keeps this from drifting out of step: call it after anything
 /// that could have changed either, and it settles on the right answer.
 pub fn sync_fast_timer(app: &Rc<App>) {
-    let needed = !app.open_editors.borrow().is_empty() || app.scan.borrow().is_some();
+    let needed = !app.open_editors.borrow().is_empty()
+        || app.scan.borrow().is_some()
+        || app.ffmpeg_download.borrow().is_some();
     let mut slot = app.fast_timer.borrow_mut();
     if needed == slot.is_some() {
         return;
@@ -3042,6 +3183,7 @@ pub fn sync_fast_timer(app: &Rc<App>) {
             return;
         }
         pump_scan_events(&app_for_tick);
+        ffmpeg_prefs::drain(&app_for_tick);
         fx_editor::pump(&app_for_tick);
     });
     timer.start(100, false);
@@ -3239,7 +3381,7 @@ fn pump_events(app: &Rc<App>) {
                 mastodon_post::on_stream_started(app);
             }
             NetEvent::StreamEnded => {
-                app.engine.send(EngineCommand::StopEncoding);
+                app.stop_outgoing_audio();
                 app.engine.send(EngineCommand::StopRecording);
                 mastodon_post::on_stream_ended(app);
                 let mut run = app.run.borrow_mut();
@@ -3334,6 +3476,13 @@ fn pump_events(app: &Rc<App>) {
                 let next = match state.as_str() {
                     "active" => ServerStream::Accepted,
                     "disconnected" => ServerStream::Lost,
+                    // Nothing is able to answer for this stream. Sent once, at
+                    // the start, by an RTMP service with no YouTube channel set
+                    // — see `net::start_stream`. Without it the Home tab would
+                    // read "waiting for the server to accept the stream" for the
+                    // whole broadcast, because `Pending` is where every stream
+                    // starts and only a feed ever moves it.
+                    "unknown" => ServerStream::Unknown,
                     _ => ServerStream::Pending,
                 };
                 let mut run = app.run.borrow_mut();
@@ -3924,6 +4073,18 @@ mod chat_feed_line_tests {
         let line = super::server_state_line("pending");
         assert!(line.contains("not accepted"), "{line}");
         assert!(line.contains("listeners hear nothing"), "{line}");
+    }
+
+    /// `unknown` is not a server's answer — it is an RTMP service with no
+    /// YouTube channel set, where nothing can say whether the broadcast is being
+    /// served. It must not read as though a server said something, or the user
+    /// goes hunting a fault that is not there.
+    #[test]
+    fn an_unknown_state_owns_up_rather_than_blaming_the_server() {
+        let line = super::server_state_line("unknown");
+        assert!(!line.contains("server reports"), "{line}");
+        assert!(line.contains("cannot tell"), "{line}");
+        assert!(line.contains("YouTube channel"), "{line}");
     }
 
     /// These end up in a log a user is asked to read and quote, so they owe the

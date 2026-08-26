@@ -10,6 +10,49 @@ use wxdragon::prelude::*;
 /// Shown when no services are configured. See [`super::list`].
 const NO_SERVICES: &str = "No services";
 
+/// The service-type radio box's rows, in order.
+///
+/// One table, because the index is read and written in five places — building
+/// the box, the field-visibility switch, loading a service, saving one, and the
+/// Add dialog — and a bare `== 1` in each of them is what makes adding a third
+/// type a hunt rather than an edit.
+const SERVICE_TYPES: [(&str, StreamingServiceType); 3] = [
+    ("Audiopub", StreamingServiceType::Audiopub),
+    ("Icecast", StreamingServiceType::Icecast),
+    ("YouTube", StreamingServiceType::Youtube),
+];
+
+fn service_type_labels() -> Vec<&'static str> {
+    SERVICE_TYPES.iter().map(|(label, _)| *label).collect()
+}
+
+/// The type a selected row means. An out-of-range index falls back to the first
+/// row rather than panicking: `get_selection` answers `-1` for a box with no
+/// selection, which is what a freshly built one has.
+fn service_type_at(index: i32) -> StreamingServiceType {
+    usize::try_from(index)
+        .ok()
+        .and_then(|index| SERVICE_TYPES.get(index))
+        .map(|(_, kind)| *kind)
+        .unwrap_or(StreamingServiceType::Audiopub)
+}
+
+fn service_type_index(kind: StreamingServiceType) -> i32 {
+    SERVICE_TYPES
+        .iter()
+        .position(|(_, candidate)| *candidate == kind)
+        .unwrap_or(0) as i32
+}
+
+/// How a service's kind is written in the services list.
+fn service_type_name(kind: StreamingServiceType) -> &'static str {
+    SERVICE_TYPES
+        .iter()
+        .find(|(_, candidate)| *candidate == kind)
+        .map(|(label, _)| *label)
+        .unwrap_or("Audiopub")
+}
+
 pub fn show(app: &Rc<App>, frame: &Frame) {
     let dialog = Dialog::builder(frame, "Setup streaming services")
         .with_style(DialogStyle::DefaultDialogStyle | DialogStyle::ResizeBorder)
@@ -54,7 +97,7 @@ pub fn show(app: &Rc<App>, frame: &Frame) {
     service_buttons.add(&rename_service, 0, SizerFlag::All, 4);
     service_buttons.add(&remove_service, 0, SizerFlag::All, 4);
 
-    let service_type = RadioBox::builder(&panel, &["Audiopub", "Icecast"])
+    let service_type = RadioBox::builder(&panel, &service_type_labels())
         .with_label("Service type")
         .with_style(RadioBoxStyle::SpecifyRows)
         .with_major_dimension(1)
@@ -158,6 +201,53 @@ pub fn show(app: &Rc<App>, frame: &Frame) {
         "Icecast password for the selected service",
     );
 
+    let rtmp_url_label = StaticText::builder(&panel).with_label("Ingest URL").build();
+    let rtmp_url_input = TextCtrl::builder(&panel).build();
+    super::set_accessible_name(&rtmp_url_input, "Ingest URL");
+    super::help::tag(
+        &rtmp_url_input,
+        "dialog.connect.rtmpUrl",
+        "RTMP ingest URL for the selected service",
+    );
+    let rtmp_key_label = StaticText::builder(&panel).with_label("Stream key").build();
+    // A password field, because that is what it is: anyone holding a stream key
+    // can broadcast to the channel.
+    let rtmp_key_input = TextCtrl::builder(&panel)
+        .with_style(TextCtrlStyle::Password)
+        .build();
+    super::set_accessible_name(&rtmp_key_input, "Stream key");
+    super::help::tag(
+        &rtmp_key_input,
+        "dialog.connect.rtmpKey",
+        "RTMP stream key for the selected service",
+    );
+    let channel_label = StaticText::builder(&panel)
+        .with_label("YouTube channel for chat (optional)")
+        .build();
+    let channel_input = TextCtrl::builder(&panel).build();
+    super::set_accessible_name(&channel_input, "YouTube channel for chat (optional)");
+    super::help::tag(
+        &channel_input,
+        "dialog.connect.youtubeChannel",
+        "YouTube channel or video to read chat from",
+    );
+    let image_label = StaticText::builder(&panel)
+        .with_label("Still image (optional)")
+        .build();
+    let image_input = TextCtrl::builder(&panel).build();
+    super::set_accessible_name(&image_input, "Still image (optional)");
+    super::help::tag(
+        &image_input,
+        "dialog.connect.youtubeImage",
+        "Still image sent as the video track",
+    );
+    let browse_image = Button::builder(&panel).with_label("Choose image").build();
+    super::help::tag(
+        &browse_image,
+        "dialog.connect.youtubeImageBrowse",
+        "Choose still image button",
+    );
+
     let connect_button = Button::builder(&panel).with_label("Connect").build();
     super::help::tag(
         &connect_button,
@@ -200,6 +290,15 @@ pub fn show(app: &Rc<App>, frame: &Frame) {
         SizerFlag::Expand | SizerFlag::All,
         4,
     );
+    sizer.add(&rtmp_url_label, 0, SizerFlag::All, 4);
+    sizer.add(&rtmp_url_input, 0, SizerFlag::Expand | SizerFlag::All, 4);
+    sizer.add(&rtmp_key_label, 0, SizerFlag::All, 4);
+    sizer.add(&rtmp_key_input, 0, SizerFlag::Expand | SizerFlag::All, 4);
+    sizer.add(&channel_label, 0, SizerFlag::All, 4);
+    sizer.add(&channel_input, 0, SizerFlag::Expand | SizerFlag::All, 4);
+    sizer.add(&image_label, 0, SizerFlag::All, 4);
+    sizer.add(&image_input, 0, SizerFlag::Expand | SizerFlag::All, 4);
+    sizer.add(&browse_image, 0, SizerFlag::All, 4);
     sizer.add(&connect_button, 0, SizerFlag::All, 8);
     sizer.add(&close_button, 0, SizerFlag::All, 8);
     panel.set_sizer(sizer, true);
@@ -209,7 +308,14 @@ pub fn show(app: &Rc<App>, frame: &Frame) {
 
     let update_field_visibility = {
         move || {
-            let audiopub = service_type.get_selection() != 1;
+            let kind = service_type_at(service_type.get_selection());
+            let audiopub = kind == StreamingServiceType::Audiopub;
+            let icecast = kind == StreamingServiceType::Icecast;
+            let youtube = kind == StreamingServiceType::Youtube;
+            // The endpoint pair below is shared by the two Icecast-shaped types
+            // and meaningless to an RTMP one, which carries its whole
+            // destination in a single URL.
+            let has_icecast_endpoint = audiopub || icecast;
             url_label.show(audiopub);
             url_input.show(audiopub);
             // These two fields serve both service types, so their wording
@@ -234,20 +340,30 @@ pub fn show(app: &Rc<App>, frame: &Frame) {
             email_input.show(audiopub);
             password_label.show(audiopub);
             password_input.show(audiopub);
-            server_label.show(true);
-            server_input.show(true);
-            port_label.show(true);
-            port_input.show(true);
-            mount_label.show(!audiopub);
-            mount_input.show(!audiopub);
+            server_label.show(has_icecast_endpoint);
+            server_input.show(has_icecast_endpoint);
+            port_label.show(has_icecast_endpoint);
+            port_input.show(has_icecast_endpoint);
+            mount_label.show(icecast);
+            mount_input.show(icecast);
             // Audiopub counts its own listeners and reports them over the live
             // events feed, so this only applies to a direct Icecast service.
-            listeners_label.show(!audiopub);
-            listeners_input.show(!audiopub);
-            username_label.show(!audiopub);
-            username_input.show(!audiopub);
-            icecast_password_label.show(!audiopub);
-            icecast_password_input.show(!audiopub);
+            // YouTube's arrive on its chat feed for the same reason.
+            listeners_label.show(icecast);
+            listeners_input.show(icecast);
+            username_label.show(icecast);
+            username_input.show(icecast);
+            icecast_password_label.show(icecast);
+            icecast_password_input.show(icecast);
+            rtmp_url_label.show(youtube);
+            rtmp_url_input.show(youtube);
+            rtmp_key_label.show(youtube);
+            rtmp_key_input.show(youtube);
+            channel_label.show(youtube);
+            channel_input.show(youtube);
+            image_label.show(youtube);
+            image_input.show(youtube);
+            browse_image.show(youtube);
             panel.layout();
         }
     };
@@ -266,14 +382,11 @@ pub fn show(app: &Rc<App>, frame: &Frame) {
                 .map(|service| {
                     let connected =
                         app.run.borrow().connected_service.as_deref() == Some(service.id.as_str());
-                    let mut label = match service.service_type {
-                        StreamingServiceType::Audiopub => {
-                            format!("{} (Audiopub)", service.display_name())
-                        }
-                        StreamingServiceType::Icecast => {
-                            format!("{} (Icecast)", service.display_name())
-                        }
-                    };
+                    let mut label = format!(
+                        "{} ({})",
+                        service.display_name(),
+                        service_type_name(service.service_type)
+                    );
                     if service.is_main() {
                         label.push_str(" (main)");
                     }
@@ -336,6 +449,10 @@ pub fn show(app: &Rc<App>, frame: &Frame) {
             listeners_input.set_value("");
             username_input.set_value("");
             icecast_password_input.set_value("");
+            rtmp_url_input.set_value("");
+            rtmp_key_input.set_value("");
+            channel_input.set_value("");
+            image_input.set_value("");
         }
     };
 
@@ -351,10 +468,7 @@ pub fn show(app: &Rc<App>, frame: &Frame) {
                 return;
             };
             if let Some(service) = config.connection.sites.get(index) {
-                service_type.set_selection(match service.service_type {
-                    StreamingServiceType::Audiopub => 0,
-                    StreamingServiceType::Icecast => 1,
-                });
+                service_type.set_selection(service_type_index(service.service_type));
                 service_type.enable(!service.is_main());
                 url_input.set_value(&service.url);
                 email_input.set_value(&service.email);
@@ -370,6 +484,10 @@ pub fn show(app: &Rc<App>, frame: &Frame) {
                 listeners_input.set_value(&service.icecast_listener_url);
                 username_input.set_value(&service.icecast_username);
                 icecast_password_input.set_value(service.icecast_password.as_str());
+                rtmp_url_input.set_value(&service.rtmp_url);
+                rtmp_key_input.set_value(service.rtmp_key.as_str());
+                channel_input.set_value(&service.youtube_channel);
+                image_input.set_value(&service.youtube_image);
             }
             drop(config);
             update_field_visibility();
@@ -445,11 +563,7 @@ pub fn show(app: &Rc<App>, frame: &Frame) {
             let mut config = app.config.borrow_mut();
             let service = config.connection.sites.get_mut(index)?;
             if !service.is_main() {
-                service.service_type = if service_type.get_selection() == 1 {
-                    StreamingServiceType::Icecast
-                } else {
-                    StreamingServiceType::Audiopub
-                };
+                service.service_type = service_type_at(service_type.get_selection());
             } else {
                 service.service_type = StreamingServiceType::Audiopub;
                 service.nickname = "Audiopub".to_string();
@@ -481,6 +595,13 @@ pub fn show(app: &Rc<App>, frame: &Frame) {
             service.icecast_listener_url = listeners_input.get_value().trim().to_string();
             service.icecast_username = username_input.get_value().trim().to_string();
             service.icecast_password = Secret::new(icecast_password_input.get_value());
+            service.rtmp_url = rtmp_url_input.get_value().trim().to_string();
+            // Trimmed, because a stream key copied out of YouTube Studio very
+            // often brings a trailing space or newline with it, and RTMP answers
+            // that with the same closed socket a wrong key gets.
+            service.rtmp_key = Secret::new(rtmp_key_input.get_value().trim());
+            service.youtube_channel = channel_input.get_value().trim().to_string();
+            service.youtube_image = image_input.get_value().trim().to_string();
             let id = service.id.clone();
             drop(config);
             // After the borrow, not during it: writing to a widget is a call out
@@ -511,6 +632,7 @@ pub fn show(app: &Rc<App>, frame: &Frame) {
                 let service = match service_type {
                     StreamingServiceType::Audiopub => SiteConfig::audiopub(id.clone(), nickname),
                     StreamingServiceType::Icecast => SiteConfig::icecast(id.clone(), nickname),
+                    StreamingServiceType::Youtube => SiteConfig::youtube(id.clone(), nickname),
                 };
                 config.connection.sites.push(service);
                 id
@@ -604,6 +726,27 @@ pub fn show(app: &Rc<App>, frame: &Frame) {
     }
 
     {
+        let dialog_for_image = dialog;
+        browse_image.on_click(move |_| {
+            let picker = FileDialog::builder(&dialog_for_image)
+                .with_message("Choose the still image to send as video")
+                .with_wildcard(
+                    "Images (*.png;*.jpg;*.jpeg;*.bmp;*.gif)|*.png;*.jpg;*.jpeg;*.bmp;*.gif\
+                     |All files (*.*)|*.*",
+                )
+                .with_style(FileDialogStyle::Open | FileDialogStyle::FileMustExist)
+                .build();
+            if picker.show_modal() == ID_OK
+                && let Some(path) = picker.get_path()
+            {
+                image_input.set_value(&path);
+            }
+            // Not saved here: `save_fields` runs on Connect and on Close, and
+            // writing the box is enough for both to pick it up.
+        });
+    }
+
+    {
         let app = app.clone();
         let selected_service_id = selected_service_id.clone();
         let save_fields = save_fields.clone();
@@ -627,10 +770,11 @@ pub fn show(app: &Rc<App>, frame: &Frame) {
             let Some(id) = save_fields() else { return };
             let profile = {
                 let config = app.config.borrow();
+                let ffmpeg_path = config.connection.ffmpeg_path.clone();
                 let Some(service) = config.connection.site(&id) else {
                     return;
                 };
-                match super::service_profile_from_site(service) {
+                match super::service_profile_from(service, &ffmpeg_path) {
                     Ok(profile) => profile,
                     Err(message) => {
                         drop(config);
@@ -682,7 +826,7 @@ fn prompt_new_service(parent: &Dialog) -> Option<(String, StreamingServiceType)>
         "dialog.connect.nickname",
         "Streaming service nickname",
     );
-    let service_type = RadioBox::builder(&panel, &["Audiopub", "Icecast"])
+    let service_type = RadioBox::builder(&panel, &service_type_labels())
         .with_label("Service type")
         .with_style(RadioBoxStyle::SpecifyRows)
         .with_major_dimension(1)
@@ -727,11 +871,7 @@ fn prompt_new_service(parent: &Dialog) -> Option<(String, StreamingServiceType)>
             show_error(&dialog, "Add service", "Enter a nickname.");
             continue;
         }
-        let kind = if service_type.get_selection() == 1 {
-            StreamingServiceType::Icecast
-        } else {
-            StreamingServiceType::Audiopub
-        };
+        let kind = service_type_at(service_type.get_selection());
         dialog.destroy();
         return Some((nickname, kind));
     }

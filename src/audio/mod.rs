@@ -182,6 +182,24 @@ pub enum EngineCommand {
         out: tokio::sync::mpsc::Sender<Vec<u8>>,
     },
     StopEncoding,
+    /// Begin feeding the master mix out as raw interleaved 16-bit PCM at
+    /// [`mixer::SAMPLE_RATE`], little-endian, for a target that encodes on the
+    /// far side of the channel.
+    ///
+    /// The alternative to this was letting an RTMP target take the MP3 the
+    /// encoder above already produces and transcode it to AAC, which is a
+    /// generation of lossy loss for nothing: the samples exist here, and every
+    /// consumer of them is downstream of this point anyway. It is also the
+    /// cheaper of the two on this thread, since it skips LAME entirely.
+    ///
+    /// Mutually exclusive with [`EngineCommand::StartEncoding`] in practice —
+    /// a stream is one or the other — but not enforced here, because a
+    /// *recording* runs alongside either and the engine has no business knowing
+    /// which combinations the UI considers sensible.
+    StartRawFeed {
+        out: tokio::sync::mpsc::Sender<Vec<u8>>,
+    },
+    StopRawFeed,
     /// Begin recording the master mix to `path` as MP3, using a dedicated
     /// encoder independent of streaming. Ignored if a recording is already
     /// active.
@@ -584,8 +602,11 @@ fn engine_loop(
     let mut master_monitor = false;
     let mut monitor_out: Option<MonitorOutput> = None;
     let mut encoder: Option<(encoder::Mp3Encoder, tokio::sync::mpsc::Sender<Vec<u8>>)> = None;
+    // The other outgoing tap: raw PCM for a target that encodes downstream.
+    let mut raw_feed: Option<tokio::sync::mpsc::Sender<Vec<u8>>> = None;
     // Consecutive blocks dropped because the outgoing stream buffer was full,
-    // so the log says so once a second rather than a hundred times.
+    // so the log says so once a second rather than a hundred times. Shared by
+    // both taps because only one of them is ever open.
     let mut dropped_blocks: u64 = 0;
     // Recording runs on its own encoder so it works with or without streaming.
     let mut rec_encoder: Option<encoder::Mp3Encoder> = None;
@@ -626,6 +647,7 @@ fn engine_loop(
     loop {
         let idle = sources.is_empty()
             && encoder.is_none()
+            && raw_feed.is_none()
             && rec_encoder.is_none()
             && recorder.is_none()
             && monitor_out.is_none()
@@ -855,6 +877,15 @@ fn engine_loop(
                         let _ = out.try_send(tail);
                     }
                 }
+                Ok(EngineCommand::StartRawFeed { out }) => {
+                    raw_feed = Some(out);
+                    dropped_blocks = 0;
+                }
+                // No tail to flush: PCM has no encoder state, so dropping the
+                // sender is the whole of stopping. Closing it is also what tells
+                // the far side the stream is over — `net::pump_rtmp` reads the
+                // closed channel as the end and lets ffmpeg finish its FLV.
+                Ok(EngineCommand::StopRawFeed) => raw_feed = None,
                 Ok(EngineCommand::StartRecording { bitrate_kbps, path }) => {
                     if recorder.is_none() {
                         // Both halves are built before either is kept, and a
@@ -1016,8 +1047,38 @@ fn engine_loop(
 
         // Convert the block to i16 once and feed the stream and recording
         // encoders (either, both, or neither may be active).
-        if encoder.is_some() || rec_encoder.is_some() {
+        if encoder.is_some() || rec_encoder.is_some() || raw_feed.is_some() {
             mixer::to_i16(&mix_block, &mut pcm_i16);
+        }
+
+        // The raw tap, ahead of the MP3 encoder only because it is the shorter
+        // of the two. Same drop-newest policy and the same reason: this is a
+        // live stream, so a consumer that is behind is better given a gap than a
+        // queue that grows for as long as the stall lasts.
+        if let Some(out) = &raw_feed {
+            use tokio::sync::mpsc::error::TrySendError;
+            // `to_le_bytes` rather than a transmute of the slice: `i16` has no
+            // guaranteed byte order, and ffmpeg is told `s16le` on the far side.
+            // A big-endian host would otherwise broadcast noise.
+            let mut bytes = Vec::with_capacity(pcm_i16.len() * 2);
+            for sample in &pcm_i16 {
+                bytes.extend_from_slice(&sample.to_le_bytes());
+            }
+            match out.try_send(bytes) {
+                Ok(()) => dropped_blocks = 0,
+                Err(TrySendError::Full(_)) => {
+                    dropped_blocks += 1;
+                    if dropped_blocks % 100 == 1 {
+                        log::warn!(
+                            "Outgoing stream buffer is full; dropping audio ({dropped_blocks} blocks so far)"
+                        );
+                    }
+                }
+                Err(TrySendError::Closed(_)) => {
+                    raw_feed = None;
+                    events.send(EngineEvent::EncodingStopped { reason: None });
+                }
+            }
         }
 
         if let Some((enc, out)) = &mut encoder {

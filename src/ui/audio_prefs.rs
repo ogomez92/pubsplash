@@ -117,6 +117,11 @@ pub fn build_tab(app: &Rc<App>, dialog: &Dialog, panel: &Panel) {
     device_group.add(&test, 0, SizerFlag::All, 4);
 
     sizer.add_sizer(&device_group, 0, SizerFlag::Expand | SizerFlag::All, 4);
+    // The encoder a YouTube service needs. Here rather than on a tab of its own
+    // because the notebook is already as wide as it can be; see the header of
+    // `super::ffmpeg_prefs`.
+    let ffmpeg_group = super::ffmpeg_prefs::build_group(app, dialog, panel);
+    sizer.add_sizer(&ffmpeg_group, 0, SizerFlag::Expand | SizerFlag::All, 4);
     panel.set_sizer(sizer, true);
 }
 

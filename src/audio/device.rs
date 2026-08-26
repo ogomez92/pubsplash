@@ -868,6 +868,14 @@ mod tests {
     /// Explorer is always running on a desktop Windows session and always
     /// carries a version resource, so it exercises the whole path: name match
     /// without the `.exe` the user may not have typed, plus the friendly name.
+    ///
+    /// What it deliberately does **not** assert is that the friendly name is
+    /// `"Windows Explorer"`. It used to, and that made this fail on every
+    /// Windows that is not in English — the version resource is localised, so a
+    /// Spanish install answers `"Explorador de Windows"`. The property worth
+    /// pinning is that the name came from the version resource *at all*, since
+    /// [`friendly_name`] falls back to the bare exe name when it cannot read
+    /// one, and that fallback is the failure this test exists to catch.
     #[test]
     fn resolves_a_running_process_to_its_friendly_name() {
         let apps = resolve_apps(&["explorer".to_string()]);
@@ -877,7 +885,18 @@ mod tests {
         };
         assert_eq!(app.exe.to_ascii_lowercase(), "explorer.exe");
         assert!(app.pid != 0);
-        assert_eq!(app.display_name, "Windows Explorer");
+        assert!(!app.display_name.is_empty());
+        assert_ne!(
+            app.display_name.to_ascii_lowercase(),
+            app.exe.to_ascii_lowercase(),
+            "the friendly name fell back to the exe name, so no version resource was read"
+        );
+        // Every name here reaches a wx control, and `append` panics on a string
+        // it cannot turn into a `CString`. Same rule as
+        // `resolved_names_are_safe_to_hand_to_wx`, asserted on the one process
+        // this test knows is there.
+        assert!(!app.display_name.contains('\0'), "{:?}", app.display_name);
+        assert_eq!(app.display_name.trim(), app.display_name);
     }
 
     /// This runs on the UI thread every couple of seconds, so a repeat poll
