@@ -48,6 +48,15 @@ const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 /// shutdown with no window on screen to explain the wait.
 const END_STREAM_TIMEOUT: Duration = Duration::from_secs(10);
 
+/// The page that tells a broadcaster how to reach this instance. Its
+/// `__data.json` carries the account's stream key; the page itself carries the
+/// endpoint the key is meant to be used against.
+const INSTRUCTIONS_PATH: &str = "/stream/instructions";
+
+/// The one-line source URL the instructions page offers, and the anchor
+/// [`parse_published_endpoint`] reads the endpoint out of.
+const SOURCE_URL_SCHEME: &str = "icecast://";
+
 pub struct AudioPubClient {
     http: reqwest::Client,
     /// Site base URL, no trailing slash, e.g. `https://audiopub.site`.
@@ -101,7 +110,7 @@ impl AudioPubClient {
     pub async fn stream_identity(&self) -> Result<StreamIdentity, ApiError> {
         let response = self
             .http
-            .get(format!("{}/stream/instructions/__data.json", self.base))
+            .get(format!("{}{INSTRUCTIONS_PATH}/__data.json", self.base))
             .timeout(REQUEST_TIMEOUT)
             .send()
             .await?
@@ -188,10 +197,75 @@ impl AudioPubClient {
         Ok(EventsStream::Open(response))
     }
 
+    /// Asks the instance where its broadcasters are supposed to publish.
+    ///
+    /// There is no API for this and no setting that carries it. Upstream's
+    /// `src/routes/stream/instructions/+page.svelte` has `live.audiopub.site`
+    /// and `8000` written into the template as literals, so an instance that
+    /// publishes anywhere else is one whose operator edited that file — and the
+    /// page it renders is the only place the answer exists. `.env.example`'s
+    /// `ICECAST_HOST` is the *server's* own admin address (`127.0.0.1:8000`),
+    /// not the one a broadcaster dials, so it is no help even where it leaks.
+    ///
+    /// What is read out of the page is the one-line source URL it offers to
+    /// software that wants everything in a single box:
+    /// `icecast://source:<key>@host:port/<user-id>`. That anchor is deliberate.
+    /// A fork is free to translate every label around it — audio.gomsen.com's
+    /// page is entirely in Spanish, where "Server address" reads "Dirección del
+    /// servidor" — but the scheme, the `@` and the `:` are structure rather than
+    /// prose and survive translation. The URL is also rendered logged out, with
+    /// the key and mount left as placeholders and the host and port real, so
+    /// this needs no session and can run before the login.
+    ///
+    /// A failure of any kind is the caller's cue to keep whatever it already
+    /// had. Nothing here may stand between the user and their broadcast.
+    pub async fn published_endpoint(&self) -> Result<Option<(String, u16)>, ApiError> {
+        let body = self
+            .http
+            .get(format!("{}{INSTRUCTIONS_PATH}", self.base))
+            .timeout(REQUEST_TIMEOUT)
+            .send()
+            .await?
+            .error_for_status()?
+            .text()
+            .await?;
+        Ok(parse_published_endpoint(&body))
+    }
+
     #[allow(dead_code)]
     pub fn base_url(&self) -> &str {
         &self.base
     }
+}
+
+/// Pulls the publishing host and port out of a rendered instructions page.
+///
+/// Every `icecast://` on the page is tried in turn, because the masked and the
+/// revealed form of the URL both appear and a fork may put more prose around
+/// them; the first that parses to something that could be an address wins.
+/// [`super::icecast::split_host_port`] does the parsing, so an IPv6 literal,
+/// the embedded credentials and the trailing mount are all handled exactly as
+/// they are for a hand-typed field.
+///
+/// The placeholder guard is what stops a page whose values were never filled in
+/// from being read as an address: `&lt;` is how Svelte escapes the `<` of
+/// `<your-server>`, and no real host contains that or a `>`.
+fn parse_published_endpoint(page: &str) -> Option<(String, u16)> {
+    page.match_indices(SOURCE_URL_SCHEME)
+        .find_map(|(start, _)| {
+            let rest = &page[start..];
+            // The URL runs until the markup or the sentence around it resumes. A
+            // literal `<` can only be the next tag, since the page's own
+            // placeholders arrive escaped.
+            let end = rest
+                .find(|c: char| c == '<' || c == '"' || c == '\'' || c.is_whitespace())
+                .unwrap_or(rest.len());
+            let (host, port) = super::icecast::split_host_port(&rest[..end]).ok()?;
+            if host.contains("&lt;") || host.contains('>') {
+                return None;
+            }
+            Some((host, port.unwrap_or(super::icecast::DEFAULT_PORT)))
+        })
 }
 
 /// The outcome of a SvelteKit form action, normalized across the native
@@ -347,6 +421,93 @@ mod tests {
         assert_eq!(identity.stream_key.as_str(), "key-uuid-9");
     }
 
+    /// Upstream's own page, logged out: the host and port are real even though
+    /// the key and the mount are placeholders, which is what lets the endpoint
+    /// be read before anyone has signed in.
+    #[test]
+    fn reads_the_endpoint_off_the_stock_instructions_page() {
+        let page = r#"
+            <p class="url-display">
+                <code class="sensitive masked full-url">
+                icecast://source:&lt;your-stream-key>@live.audiopub.site:8000/&lt;your-user-id>
+            </code>
+            </p>
+        "#;
+        assert_eq!(
+            parse_published_endpoint(page),
+            Some(("live.audiopub.site".to_string(), 8000))
+        );
+    }
+
+    /// audio.gomsen.com, which is why any of this exists: a fork on a port that
+    /// is not 8000, with every label around the URL translated. The prose moves
+    /// and the anchor does not.
+    #[test]
+    fn reads_a_translated_forks_endpoint_on_its_own_port() {
+        let page = r#"
+            <dt>Dirección del servidor</dt>
+            <dd><code>live.audio.gomsen.com</code></dd>
+            <dt>Puerto</dt>
+            <dd><code>8010</code></dd>
+            <p class="url-display">
+                <code class="sensitive masked full-url">
+                icecast://source:&lt;tu-clave-de-emisión>@live.audio.gomsen.com:8010/&lt;tu-id-de-usuario>
+            </code>
+            </p>
+        "#;
+        assert_eq!(
+            parse_published_endpoint(page),
+            Some(("live.audio.gomsen.com".to_string(), 8010))
+        );
+    }
+
+    /// The same page for someone signed in with "show sensitive information"
+    /// ticked, where the placeholders are gone and the key is a real UUID.
+    #[test]
+    fn reads_the_endpoint_out_of_a_revealed_url() {
+        let page = r#"<code class="sensitive full-url">icecast://source:0f7a1c2e-0000-4d00-9000-1234567890ab@live.example.org:8100/8b3d5f60-1111-4a00-8000-abcdefabcdef</code>"#;
+        assert_eq!(
+            parse_published_endpoint(page),
+            Some(("live.example.org".to_string(), 8100))
+        );
+    }
+
+    /// A URL with no port on it means Icecast's own default, the same way it
+    /// does everywhere else the app parses one.
+    #[test]
+    fn a_portless_url_means_the_icecast_default() {
+        let page = "icecast://source:key@stream.example.org/mount";
+        assert_eq!(
+            parse_published_endpoint(page),
+            Some((
+                "stream.example.org".to_string(),
+                super::super::icecast::DEFAULT_PORT
+            ))
+        );
+    }
+
+    /// A fork that left the host as a placeholder has told us nothing, and
+    /// "&lt;your-server>" must never be dialled. The scan carries on past it to
+    /// the URL that does name a host.
+    #[test]
+    fn placeholder_hosts_are_skipped_not_dialled() {
+        let unfilled = "icecast://source:&lt;key>@&lt;your-server>:8000/&lt;your-user-id>";
+        assert_eq!(parse_published_endpoint(unfilled), None);
+        let page = format!("{unfilled} <p>icecast://source:k@live.example.net:8020/m</p>");
+        assert_eq!(
+            parse_published_endpoint(&page),
+            Some(("live.example.net".to_string(), 8020))
+        );
+    }
+
+    /// A page with nothing to read — a fork that rewrote the instructions, or a
+    /// login wall — leaves the caller on whatever it already had.
+    #[test]
+    fn a_page_without_a_source_url_answers_nothing() {
+        assert_eq!(parse_published_endpoint("<h1>How to stream</h1>"), None);
+        assert_eq!(parse_published_endpoint(""), None);
+    }
+
     /// Hits the real audiopub.site. Run explicitly with
     /// `cargo test real_login -- --ignored`.
     #[tokio::test]
@@ -356,6 +517,89 @@ mod tests {
         match client.login("probe@example.com", "wrongpassword").await {
             Err(ApiError::BadCredentials) => {}
             other => panic!("expected BadCredentials, got {other:?}"),
+        }
+    }
+
+    /// The whole custom-instance path against a real server: discover the
+    /// endpoint, log in, and fetch the stream key — everything Connect does,
+    /// and nothing that creates a stream or puts audio on the air.
+    ///
+    /// Driven by `PUBSPLASH_TEST_SITE`, `PUBSPLASH_TEST_EMAIL` and
+    /// `PUBSPLASH_TEST_PASSWORD`, and skipped when they are unset, so it can
+    /// live in the tree without a credential in it. Run with
+    /// `cargo test real_instance_connect -- --ignored --nocapture`.
+    #[tokio::test]
+    #[ignore]
+    async fn real_instance_connect() {
+        let (Ok(site), Ok(email), Ok(password)) = (
+            std::env::var("PUBSPLASH_TEST_SITE"),
+            std::env::var("PUBSPLASH_TEST_EMAIL"),
+            std::env::var("PUBSPLASH_TEST_PASSWORD"),
+        ) else {
+            eprintln!("skipped: set PUBSPLASH_TEST_SITE/_EMAIL/_PASSWORD to run this");
+            return;
+        };
+
+        let client = AudioPubClient::new(&site).unwrap();
+
+        let endpoint = client
+            .published_endpoint()
+            .await
+            .unwrap_or_else(|e| panic!("reading {site}'s instructions page: {e}"));
+        let (host, port) = endpoint.expect("the instance should name an endpoint");
+        eprintln!("endpoint: {host}:{port}");
+
+        client
+            .login(&email, &password)
+            .await
+            .unwrap_or_else(|e| panic!("logging in to {site}: {e}"));
+        eprintln!("login: ok");
+
+        let identity = client
+            .stream_identity()
+            .await
+            .unwrap_or_else(|e| panic!("fetching the stream key from {site}: {e}"));
+        assert!(!identity.user_id.is_empty(), "the mount must not be empty");
+        assert!(
+            !identity.stream_key.is_empty(),
+            "the source password must not be empty"
+        );
+        // The mount is the user id; the key is a password and stays out of the
+        // output beyond enough to tell one from another.
+        eprintln!(
+            "mount: {} / key: {}… ({} chars)",
+            identity.user_id,
+            &identity.stream_key.as_str()[..8],
+            identity.stream_key.as_str().len()
+        );
+    }
+
+    /// Hits two real instances, and is the regression test for the whole of
+    /// [`parse_published_endpoint`]: the markup it reads belongs to somebody
+    /// else and can be rewritten without warning, so the only honest check is
+    /// against the live pages. audio.gomsen.com is here because it is the case
+    /// the guess gets wrong — its port is 8010, and `live.audio.gomsen.com:8000`
+    /// is a different streaming server altogether. Run with
+    /// `cargo test real_published_endpoint -- --ignored`.
+    #[tokio::test]
+    #[ignore]
+    async fn real_published_endpoints() {
+        for (site, expected) in [
+            ("https://audiopub.site/", ("live.audiopub.site", 8000)),
+            ("https://audio.gomsen.com/", ("live.audio.gomsen.com", 8010)),
+        ] {
+            let client = AudioPubClient::new(site).unwrap();
+            let found = client
+                .published_endpoint()
+                .await
+                .unwrap_or_else(|e| panic!("{site} instructions page: {e}"));
+            assert_eq!(
+                found,
+                Some((expected.0.to_string(), expected.1)),
+                "{site} should publish to {}:{}",
+                expected.0,
+                expected.1
+            );
         }
     }
 

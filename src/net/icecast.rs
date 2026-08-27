@@ -50,6 +50,10 @@ pub const WRITE_TIMEOUT: Duration = Duration::from_secs(5);
 /// up the whole teardown.
 const CLOSE_TIMEOUT: Duration = Duration::from_secs(2);
 
+/// Icecast's own default port, which is what a source or listen URL carrying no
+/// port on it means, and what a service that has never had one typed in uses.
+pub const DEFAULT_PORT: u16 = 8000;
+
 /// Splits what someone typed into a "server" field into a host and, when they
 /// included one, a port.
 ///

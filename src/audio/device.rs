@@ -962,6 +962,7 @@ mod tests {
     /// they never open the output picker at all.
     #[test]
     fn the_effective_output_device_falls_back_to_the_system_default() {
+        let _serialized = crate::audio::render::output_device_test_lock();
         let previous = crate::audio::render::output_device_id();
         crate::audio::render::set_output_device(None);
 
@@ -982,6 +983,7 @@ mod tests {
     /// Pubsplash is really using rather than the one Windows would pick.
     #[test]
     fn a_configured_output_device_is_what_the_check_sees() {
+        let _serialized = crate::audio::render::output_device_test_lock();
         let previous = crate::audio::render::output_device_id();
         crate::audio::render::set_output_device(Some("{chosen}".to_string()));
 

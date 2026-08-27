@@ -32,6 +32,20 @@ pub enum ServiceProfile {
         port: u16,
         email: String,
         password: Secret,
+        /// Whether `server` and `port` are still the guess the app derives from
+        /// `site_url` rather than something the user chose.
+        ///
+        /// The guess is `live.<site host>` on port 8000, which is what upstream
+        /// publishes and what every instance is *assumed* to publish. When it is
+        /// wrong it is wrong silently and expensively — audio.gomsen.com is on
+        /// 8010, and `live.audio.gomsen.com:8000` answers, as somebody else's
+        /// streaming server — so a still-default endpoint is worth replacing
+        /// with the instance's own answer. A typed-in one never is: the fields
+        /// exist precisely so an operator can send us somewhere the page does
+        /// not name, and second-guessing that would break the override the
+        /// moment it was needed. Decided in `ui::service_profile_from`, where
+        /// the rest of the pre-flight judgements are made.
+        endpoint_is_default: bool,
     },
     Icecast {
         id: String,
@@ -422,6 +436,42 @@ async fn resolve_icecast_host(host: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// Replaces a guessed publishing endpoint with the one the instance itself
+/// names, when it names a different one.
+///
+/// Called only when nothing has been typed into the server and port fields, so
+/// the value being replaced is `live.<site host>:8000` and nothing else — see
+/// `ServiceProfile::Audiopub::endpoint_is_default`. Every way of learning
+/// nothing ends the same way, with the guess kept: an instance that answers what
+/// was already assumed, one whose page cannot be parsed, and one that cannot be
+/// reached at all are three shades of "carry on", and none of them is worth a
+/// failed Connect. The log line is at debug for the same reason — a user whose
+/// endpoint was right all along has nothing to read here.
+async fn discover_endpoint(
+    client: &AudioPubClient,
+    site_url: &str,
+    server: String,
+    port: u16,
+) -> (String, u16) {
+    match client.published_endpoint().await {
+        Ok(Some((host, found))) if (host.as_str(), found) != (server.as_str(), port) => {
+            log::info!(
+                "{site_url} publishes to {host}:{found}, not the {server}:{port} this service \
+                 assumed; using {host}:{found}. Type an Icecast server and port on Setup \
+                 streaming services to override this."
+            );
+            (host, found)
+        }
+        Ok(_) => (server, port),
+        Err(e) => {
+            log::debug!(
+                "could not read {site_url}'s streaming instructions ({e}); assuming {server}:{port}"
+            );
+            (server, port)
+        }
+    }
+}
+
 async fn end_active_stream(active: &ActiveStream, connection: Option<&Connection>) {
     active.abort();
     if let Some(client) = connection.and_then(audiopub_client)
@@ -463,6 +513,7 @@ async fn net_loop(mut commands: tokio_mpsc::UnboundedReceiver<NetCommand>, event
                         port,
                         email,
                         password,
+                        endpoint_is_default,
                     } => {
                         let client = match AudioPubClient::new(&site_url) {
                             Ok(c) => c,
@@ -472,6 +523,13 @@ async fn net_loop(mut commands: tokio_mpsc::UnboundedReceiver<NetCommand>, event
                                 });
                                 continue;
                             }
+                        };
+                        // Only while nothing has been typed in, and only ever to
+                        // replace the guess. See `endpoint_is_default`.
+                        let (server, port) = if endpoint_is_default {
+                            discover_endpoint(&client, &site_url, server, port).await
+                        } else {
+                            (server, port)
                         };
                         // The publishing host is configurable here as well now,
                         // so it is checked here as well: logging in proves the
@@ -1957,6 +2015,158 @@ async fn start_stream(
                 chat_reconnect,
             })
         }
+    }
+}
+
+/// A real broadcast against a real Audiopub instance, start to finish.
+///
+/// This is the only test that proves the thing the unit tests can only imply:
+/// that an endpoint discovered from an instance's own page is one the instance
+/// will actually accept a source connection on. Everything below the discovery
+/// is the ordinary path — create the stream, dial Icecast, feed it MP3, watch
+/// the state arrive over SSE, end the stream.
+///
+/// It **puts a live broadcast on the site**, briefly and publicly, so it is
+/// gated on `PUBSPLASH_TEST_BROADCAST=1` on top of `--ignored` and the three
+/// credential variables. Nothing here holds a credential; they all come from the
+/// environment. Run with:
+///
+/// ```text
+/// cargo test --bin pubsplash real_broadcast -- --ignored --nocapture
+/// ```
+#[cfg(test)]
+mod real_broadcast_tests {
+    use super::*;
+    use crate::audio::encoder::Mp3Encoder;
+    use crate::audio::mixer::{CHANNELS, SAMPLE_RATE};
+
+    /// Long enough to cover `sourceConnected`'s serial validation — archiving,
+    /// then `ffprobe -probesize 33000` against the live mount, which needs about
+    /// two seconds of *real-time* audio at 128 kbps, then a third fetch just to
+    /// read a content-type header.
+    const DEADLINE: Duration = Duration::from_secs(60);
+    const BITRATE_KBPS: u32 = 128;
+    /// The mixer's own block, so the pacing matches what the engine really does.
+    const BLOCK_FRAMES: usize = SAMPLE_RATE as usize / 100;
+
+    /// A quiet 440 Hz tone rather than digital silence: it proves audio is
+    /// flowing rather than that a socket is open, and it is what anyone who
+    /// happened to be listening would hear, so it stays at about -30 dBFS.
+    fn tone_block(phase: &mut f32) -> Vec<i16> {
+        let step = std::f32::consts::TAU * 440.0 / SAMPLE_RATE as f32;
+        let mut pcm = Vec::with_capacity(BLOCK_FRAMES * CHANNELS);
+        for _ in 0..BLOCK_FRAMES {
+            let sample = (phase.sin() * 0.03 * i16::MAX as f32) as i16;
+            *phase = (*phase + step) % std::f32::consts::TAU;
+            for _ in 0..CHANNELS {
+                pcm.push(sample);
+            }
+        }
+        pcm
+    }
+
+    #[tokio::test]
+    #[ignore]
+    async fn real_broadcast_round_trip() {
+        use futures_util::StreamExt;
+
+        let (Ok(site), Ok(email), Ok(password)) = (
+            std::env::var("PUBSPLASH_TEST_SITE"),
+            std::env::var("PUBSPLASH_TEST_EMAIL"),
+            std::env::var("PUBSPLASH_TEST_PASSWORD"),
+        ) else {
+            eprintln!("skipped: set PUBSPLASH_TEST_SITE/_EMAIL/_PASSWORD to run this");
+            return;
+        };
+        if std::env::var("PUBSPLASH_TEST_BROADCAST").as_deref() != Ok("1") {
+            eprintln!("skipped: this goes live on the site; set PUBSPLASH_TEST_BROADCAST=1");
+            return;
+        }
+
+        let client = AudioPubClient::new(&site).unwrap();
+        let (host, port) = client
+            .published_endpoint()
+            .await
+            .expect("instructions page")
+            .expect("an endpoint");
+        client.login(&email, &password).await.expect("login");
+        let identity = client.stream_identity().await.expect("stream key");
+        eprintln!("publishing to {host}:{port}, mount {}", identity.user_id);
+
+        let stream_id = client
+            .create_stream(
+                "Pubsplash connection test",
+                "Automated check that this instance accepts a source connection.",
+                false,
+            )
+            .await
+            .expect("create stream");
+        eprintln!("stream {stream_id} created");
+
+        // Opened before the source connects, so the `state` transition the
+        // server sends on `sourceConnected` cannot be missed.
+        let events = match client.open_events(&stream_id).await.expect("open events") {
+            EventsStream::Open(response) => response,
+            EventsStream::Gone => panic!("the stream was gone the moment it was created"),
+        };
+
+        let target = IcecastTarget {
+            host: format!("{host}:{port}"),
+            mount: identity.user_id.clone(),
+            username: "source".to_string(),
+            password: identity.stream_key.clone(),
+            content_type: "audio/mpeg".to_string(),
+        };
+        let mut source = IcecastConnection::connect(&target)
+            .await
+            .expect("icecast source connection");
+        eprintln!("source connection accepted");
+
+        let mut encoder = Mp3Encoder::new(BITRATE_KBPS).expect("encoder");
+        let mut parser = SseParser::new();
+        let mut body = events.bytes_stream();
+        let mut phase = 0.0f32;
+        let started = Instant::now();
+        let mut went_active = false;
+        let mut ticker = tokio::time::interval(Duration::from_millis(10));
+
+        while started.elapsed() < DEADLINE && !went_active {
+            // Paced like the engine: Icecast reads a source at the rate it
+            // delivers, so sending as fast as the loop can encode would put the
+            // whole broadcast ahead of real time.
+            ticker.tick().await;
+            let mp3 = encoder.encode(&tone_block(&mut phase)).expect("encode");
+            if !mp3.is_empty() {
+                source.send(mp3).await.expect("send audio");
+            }
+            // Non-blocking: the audio must keep flowing while we wait for the
+            // server to finish validating it.
+            if let Ok(Some(chunk)) = tokio::time::timeout(Duration::ZERO, body.next()).await {
+                for raw in parser.feed(&chunk.expect("event chunk")) {
+                    match LiveEvent::from_sse(&raw) {
+                        Some(LiveEvent::State { state }) => {
+                            eprintln!("  state: {state} (at {:?})", started.elapsed());
+                            went_active |= state == "active";
+                        }
+                        Some(LiveEvent::Listeners { active, peak }) => {
+                            eprintln!("  listeners: {active} (peak {peak})");
+                        }
+                        other => eprintln!("  event: {other:?}"),
+                    }
+                }
+            }
+        }
+
+        source.close().await;
+        client.end_stream(&stream_id).await.expect("end stream");
+        eprintln!("stream {stream_id} ended");
+
+        assert!(
+            went_active,
+            "the server never reported the stream active within {DEADLINE:?}; \
+             the source connection was accepted on {host}:{port} but the audio \
+             was not validated"
+        );
     }
 }
 

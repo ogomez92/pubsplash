@@ -32,10 +32,10 @@ Both kinds keep themselves up to date — see [Automatic updates](#automatic-upd
 ### Connecting to a service
 
 1. Open **File > Setup streaming services**.
-2. Select the built-in **Audiopub** service, or choose **Add** for a self-hosted Audiopub instance or Icecast.
+2. Select the built-in **Audiopub** service, or choose **Add service** for a self-hosted Audiopub instance, Icecast, or YouTube. You can keep as many services as you like, including several Audiopub instances.
 3. Enter the requested details and choose **Connect**.
 
-For Audiopub, you need the site address, your email, and your password. The Icecast server and port are filled in for you from the site address and only need changing if the instance publishes somewhere other than the usual `live.` host on port 8000.
+For Audiopub, you need the site address, your email, and your password. You do not need to know where the instance publishes: the Icecast server and port boxes start out holding the usual guess (the `live.` host of the site address, on port 8000), and when you connect, Pubsplash asks the instance itself and uses whatever it says instead. Fill the two boxes in yourself only if you want to override that — a typed-in server and port are always used as they stand.
 
 For Icecast, you normally need the server, port, mount point, username, and source password. The username defaults to source; the mount point may be `/` for the server root. Icecast does not provide Audiopub chat, listener counts, archiving, or an Audiopub stream page.
 

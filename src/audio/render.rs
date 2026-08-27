@@ -209,6 +209,22 @@ fn append_frames(bytes: &mut VecDeque<u8>, samples: &[f32], offset: &mut usize, 
     }
 }
 
+/// Serializes the tests that write the process-global output device setting.
+///
+/// Four tests across two modules set that device, read it back and restore it.
+/// Run in parallel — which is how `cargo test` runs them — they overwrite each
+/// other between the set and the read, so whichever loses the race fails. It is
+/// not always the same one and not on every run, which is the worst shape a
+/// failure can have: it reads as a bug in whatever was changed last. Every test
+/// that touches the setting takes this first.
+#[cfg(test)]
+pub(crate) fn output_device_test_lock() -> std::sync::MutexGuard<'static, ()> {
+    static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    // Poisoning here would mean an unrelated test panicked while holding it, and
+    // failing every other test in the group on top of that helps nobody.
+    LOCK.lock().unwrap_or_else(|e| e.into_inner())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -245,6 +261,7 @@ mod tests {
     /// module in one process.
     #[test]
     fn the_output_device_setting_round_trips() {
+        let _serialized = super::output_device_test_lock();
         let previous = output_device_id();
 
         set_output_device(Some("{some-endpoint-id}".to_string()));
@@ -261,6 +278,7 @@ mod tests {
     /// output back onto the endpoint that check just approved.
     #[test]
     fn an_unknown_output_device_is_an_error_not_the_default() {
+        let _serialized = super::output_device_test_lock();
         let previous = output_device_id();
 
         set_output_device(Some("{not-a-real-endpoint}".to_string()));

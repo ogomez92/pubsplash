@@ -2179,6 +2179,15 @@ pub fn service_profile_from(
             if site.email.trim().is_empty() || site.password.is_empty() {
                 return Err("Enter your email and password first.".to_string());
             }
+            // Whether the endpoint above is still the guess. The comparison is
+            // against the guess rather than against a stored "was this typed?"
+            // flag because the dialog shows the derived value and saves it back,
+            // so by the time a service reaches here the two are indistinguishable
+            // in the settings file — and a user who typed the guess in by hand
+            // has, either way, asked for nothing the instance cannot overrule.
+            let endpoint_is_default = crate::config::default_audiopub_server(&site.url)
+                .is_some_and(|derived| derived == server)
+                && port == crate::net::icecast::DEFAULT_PORT;
             Ok(ServiceProfile::Audiopub {
                 id: site.id.clone(),
                 nickname,
@@ -2187,6 +2196,7 @@ pub fn service_profile_from(
                 port,
                 email: site.email.trim().to_string(),
                 password: site.password.clone(),
+                endpoint_is_default,
             })
         }
         StreamingServiceType::Icecast => {
@@ -3930,6 +3940,75 @@ mod accessible_tests {
         assert_eq!(
             acc.get_name(1),
             (wxd_AccStatus_WXD_ACC_NOT_IMPLEMENTED, None)
+        );
+    }
+}
+
+#[cfg(test)]
+mod service_profile_tests {
+    use crate::config::{SiteConfig, StreamingServiceType};
+    use crate::net::ServiceProfile;
+
+    /// A service whose endpoint has never been typed into, which is what both
+    /// `SiteConfig::repair_defaults` and the dialog leave behind.
+    fn untouched(url: &str) -> SiteConfig {
+        let mut site = SiteConfig::audiopub("service-2".into(), "Gomsen".into());
+        site.service_type = StreamingServiceType::Audiopub;
+        site.url = url.to_string();
+        site.email = "someone@example.org".into();
+        site.password = crate::secret::Secret::new("hunter2");
+        site.icecast_server = crate::config::default_audiopub_server(url).unwrap_or_default();
+        site.icecast_port = crate::net::icecast::DEFAULT_PORT;
+        site
+    }
+
+    fn endpoint_is_default(site: &SiteConfig) -> bool {
+        match super::service_profile_from(site, "") {
+            Ok(ServiceProfile::Audiopub {
+                endpoint_is_default,
+                ..
+            }) => endpoint_is_default,
+            other => panic!("expected an Audiopub profile, got {other:?}"),
+        }
+    }
+
+    /// The flag that decides whether the instance may overrule the endpoint. It
+    /// has to answer "yes" for a service nobody has touched — the whole point is
+    /// that audio.gomsen.com is on 8010 while the guess is 8000 — and "no" the
+    /// moment either box is typed into, because those boxes are the override for
+    /// an instance whose own page names the wrong place.
+    #[test]
+    fn only_an_untouched_endpoint_may_be_overruled_by_the_instance() {
+        assert!(
+            endpoint_is_default(&untouched("https://audio.gomsen.com")),
+            "a service still on the guess must let the instance answer"
+        );
+        assert!(
+            endpoint_is_default(&untouched("https://audiopub.site/")),
+            "the main site is on the guess too; its instance simply agrees"
+        );
+
+        let mut typed_port = untouched("https://audio.gomsen.com");
+        typed_port.icecast_port = 8010;
+        assert!(
+            !endpoint_is_default(&typed_port),
+            "a typed port is a choice"
+        );
+
+        let mut typed_server = untouched("https://audio.gomsen.com");
+        typed_server.icecast_server = "stream.gomsen.com".into();
+        assert!(
+            !endpoint_is_default(&typed_server),
+            "a typed server is a choice"
+        );
+
+        // A whole `host:port` pasted into the server box is unpacked before the
+        // comparison, so it reads as typed even though the host still matches.
+        let mut pasted = untouched("https://audio.gomsen.com");
+        pasted.icecast_server = "live.audio.gomsen.com:8010".into();
+        assert!(
+            !endpoint_is_default(&pasted),
+            "a pasted host:port is a choice"
         );
     }
 }

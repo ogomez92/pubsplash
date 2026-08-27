@@ -363,7 +363,7 @@ impl Default for SiteConfig {
             email: String::new(),
             password: Secret::default(),
             icecast_server: String::new(),
-            icecast_port: 8000,
+            icecast_port: crate::net::icecast::DEFAULT_PORT,
             icecast_mount: String::new(),
             icecast_username: "source".to_string(),
             icecast_password: Secret::default(),
@@ -477,7 +477,7 @@ impl SiteConfig {
         // field is a default, not a requirement: leave it alone and the service
         // goes on reaching the same host it always did.
         if self.icecast_port == 0 {
-            self.icecast_port = 8000;
+            self.icecast_port = crate::net::icecast::DEFAULT_PORT;
         }
         // Container-level `#[serde(default)]` already fills these in for a
         // settings file written before the fields existed. This covers the other
@@ -511,7 +511,7 @@ impl SiteConfig {
             server.to_string()
         };
         let port = if self.icecast_port == 0 {
-            8000
+            crate::net::icecast::DEFAULT_PORT
         } else {
             self.icecast_port
         };
@@ -521,6 +521,14 @@ impl SiteConfig {
 
 /// Audiopub's published convention: the `live.` subdomain of the site, which is
 /// what the app derived on every connect before the host became configurable.
+///
+/// A guess, and named one everywhere it is used. It is right for upstream and
+/// for most forks, and when it is wrong it is wrong in the worst way available —
+/// `live.audio.gomsen.com:8000` is a live streaming server belonging to somebody
+/// else, so the failure is a confusing rejection rather than a name that does
+/// not resolve. So this is only where a service *starts*: while it is still
+/// this, `net::discover_endpoint` asks the instance itself at Connect and
+/// believes the answer. Anything typed into the dialog wins over both.
 ///
 /// `None` only when there is no site URL to derive from, which
 /// `validate_site_url` refuses before the endpoint is ever reached.
