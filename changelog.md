@@ -4,6 +4,14 @@
 
 ### Additions
 
+### Fixes
+
+### Changes
+
+## 2.0.0
+
+### Additions
+
 - **Pubsplash speaks Spanish.** The whole interface is translated: every window, menu, button, list row, mixer strip, spoken announcement, and all 214 context-help messages that F1 reads out.
 
 - **An Interface language setting on Preferences, General.** It follows the language Windows is set to unless you choose one, and the change takes effect the next time Pubsplash starts. Anything not yet translated stays in English rather than going blank.
