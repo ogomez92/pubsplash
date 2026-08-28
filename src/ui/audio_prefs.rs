@@ -201,7 +201,11 @@ fn colliding_sources(
                 &source.kind,
                 SourceKindConfig::DesktopAudio { device_id: Some(id) } if id == device_id
             ) {
-                names.push(format!("{} ({})", label, scene.name));
+                names.push(t!(
+                "{source} ({scene})",
+                source = label,
+                scene = scene.name
+            ));
             }
         }
     }

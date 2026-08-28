@@ -4,6 +4,16 @@
 
 ### Additions
 
+- **Pubsplash speaks Spanish.** The whole interface is translated: every window, menu, button, list row, mixer strip, spoken announcement, and all 214 context-help messages that F1 reads out.
+
+- **An Interface language setting on Preferences, General.** It follows the language Windows is set to unless you choose one, and the change takes effect the next time Pubsplash starts. Anything not yet translated stays in English rather than going blank.
+
+- The standalone Sound Pack Manager is translated too, and follows the Windows language.
+
+- Translations live in `po/es.po`, a standard gettext catalogue that opens in Poedit and is embedded at build time — there is nothing to install or ship beside the executable. Adding a language is a `.po` file, a row in `i18n::LANGUAGES`, and a line in `i18n::CATALOGS`.
+
+- Maintainers: `cargo run --bin gen-po` rescans the source for `t!`/`tn!` calls and `help.toml` for context-help prose, then round-trips every catalogue under `po/` — new messages get an empty translation, existing translations are preserved, and messages that have left the source are kept as commented-out entries rather than deleted. It also reports any translation that has lost or invented a `{placeholder}`.
+
 - Maintainers: `tools/deploy.ps1` builds a release and replaces a portable install with it. It refuses to overwrite an install that is running (`-Force` stops it first) or one made by the installer, regenerates `readme.html` and `changelog.html`, puts the old files back if a copy fails part way, and leaves `user_data` and anything else in the folder alone. `-Target` or the `PUBSPLASH_DEPLOY_TARGET` environment variable picks the folder, defaulting to `stuff\software\pubsplash` under your user profile; `-DryRun` previews, `-SkipBuild` and `-SkipDocs` narrow the work, and `-Test` runs the tests first.
 
 - **An Audiopub service now takes its streaming server and port from the instance itself.** On connecting, Pubsplash reads the instance's **How to stream** page and uses the server and port given there, rather than assuming the `live.` host of the site address on port 8000.

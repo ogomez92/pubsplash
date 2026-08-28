@@ -147,37 +147,37 @@ impl Field {
     /// other field is a plain number and deliberately not zero-padded: "minute,
     /// 5" reads better than "minute, 05".
     fn value(self, t: &SystemTime) -> String {
-        const MONTHS: [&str; 12] = [
-            "January",
-            "February",
-            "March",
-            "April",
-            "May",
-            "June",
-            "July",
-            "August",
-            "September",
-            "October",
-            "November",
-            "December",
+        let months: [String; 12] = [
+            t!("January"),
+            t!("February"),
+            t!("March"),
+            t!("April"),
+            t!("May"),
+            t!("June"),
+            t!("July"),
+            t!("August"),
+            t!("September"),
+            t!("October"),
+            t!("November"),
+            t!("December"),
         ];
-        const DAYS: [&str; 7] = [
-            "Sunday",
-            "Monday",
-            "Tuesday",
-            "Wednesday",
-            "Thursday",
-            "Friday",
-            "Saturday",
+        let days: [String; 7] = [
+            t!("Sunday"),
+            t!("Monday"),
+            t!("Tuesday"),
+            t!("Wednesday"),
+            t!("Thursday"),
+            t!("Friday"),
+            t!("Saturday"),
         ];
         match self {
-            Field::Month => MONTHS
+            Field::Month => months
                 .get(usize::from(t.month).wrapping_sub(1))
                 .map(|m| (*m).to_string())
                 .unwrap_or_else(|| t.month.to_string()),
             Field::Day => t.day.to_string(),
             Field::Year => t.year.to_string(),
-            Field::Weekday => DAYS
+            Field::Weekday => days
                 .get(usize::from(t.weekday))
                 .map(|d| (*d).to_string())
                 .unwrap_or_else(|| t.weekday.to_string()),

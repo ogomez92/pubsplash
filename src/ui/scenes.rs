@@ -247,7 +247,7 @@ pub fn refresh_scenes_list(app: &Rc<App>) {
             .iter()
             .map(|scene| {
                 if scene.is_default {
-                    format!("{} (default)", scene.name)
+                    t!("{name} (default)", name = scene.name)
                 } else {
                     scene.name.clone()
                 }
@@ -2563,8 +2563,10 @@ fn edit_sound_events(
     // dialog and the Sound Pack Manager can never name an event differently.
     // Screen readers do not announce a checkbox's label here on their own.
     let event_check = |event: StreamEvent, value: bool| {
-        let check = CheckBox::builder(&panel).with_label(event.label()).build();
-        super::set_accessible_name(&check, event.label());
+        let check = CheckBox::builder(&panel)
+            .with_label(&event.label())
+            .build();
+        super::set_accessible_name(&check, &event.label());
         check.set_value(value);
         check
     };

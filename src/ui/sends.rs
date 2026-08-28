@@ -65,7 +65,7 @@ const MIN_HEIGHT: i32 = 320;
 /// The state is in the text because on MSW there is nowhere else to put it that
 /// a screen reader can reach — see the module docs.
 fn row_labels(buses: &[String], to_master: bool, sends: &[SendConfig]) -> Vec<String> {
-    let state = |on: bool| if on { "on" } else { "off" };
+    let state = |on: bool| if on { t!("on") } else { t!("off") };
     std::iter::once(format!("{}, {}", master_row(), state(to_master)))
         .chain(
             buses

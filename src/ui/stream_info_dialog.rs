@@ -196,7 +196,7 @@ pub fn show(app: &Rc<App>, parent: &Frame) -> bool {
             let mut title = title_input.get_value().trim().to_string();
             if title.is_empty() {
                 // The server requires a title; fall back to the default.
-                title = "Stream".to_string();
+                title = t!("Stream");
             }
             let mut run = app.run.borrow_mut();
             run.stream_info.title = title;

@@ -49,7 +49,7 @@ msgstr ""
 msgid "&Add source"
 msgstr ""
 
-#: src/ui/scenes.rs:2700
+#: src/ui/scenes.rs:2702
 msgid "&Browse..."
 msgstr ""
 
@@ -57,8 +57,12 @@ msgstr ""
 msgid "&Bypass"
 msgstr ""
 
-#: src/ui/scenes.rs:2766
+#: src/ui/scenes.rs:2768
 msgid "&Calibrate to my voice"
+msgstr ""
+
+#: src/ui/connect_dialog.rs:515
+msgid "&Connect"
 msgstr ""
 
 #: src/ui/scenes.rs:74
@@ -69,7 +73,7 @@ msgstr ""
 msgid "&Edit parameters"
 msgstr ""
 
-#: src/ui/scenes.rs:2690
+#: src/ui/scenes.rs:2692
 msgid "&Folder"
 msgstr ""
 
@@ -89,11 +93,11 @@ msgstr ""
 msgid "&Sends..."
 msgstr ""
 
-#: src/ui/scenes.rs:2703
+#: src/ui/scenes.rs:2705
 msgid "&Shuffle the folder"
 msgstr ""
 
-#: src/ui/scenes.rs:2714
+#: src/ui/scenes.rs:2716
 msgid "&Turn the music down while other sources are playing"
 msgstr ""
 
@@ -111,7 +115,7 @@ msgstr ""
 msgid "A bus with that name already exists."
 msgstr ""
 
-#: src/ui/keybinds_ui.rs:540
+#: src/ui/keybinds_ui.rs:542
 msgid ""
 "A global shortcut needs CTRL, ALT or SHIFT, or a function key. On its "
 "own that key would be swallowed in every application you type in."
@@ -199,10 +203,10 @@ msgid "Add at least one plugin folder first."
 msgstr ""
 
 #: src/ui/keybinds_ui.rs:226
-#: src/ui/keybinds_ui.rs:504
-#: src/ui/keybinds_ui.rs:513
-#: src/ui/keybinds_ui.rs:531
-#: src/ui/keybinds_ui.rs:539
+#: src/ui/keybinds_ui.rs:506
+#: src/ui/keybinds_ui.rs:515
+#: src/ui/keybinds_ui.rs:533
+#: src/ui/keybinds_ui.rs:541
 msgid "Add binding"
 msgstr ""
 
@@ -315,6 +319,10 @@ msgid_plural "Apply with {n} available plugins"
 msgstr[0] ""
 msgstr[1] ""
 
+#: src/ui/picker_acc.rs:154
+msgid "April"
+msgstr ""
+
 #: src/ui/preferences.rs:256
 #: src/ui/preferences.rs:258
 msgid "Archive streams by default"
@@ -352,6 +360,10 @@ msgstr ""
 #: src/ui/connect_dialog.rs:116
 #: src/ui/connect_dialog.rs:119
 msgid "Audiopub URL"
+msgstr ""
+
+#: src/ui/picker_acc.rs:158
+msgid "August"
 msgstr ""
 
 #: src/ui/mastodon_post.rs:373
@@ -417,6 +429,8 @@ msgstr ""
 msgid "Backtick"
 msgstr ""
 
+#: src/bin/soundpack_manager.rs:180
+#: src/bin/soundpack_manager.rs:465
 #: src/ui/preferences.rs:327
 msgid "Browse..."
 msgstr ""
@@ -460,22 +474,23 @@ msgstr ""
 msgid "Bypass this plugin"
 msgstr ""
 
-#: src/ui/scenes.rs:2944
+#: src/ui/scenes.rs:2946
 msgid "Calibrated. The music will start turning down at {db} decibels."
 msgstr ""
 
+#: src/bin/soundpack_manager.rs:483
 #: src/ui/app_picker.rs:72
 #: src/ui/buses.rs:742
 #: src/ui/buses.rs:945
 #: src/ui/connect_dialog.rs:848
-#: src/ui/keybinds_ui.rs:306
+#: src/ui/keybinds_ui.rs:308
 #: src/ui/mastodon_post.rs:276
 #: src/ui/mastodon_templates.rs:93
 #: src/ui/mastodon_templates.rs:222
 #: src/ui/scenes.rs:705
 #: src/ui/scenes.rs:949
-#: src/ui/scenes.rs:2621
-#: src/ui/scenes.rs:2794
+#: src/ui/scenes.rs:2623
+#: src/ui/scenes.rs:2796
 #: src/ui/schedule_ui.rs:207
 #: src/ui/stream_info_dialog.rs:162
 msgid "Cancel"
@@ -496,6 +511,10 @@ msgstr ""
 
 #: src/ui/scan_dialog.rs:137
 msgid "Cancelling the scan..."
+msgstr ""
+
+#: src/ui/update_dialog.rs:128
+msgid "Cancelling..."
 msgstr ""
 
 #: src/ui/keybinds.rs:338
@@ -571,8 +590,16 @@ msgstr ""
 msgid "Choose a folder for stream recordings"
 msgstr ""
 
-#: src/ui/scenes.rs:2822
+#: src/ui/scenes.rs:2824
 msgid "Choose a folder of music for this source"
+msgstr ""
+
+#: src/bin/soundpack_manager.rs:501
+msgid "Choose a parent folder"
+msgstr ""
+
+#: src/bin/soundpack_manager.rs:519
+msgid "Choose a parent folder."
 msgstr ""
 
 #: src/ui/schedule_ui.rs:348
@@ -581,7 +608,7 @@ msgid ""
 "while this window was open."
 msgstr ""
 
-#: src/ui/keybinds_ui.rs:504
+#: src/ui/keybinds_ui.rs:506
 msgid "Choose an action first."
 msgstr ""
 
@@ -593,11 +620,15 @@ msgstr ""
 msgid "Choose image"
 msgstr ""
 
+#: src/bin/soundpack_manager.rs:439
+msgid "Choose or type the path of a sound file to test."
+msgstr ""
+
 #: src/ui/connect_dialog.rs:735
 msgid "Choose the still image to send as video"
 msgstr ""
 
-#: src/ui/keybinds_ui.rs:514
+#: src/ui/keybinds_ui.rs:516
 msgid ""
 "Choose which {what} this binding applies to. If the list is empty, "
 "there are none to choose from yet."
@@ -638,6 +669,18 @@ msgstr[1] ""
 
 #: src/keybind.rs:155
 msgid "Comma"
+msgstr ""
+
+#: src/bin/soundpack_manager.rs:371
+msgid "Compile sound pack"
+msgstr ""
+
+#: src/bin/soundpack_manager.rs:71
+msgid "Compile..."
+msgstr ""
+
+#: src/bin/soundpack_manager.rs:396
+msgid "Compiled revision {revision} to {path}"
 msgstr ""
 
 #: src/ui/logging_ui.rs:129
@@ -750,6 +793,10 @@ msgstr ""
 msgid "Date"
 msgstr ""
 
+#: src/ui/picker_acc.rs:162
+msgid "December"
+msgstr ""
+
 #: src/ui/scenes.rs:610
 msgid "Default microphone"
 msgstr ""
@@ -810,6 +857,10 @@ msgstr ""
 msgid "Diagnostics"
 msgstr ""
 
+#: src/ui/connect_dialog.rs:513
+msgid "Dis&connect"
+msgstr ""
+
 #: src/ui/keybinds_ui.rs:191
 msgid ""
 "Discard every keybinding and restore the defaults, F9 for streaming and "
@@ -829,6 +880,10 @@ msgstr ""
 
 #: src/ui/mod.rs:3362
 msgid "Disconnected from {name}."
+msgstr ""
+
+#: src/ui/mod.rs:3363
+msgid "Disconnected."
 msgstr ""
 
 #: src/keybind.rs:132
@@ -952,6 +1007,10 @@ msgstr ""
 msgid "Enable volume boost"
 msgstr ""
 
+#: src/bin/soundpack_manager.rs:76
+msgid "Encode sounds as Opus ({kbps} kbps)"
+msgstr ""
+
 #: src/keybind.rs:127
 msgid "End"
 msgstr ""
@@ -1038,7 +1097,7 @@ msgstr ""
 msgid "Export chain..."
 msgstr ""
 
-#: src/ui/keybinds_ui.rs:532
+#: src/ui/keybinds_ui.rs:534
 msgid ""
 "F1 and F6 are reserved: F1 speaks the help for whatever has focus, and "
 "F6 moves between the lists on a tab. Choose another key."
@@ -1063,6 +1122,10 @@ msgstr ""
 msgid "FFmpeg status"
 msgstr ""
 
+#: src/ui/picker_acc.rs:152
+msgid "February"
+msgstr ""
+
 #: src/ui/mod.rs:2974
 msgid "File"
 msgstr ""
@@ -1075,7 +1138,7 @@ msgstr ""
 msgid "Filter parameters"
 msgstr ""
 
-#: src/ui/scenes.rs:2694
+#: src/ui/scenes.rs:2696
 msgid "Folder"
 msgstr ""
 
@@ -1091,12 +1154,16 @@ msgstr ""
 msgid "Found {total} plugins to scan."
 msgstr ""
 
+#: src/ui/picker_acc.rs:170
+msgid "Friday"
+msgstr ""
+
 #: src/ui/preferences.rs:38
 msgid "General"
 msgstr ""
 
-#: src/ui/keybinds_ui.rs:290
-#: src/ui/keybinds_ui.rs:291
+#: src/ui/keybinds_ui.rs:292
+#: src/ui/keybinds_ui.rs:293
 msgid "Global"
 msgstr ""
 
@@ -1232,6 +1299,10 @@ msgstr ""
 msgid "Import pack..."
 msgstr ""
 
+#: src/soundpack.rs:110
+msgid "Incoming chat message"
+msgstr ""
+
 #: src/ui/connect_dialog.rs:207
 #: src/ui/connect_dialog.rs:209
 msgid "Ingest URL"
@@ -1245,8 +1316,21 @@ msgstr ""
 msgid "Interface language"
 msgstr ""
 
+#: src/bin/soundpack_manager.rs:108
 #: src/ui/preferences.rs:1211
 msgid "Interface sounds"
+msgstr ""
+
+#: src/ui/picker_acc.rs:151
+msgid "January"
+msgstr ""
+
+#: src/ui/picker_acc.rs:157
+msgid "July"
+msgstr ""
+
+#: src/ui/picker_acc.rs:156
+msgid "June"
 msgstr ""
 
 #: src/keybind.rs:164
@@ -1309,6 +1393,18 @@ msgstr ""
 msgid "Listener count URL (optional)"
 msgstr ""
 
+#: src/soundpack.rs:108
+msgid "Listener count decreased"
+msgstr ""
+
+#: src/soundpack.rs:107
+msgid "Listener count increased"
+msgstr ""
+
+#: src/soundpack.rs:109
+msgid "Listener peak increased"
+msgstr ""
+
 #: src/ui/home.rs:464
 msgid "Listener peak: {count}"
 msgstr ""
@@ -1360,6 +1456,14 @@ msgstr ""
 msgid "Manage Audiopub and Icecast streaming services"
 msgstr ""
 
+#: src/ui/picker_acc.rs:153
+msgid "March"
+msgstr ""
+
+#: src/ui/home.rs:696
+msgid "Master"
+msgstr ""
+
 #: src/ui/buses.rs:319
 #: src/ui/buses.rs:642
 #: src/ui/sends.rs:44
@@ -1371,6 +1475,10 @@ msgstr ""
 msgid "Mastodon"
 msgstr ""
 
+#: src/ui/picker_acc.rs:155
+msgid "May"
+msgstr ""
+
 #: src/source_name.rs:235
 #: src/ui/scenes.rs:485
 msgid "Media Player"
@@ -1380,7 +1488,7 @@ msgstr ""
 msgid "Media Player ({folder})"
 msgstr ""
 
-#: src/ui/scenes.rs:2681
+#: src/ui/scenes.rs:2683
 msgid "Media Player source"
 msgstr ""
 
@@ -1461,6 +1569,10 @@ msgstr ""
 
 #: src/ui/scenes.rs:1595
 msgid "Model (blank uses provider default)"
+msgstr ""
+
+#: src/ui/picker_acc.rs:166
+msgid "Monday"
 msgstr ""
 
 #: src/keybind.rs:374
@@ -1567,6 +1679,14 @@ msgstr ""
 msgid "New service nickname:"
 msgstr ""
 
+#: src/bin/soundpack_manager.rs:450
+msgid "New sound pack project"
+msgstr ""
+
+#: src/bin/soundpack_manager.rs:68
+msgid "New..."
+msgstr ""
+
 #: src/keybind.rs:149
 msgid "Next Track"
 msgstr ""
@@ -1643,6 +1763,11 @@ msgstr ""
 msgid "No sound events"
 msgstr ""
 
+#: src/bin/soundpack_manager.rs:101
+#: src/bin/soundpack_manager.rs:565
+msgid "No sound pack project is open"
+msgstr ""
+
 #: src/ui/scenes.rs:25
 msgid "No sources"
 msgstr ""
@@ -1653,6 +1778,10 @@ msgstr ""
 
 #: src/ui/mastodon_prefs.rs:20
 msgid "No templates"
+msgstr ""
+
+#: src/keybind.rs:70
+msgid "None"
 msgstr ""
 
 #: src/ui/buses.rs:962
@@ -1671,11 +1800,15 @@ msgstr ""
 msgid "Not streaming"
 msgstr ""
 
-#: src/ui/scenes.rs:2950
+#: src/ui/scenes.rs:2952
 msgid ""
 "Nothing loud enough to be a voice was heard, so the level was left "
 "alone. Check that your microphone is in this scene, unmuted, and turned "
 "up."
+msgstr ""
+
+#: src/ui/picker_acc.rs:161
+msgid "November"
 msgstr ""
 
 #: src/keybind.rs:142
@@ -1706,18 +1839,23 @@ msgstr ""
 msgid "Numpad {digit}"
 msgstr ""
 
+#: src/bin/soundpack_manager.rs:479
 #: src/ui/buses.rs:968
 #: src/ui/connect_dialog.rs:845
-#: src/ui/keybinds_ui.rs:302
+#: src/ui/keybinds_ui.rs:304
 #: src/ui/mastodon_templates.rs:89
 #: src/ui/mastodon_templates.rs:219
 #: src/ui/scenes.rs:701
 #: src/ui/scenes.rs:945
-#: src/ui/scenes.rs:2617
-#: src/ui/scenes.rs:2790
+#: src/ui/scenes.rs:2619
+#: src/ui/scenes.rs:2792
 #: src/ui/schedule_ui.rs:203
 #: src/ui/stream_info_dialog.rs:158
 msgid "OK"
+msgstr ""
+
+#: src/ui/picker_acc.rs:160
+msgid "October"
 msgstr ""
 
 #: src/ui/app_picker.rs:52
@@ -1746,6 +1884,10 @@ msgstr ""
 msgid "Open a file to play on {source}"
 msgstr ""
 
+#: src/bin/soundpack_manager.rs:286
+msgid "Open a sound pack project folder"
+msgstr ""
+
 #: src/ui/home.rs:933
 msgid "Open file..."
 msgstr ""
@@ -1759,6 +1901,11 @@ msgstr ""
 #: src/ui/logging_ui.rs:111
 #: src/ui/logging_ui.rs:119
 msgid "Open logs folder"
+msgstr ""
+
+#: src/bin/soundpack_manager.rs:324
+#: src/bin/soundpack_manager.rs:367
+msgid "Open or create a sound pack project first."
 msgstr ""
 
 #: src/ui/mod.rs:2952
@@ -1777,6 +1924,10 @@ msgstr ""
 msgid "Open the list of changes in your browser"
 msgstr ""
 
+#: src/bin/soundpack_manager.rs:69
+msgid "Open..."
+msgstr ""
+
 #: src/ui/preferences.rs:543
 msgid "OpenAI API key"
 msgstr ""
@@ -1791,6 +1942,10 @@ msgstr ""
 
 #: src/ui/scenes.rs:1731
 msgid "OpenAI voice settings"
+msgstr ""
+
+#: src/soundpack.rs:111
+msgid "Outgoing chat message"
 msgstr ""
 
 #: src/ui/audio_prefs.rs:34
@@ -1813,6 +1968,10 @@ msgstr ""
 msgid "Override style exaggeration"
 msgstr ""
 
+#: src/bin/soundpack_manager.rs:457
+msgid "Pack name"
+msgstr ""
+
 #: src/keybind.rs:126
 msgid "Page Down"
 msgstr ""
@@ -1828,6 +1987,10 @@ msgstr ""
 
 #: src/ui/fx_editor.rs:161
 msgid "Parameters..."
+msgstr ""
+
+#: src/bin/soundpack_manager.rs:461
+msgid "Parent folder"
 msgstr ""
 
 #: src/ui/connect_dialog.rs:133
@@ -1849,6 +2012,7 @@ msgstr ""
 
 #: src/ui/sound_preview.rs:59
 #: src/ui/sound_preview.rs:60
+#: src/ui/sound_preview.rs:104
 msgid "Play"
 msgstr ""
 
@@ -1959,8 +2123,8 @@ msgstr ""
 msgid "Preferences...\tCtrl+,"
 msgstr ""
 
-#: src/ui/sound_preview.rs:154
-#: src/ui/sound_preview.rs:166
+#: src/ui/sound_preview.rs:150
+#: src/ui/sound_preview.rs:162
 msgid "Preview sound"
 msgstr ""
 
@@ -1993,6 +2157,10 @@ msgstr ""
 msgid "Progress"
 msgstr ""
 
+#: src/bin/soundpack_manager.rs:558
+msgid "Project: {name} at {path} (revision {revision})"
+msgstr ""
+
 #: src/ui/scenes.rs:2297
 msgid "Provider default"
 msgstr ""
@@ -2007,6 +2175,10 @@ msgstr ""
 
 #: src/ui/buses.rs:812
 msgid "Pubsplash FX chain (*.pubfx)|*.pubfx|All files (*.*)|*.*"
+msgstr ""
+
+#: src/bin/soundpack_manager.rs:59
+msgid "Pubsplash Sound Pack Manager"
 msgstr ""
 
 #: src/ui/mod.rs:3057
@@ -2040,6 +2212,7 @@ msgid ""
 "Choose a different folder under Recording folder in Preferences."
 msgstr ""
 
+#: src/bin/soundpack_manager.rs:372
 #: src/ui/preferences.rs:1117
 msgid "Pubsplash sound packs (*.pspack)|*.pspack"
 msgstr ""
@@ -2246,6 +2419,14 @@ msgstr ""
 msgid "Running applications"
 msgstr ""
 
+#: src/ui/picker_acc.rs:171
+msgid "Saturday"
+msgstr ""
+
+#: src/bin/soundpack_manager.rs:70
+msgid "Save"
+msgstr ""
+
 #: src/ui/buses.rs:665
 #: src/ui/buses.rs:671
 #: src/ui/buses.rs:687
@@ -2268,6 +2449,12 @@ msgstr ""
 #: src/ui/buses.rs:730
 msgid "Saved chains"
 msgstr ""
+
+#: src/bin/soundpack_manager.rs:346
+msgid "Saved {n} sound to the project."
+msgid_plural "Saved {n} sounds to the project."
+msgstr[0] ""
+msgstr[1] ""
 
 #: src/ui/mod.rs:3796
 msgid "Scan cancelled"
@@ -2357,6 +2544,10 @@ msgstr ""
 msgid "Select"
 msgstr ""
 
+#: src/bin/soundpack_manager.rs:203
+msgid "Select a sound file"
+msgstr ""
+
 #: src/keybind.rs:153
 msgid "Semicolon"
 msgstr ""
@@ -2389,8 +2580,8 @@ msgstr ""
 msgid "Send speech to the stream"
 msgstr ""
 
-#: src/ui/scenes.rs:2606
 #: src/ui/scenes.rs:2608
+#: src/ui/scenes.rs:2610
 msgid "Send these sounds to the stream"
 msgstr ""
 
@@ -2401,6 +2592,10 @@ msgstr ""
 
 #: src/ui/sends.rs:312
 msgid "Sends for {source_name}"
+msgstr ""
+
+#: src/ui/picker_acc.rs:159
+msgid "September"
 msgstr ""
 
 #: src/ui/mastodon_prefs.rs:31
@@ -2463,19 +2658,19 @@ msgstr ""
 msgid "Shortcut"
 msgstr ""
 
-#: src/ui/keybinds_ui.rs:560
+#: src/ui/keybinds_ui.rs:562
 msgid "Shortcut already in use"
 msgstr ""
 
-#: src/ui/keybinds_ui.rs:283
+#: src/ui/keybinds_ui.rs:285
 msgid "Shortcut, None"
 msgstr ""
 
-#: src/ui/keybinds_ui.rs:421
+#: src/ui/keybinds_ui.rs:423
 msgid "Shortcut, {chord}"
 msgstr ""
 
-#: src/ui/keybinds_ui.rs:481
+#: src/ui/keybinds_ui.rs:483
 msgid "Shortcut, {label}"
 msgstr ""
 
@@ -2489,8 +2684,12 @@ msgstr ""
 msgid "Show unnamed parameters"
 msgstr ""
 
-#: src/ui/scenes.rs:2705
+#: src/ui/scenes.rs:2707
 msgid "Shuffle the folder"
+msgstr ""
+
+#: src/soundpack.rs:106
+msgid "Shut down"
 msgstr ""
 
 #: src/ui/schedule_ui.rs:117
@@ -2537,6 +2736,8 @@ msgstr ""
 msgid "Sound Events source"
 msgstr ""
 
+#: src/bin/soundpack_manager.rs:688
+#: src/bin/soundpack_manager.rs:695
 #: src/ui/mod.rs:2997
 msgid "Sound Pack Manager"
 msgstr ""
@@ -2548,6 +2749,12 @@ msgstr ""
 #: src/ui/sound_preview.rs:46
 #: src/ui/sound_preview.rs:48
 msgid "Sound event"
+msgstr ""
+
+#: src/bin/soundpack_manager.rs:204
+msgid ""
+"Sound files (*.wav;*.opus)|*.wav;*.opus|WAV files (*.wav)|*.wav|Opus "
+"files (*.opus)|*.opus"
 msgstr ""
 
 #: src/ui/preferences.rs:902
@@ -2562,6 +2769,10 @@ msgstr ""
 
 #: src/keybind.rs:215
 msgid "Source"
+msgstr ""
+
+#: src/bin/soundpack_manager.rs:176
+msgid "Source file (WAV or Opus)"
 msgstr ""
 
 #: src/ui/scenes.rs:63
@@ -2651,13 +2862,13 @@ msgstr ""
 msgid "Start streaming"
 msgstr ""
 
-#: src/ui/scenes.rs:2744
+#: src/ui/scenes.rs:2746
 msgid "Start turning down &at"
 msgstr ""
 
-#: src/ui/scenes.rs:2751
-#: src/ui/scenes.rs:2759
-#: src/ui/scenes.rs:2943
+#: src/ui/scenes.rs:2753
+#: src/ui/scenes.rs:2761
+#: src/ui/scenes.rs:2945
 msgid "Start turning down at"
 msgstr ""
 
@@ -2675,6 +2886,10 @@ msgid ""
 "cancel it."
 msgstr ""
 
+#: src/soundpack.rs:105
+msgid "Startup"
+msgstr ""
+
 #: src/ui/ffmpeg_prefs.rs:91
 #: src/ui/scan_dialog.rs:83
 #: src/ui/update_dialog.rs:97
@@ -2688,6 +2903,10 @@ msgstr ""
 #: src/ui/connect_dialog.rs:238
 #: src/ui/connect_dialog.rs:241
 msgid "Still image (optional)"
+msgstr ""
+
+#: src/ui/sound_preview.rs:104
+msgid "Stop"
 msgstr ""
 
 #: src/keybind.rs:151
@@ -2715,6 +2934,7 @@ msgid "Stopping the stream"
 msgstr ""
 
 #: src/ui/mod.rs:244
+#: src/ui/stream_info_dialog.rs:199
 msgid "Stream"
 msgstr ""
 
@@ -2725,6 +2945,10 @@ msgstr ""
 #: src/ui/scenes.rs:1714
 #: src/ui/scenes.rs:1716
 msgid "Stream audio as it is generated"
+msgstr ""
+
+#: src/bin/soundpack_manager.rs:114
+msgid "Stream events"
 msgstr ""
 
 #: src/ui/connect_dialog.rs:215
@@ -2775,6 +2999,10 @@ msgstr ""
 msgid "Style intensity"
 msgstr ""
 
+#: src/ui/picker_acc.rs:165
+msgid "Sunday"
+msgstr ""
+
 #: src/keybind.rs:371
 msgid "Switch to a specific scene"
 msgstr ""
@@ -2807,7 +3035,7 @@ msgstr ""
 msgid "Tab"
 msgstr ""
 
-#: src/ui/scenes.rs:2918
+#: src/ui/scenes.rs:2920
 msgid "Talk normally for five seconds, starting now."
 msgstr ""
 
@@ -2825,6 +3053,10 @@ msgstr ""
 #: src/ui/mastodon_prefs.rs:143
 #: src/ui/mastodon_prefs.rs:148
 msgid "Templates"
+msgstr ""
+
+#: src/bin/soundpack_manager.rs:185
+msgid "Test"
 msgstr ""
 
 #: src/source_name.rs:225
@@ -2877,7 +3109,7 @@ msgid "That sound pack could not be loaded: {e}"
 msgstr ""
 
 #: src/ui/home.rs:1234
-#: src/ui/home.rs:1253
+#: src/ui/home.rs:1254
 msgid "That strip is not in the mixer right now"
 msgstr ""
 
@@ -2893,7 +3125,7 @@ msgid ""
 "restore it."
 msgstr ""
 
-#: src/ui/scenes.rs:2934
+#: src/ui/scenes.rs:2936
 msgid "The audio engine did not answer; nothing was changed."
 msgstr ""
 
@@ -2922,6 +3154,10 @@ msgstr ""
 msgid "The main Audiopub service cannot be renamed."
 msgstr ""
 
+#: src/bin/soundpack_manager.rs:523
+msgid "The parent folder does not exist."
+msgstr ""
+
 #: src/ui/mod.rs:2452
 msgid ""
 "The recording did not start.\n\n"
@@ -2939,7 +3175,7 @@ msgstr ""
 msgid "The scan was cancelled. Nothing was saved."
 msgstr ""
 
-#: src/ui/sound_preview.rs:155
+#: src/ui/sound_preview.rs:151
 msgid "The sound pack could not be loaded."
 msgstr ""
 
@@ -3008,7 +3244,7 @@ msgstr ""
 msgid "This is just a stream"
 msgstr ""
 
-#: src/ui/scenes.rs:2781
+#: src/ui/scenes.rs:2783
 msgid ""
 "This music is mixed into the stream directly. A Desktop Audio source "
 "will not capture it a second time, because Desktop Audio leaves "
@@ -3017,7 +3253,7 @@ msgid ""
 "twice, echoed."
 msgstr ""
 
-#: src/ui/sound_preview.rs:165
+#: src/ui/sound_preview.rs:161
 msgid "This pack has no sound for that event."
 msgstr ""
 
@@ -3043,6 +3279,10 @@ msgid ""
 "like to post about resuming it?"
 msgstr ""
 
+#: src/ui/picker_acc.rs:169
+msgid "Thursday"
+msgstr ""
+
 #: src/ui/schedule_ui.rs:153
 #: src/ui/schedule_ui.rs:155
 #: src/ui/schedule_ui.rs:243
@@ -3062,16 +3302,20 @@ msgstr ""
 msgid "Tools"
 msgstr ""
 
-#: src/ui/scenes.rs:2718
+#: src/ui/picker_acc.rs:167
+msgid "Tuesday"
+msgstr ""
+
+#: src/ui/scenes.rs:2720
 msgid "Turn the music down while other sources are playing"
 msgstr ""
 
-#: src/ui/scenes.rs:2724
+#: src/ui/scenes.rs:2726
 msgid "Turned-down &level"
 msgstr ""
 
-#: src/ui/scenes.rs:2731
-#: src/ui/scenes.rs:2737
+#: src/ui/scenes.rs:2733
+#: src/ui/scenes.rs:2739
 msgid "Turned-down level"
 msgstr ""
 
@@ -3204,6 +3448,10 @@ msgid ""
 "closes on its own once you have."
 msgstr ""
 
+#: src/ui/picker_acc.rs:168
+msgid "Wednesday"
+msgstr ""
+
 #: src/ui/scenes.rs:489
 #: src/ui/scenes.rs:490
 msgid "What kind of source?"
@@ -3286,6 +3534,14 @@ msgstr ""
 msgid "not fetched, press Refresh balances"
 msgstr ""
 
+#: src/ui/sends.rs:68
+msgid "off"
+msgstr ""
+
+#: src/ui/sends.rs:68
+msgid "on"
+msgstr ""
+
 #: src/ui/picker_acc.rs:138
 msgid "second"
 msgstr ""
@@ -3304,6 +3560,18 @@ msgstr ""
 
 #: src/ui/picker_acc.rs:134
 msgid "year"
+msgstr ""
+
+#: src/keybind.rs:632
+msgid "{action}: Unassigned"
+msgstr ""
+
+#: src/keybind.rs:638
+msgid "{action}: {chord}"
+msgstr ""
+
+#: src/keybind.rs:633
+msgid "{action}: {chord}, global"
 msgstr ""
 
 #: src/ui/home.rs:414
@@ -3338,7 +3606,7 @@ msgstr ""
 msgid "{current} (not running)"
 msgstr ""
 
-#: src/ui/scenes.rs:2943
+#: src/ui/scenes.rs:2945
 msgid "{db} dB"
 msgstr ""
 
@@ -3382,6 +3650,14 @@ msgstr ""
 msgid "{label}, unavailable until a Mastodon account is linked in Preferences"
 msgstr ""
 
+#: src/ui/home.rs:259
+msgid "{name} (active)"
+msgstr ""
+
+#: src/ui/scenes.rs:250
+msgid "{name} (default)"
+msgstr ""
+
 #: src/ui/home.rs:724
 msgid "{name} bus"
 msgstr ""
@@ -3394,8 +3670,24 @@ msgstr ""
 msgid "{name} is not in the current scene"
 msgstr ""
 
+#: src/ui/home.rs:1299
+msgid "{name} monitoring off"
+msgstr ""
+
+#: src/ui/home.rs:1297
+msgid "{name} monitoring on"
+msgstr ""
+
+#: src/ui/home.rs:1244
+msgid "{name} muted"
+msgstr ""
+
 #: src/ui/scenes.rs:2367
 msgid "{name} reported no voices."
+msgstr ""
+
+#: src/ui/home.rs:1246
+msgid "{name} unmuted"
 msgstr ""
 
 #: src/ui/home.rs:807
@@ -3439,6 +3731,10 @@ msgid ""
 "{source_name} is not sending to master or to any bus, so your listeners "
 "will not hear it. You will still hear it yourself. Check a destination "
 "in the Sends dialog to put it on the stream."
+msgstr ""
+
+#: src/ui/audio_prefs.rs:204
+msgid "{source} ({scene})"
 msgstr ""
 
 #: src/ui/mod.rs:2122

@@ -101,13 +101,9 @@ pub fn show(parent: &Dialog) {
                 .borrow()
                 .as_ref()
                 .is_some_and(|(kind, _)| selected == Some(*kind));
-            let (label, name) = if stops {
-                ("Stop", "Stop")
-            } else {
-                ("Play", "Play")
-            };
-            play.set_label(label);
-            super::set_accessible_name(&play, name);
+            let label = if stops { t!("Stop") } else { t!("Play") };
+            play.set_label(&label);
+            super::set_accessible_name(&play, &label);
         })
     };
 
@@ -261,7 +257,7 @@ mod tests {
         assert_eq!(labels.len(), SoundKind::ALL.len());
         for kind in SoundKind::ALL {
             assert!(
-                labels.iter().any(|label| label == kind.label()),
+                labels.iter().any(|label| *label == kind.label()),
                 "{kind:?} has no row"
             );
         }

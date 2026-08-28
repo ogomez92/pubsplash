@@ -621,12 +621,95 @@ fn write_catalog(
     if is_template {
         println!("Wrote {name} ({} messages).", messages.len());
     } else {
+        let bad = check_placeholders(path);
         println!(
-            "Wrote {name}: {translated}/{} translated, {} obsolete kept.",
+            "Wrote {name}: {translated}/{} translated, {} obsolete kept{}.",
             messages.len(),
-            existing.len()
+            existing.len(),
+            if bad == 0 {
+                String::new()
+            } else {
+                format!(", {bad} WITH PLACEHOLDER PROBLEMS")
+            }
         );
     }
+}
+
+/// Reports translations whose placeholders do not match their msgid's.
+///
+/// A dropped `{name}` is the one translation mistake that cannot be seen by
+/// reading the Spanish: the sentence still makes sense, and the value it was
+/// supposed to carry — a device, a file, a URL — simply never appears. An added
+/// one is as bad the other way, since `i18n::interpolate` leaves an unknown name
+/// standing and the user reads the braces. Both are cheap to find here and
+/// expensive to notice in a running app, so `gen-po` looks every time.
+fn check_placeholders(path: &Path) -> usize {
+    /// The names in `{...}`, ignoring `{{` and `}}` escapes.
+    fn names(text: &str) -> std::collections::BTreeSet<String> {
+        let mut out = std::collections::BTreeSet::new();
+        let chars: Vec<char> = text.chars().collect();
+        let mut i = 0;
+        while i < chars.len() {
+            if chars[i] != '{' {
+                i += 1;
+                continue;
+            }
+            if chars.get(i + 1) == Some(&'{') {
+                i += 2;
+                continue;
+            }
+            let start = i + 1;
+            let mut j = start;
+            while j < chars.len() && chars[j] != '}' {
+                j += 1;
+            }
+            let name: String = chars[start..j.min(chars.len())].iter().collect();
+            if !name.is_empty()
+                && name
+                    .chars()
+                    .all(|c| c.is_alphanumeric() || c == '_')
+                && !name.chars().next().is_some_and(|c| c.is_ascii_digit())
+            {
+                out.insert(name);
+            }
+            i = j + 1;
+        }
+        out
+    }
+
+    let Ok(text) = fs::read_to_string(path) else {
+        return 0;
+    };
+    let mut problems = 0;
+    for entry in i18n::parse_po(&text) {
+        if entry.id.is_empty() {
+            continue;
+        }
+        let mut wanted = names(&entry.id);
+        if let Some(plural) = &entry.id_plural {
+            wanted.extend(names(plural));
+        }
+        for form in entry.msgstrs.iter().filter(|s| !s.is_empty()) {
+            let got = names(form);
+            if got != wanted {
+                problems += 1;
+                eprintln!(
+                    "warning: placeholders differ for {:?}\n  msgid wants {:?}, translation has {:?}",
+                    truncate(&entry.id),
+                    wanted,
+                    got
+                );
+            }
+        }
+    }
+    problems
+}
+
+fn truncate(text: &str) -> String {
+    if text.chars().count() <= 60 {
+        return text.to_string();
+    }
+    text.chars().take(57).collect::<String>() + "..."
 }
 
 /// Renders a string as one or more `.po` quoted lines.

@@ -995,6 +995,81 @@ msgstr[1] "{n} oyentes"
     }
 
     #[test]
+    fn a_shipped_translation_is_actually_reachable() {
+        // End to end through the real Spanish catalog: parse it, look a message
+        // up, and interpolate. A test that only parses would still pass if the
+        // lookup key were subtly wrong.
+        let catalog = Catalog::parse(CATALOGS.iter().find(|(c, _)| *c == "es").unwrap().1)
+            .expect("the Spanish catalog parses");
+        let forms = catalog
+            .entries
+            .get(&(None, "Start streaming".to_string()))
+            .expect("a message every user sees");
+        assert_eq!(forms[0], "Iniciar la emisión");
+
+        // And one carrying a placeholder, through `interpolate`.
+        let listeners = &catalog.entries[&(None, "Listeners: {count}".to_string())][0];
+        let args: &[(&str, &dyn std::fmt::Display)] = &[("count", &12)];
+        assert_eq!(interpolate(listeners, args), "Oyentes: 12");
+    }
+
+    #[test]
+    fn no_translation_loses_or_invents_a_placeholder() {
+        // The one translation mistake that cannot be caught by reading the
+        // result: a dropped `{name}` still reads as a sentence, and the device,
+        // file or URL it was carrying simply never appears. An invented one is
+        // as bad the other way, since `interpolate` leaves an unknown name
+        // standing and the user is read the braces. `gen-po` checks this too,
+        // but that is a dev tool nobody is obliged to run.
+        fn names(text: &str) -> std::collections::BTreeSet<String> {
+            let mut out = std::collections::BTreeSet::new();
+            let chars: Vec<char> = text.chars().collect();
+            let mut i = 0;
+            while i < chars.len() {
+                if chars[i] != '{' {
+                    i += 1;
+                    continue;
+                }
+                if chars.get(i + 1) == Some(&'{') {
+                    i += 2;
+                    continue;
+                }
+                let start = i + 1;
+                let mut j = start;
+                while j < chars.len() && chars[j] != '}' {
+                    j += 1;
+                }
+                let name: String = chars[start..j.min(chars.len())].iter().collect();
+                if !name.is_empty() && name.chars().all(|c| c.is_alphanumeric() || c == '_') {
+                    out.insert(name);
+                }
+                i = j + 1;
+            }
+            out
+        }
+
+        for (code, source) in CATALOGS {
+            for entry in parse_po(source) {
+                if entry.id.is_empty() {
+                    continue;
+                }
+                let mut wanted = names(&entry.id);
+                if let Some(plural) = &entry.id_plural {
+                    wanted.extend(names(plural));
+                }
+                for form in entry.msgstrs.iter().filter(|s| !s.is_empty()) {
+                    assert_eq!(
+                        names(form),
+                        wanted,
+                        "{code}: placeholders differ for {:?}",
+                        entry.id
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
     fn every_language_offered_has_a_catalog_or_is_english() {
         // Preferences lists `LANGUAGES`; picking one with no catalog would look
         // like the setting had been ignored.

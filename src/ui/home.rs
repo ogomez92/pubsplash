@@ -256,7 +256,7 @@ pub fn refresh_scene_list(app: &Rc<App>) {
             .iter()
             .map(|scene| {
                 if scene.name == config.scenes.active_scene {
-                    format!("{} (active)", scene.name)
+                    t!("{name} (active)", name = scene.name)
                 } else {
                     scene.name.clone()
                 }
@@ -693,7 +693,7 @@ pub fn rebuild_mixer(app: &Rc<App>) {
         app,
         &inner,
         &sizer,
-        "Master",
+        &t!("Master"),
         master_volume,
         master_muted,
         master_boost,
@@ -1240,10 +1240,11 @@ pub fn toggle_mute_target(app: &Rc<App>, target: StripTarget) {
     // so this cannot recurse back into `set_mute`.
     strip.mute.set_value(muted);
     let name = strip.name.borrow().clone();
-    super::help::announce(&format!(
-        "{name} {}",
-        if muted { "muted" } else { "unmuted" }
-    ));
+    super::help::announce(&if muted {
+        t!("{name} muted", name = name)
+    } else {
+        t!("{name} unmuted", name = name)
+    });
 }
 
 /// Flips `target`'s monitoring from a keybinding. [`toggle_monitor`] already
@@ -1292,10 +1293,11 @@ fn toggle_monitor(app: &Rc<App>, target: StripTarget, strip: &MixerStrip) {
     strip.monitor.set(on);
     apply_strip_name(strip, false);
     let name = strip.name.borrow().clone();
-    super::help::announce(&format!(
-        "{name} monitoring {}",
-        if on { "on" } else { "off" }
-    ));
+    super::help::announce(&if on {
+        t!("{name} monitoring on", name = name)
+    } else {
+        t!("{name} monitoring off", name = name)
+    });
 }
 
 /// Whether `target`'s volume boost is currently on.

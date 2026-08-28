@@ -509,10 +509,10 @@ pub fn show(app: &Rc<App>, frame: &Frame) {
         move || {
             let connected = app.run.borrow().connected_service.clone();
             let disconnects = connected.is_some() && connected == selected_service_id();
-            connect_button.set_label(if disconnects {
-                "Dis&connect"
+            connect_button.set_label(&if disconnects {
+                t!("Dis&connect")
             } else {
-                "&Connect"
+                t!("&Connect")
             });
         }
     };

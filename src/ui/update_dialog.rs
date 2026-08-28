@@ -125,7 +125,7 @@ impl UpdateDialog {
                 cancel.store(true, Ordering::Relaxed);
                 // The worker notices between chunks and reports back, which is
                 // what closes this. Say so rather than appearing to do nothing.
-                status.set_value("Cancelling...");
+                status.set_value(&t!("Cancelling..."));
                 // Do not let this reach `wxDialogBase`'s `ID_CANCEL` handler and
                 // close the dialog behind the worker still running.
                 event.event.skip(false);

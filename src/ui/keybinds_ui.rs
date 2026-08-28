@@ -279,7 +279,9 @@ fn edit_dialog(app: &Rc<App>, parent: &Dialog, initial: Option<BindAction>) -> O
     // `ui::keybinds` swallows every key except TAB. `on_kill_focus` below puts
     // the chord's label back anyway, so even a mouse-driven paste cannot leave
     // stray text behind.
-    let shortcut_input = TextCtrl::builder(&panel).with_value("None").build();
+    let shortcut_input = TextCtrl::builder(&panel)
+        .with_value(&crate::keybind::Chord::default().label())
+        .build();
     super::set_accessible_name(&shortcut_input, &t!("Shortcut, None"));
     super::help::tag(
         &shortcut_input,

@@ -3360,7 +3360,7 @@ fn pump_events(app: &Rc<App>) {
                         &t!("Disconnected"),
                         &match display_name {
                             Some(name) => t!("Disconnected from {name}.", name = name),
-                            None => "Disconnected.".to_string(),
+                            None => t!("Disconnected."),
                         },
                     );
                     ui.connect_button.set_focus();

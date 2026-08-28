@@ -67,7 +67,7 @@ impl Chord {
     /// render the same string.
     pub fn label(&self) -> String {
         if self.is_empty() {
-            return "None".to_string();
+            return t!("None");
         }
         let mut out = String::new();
         for (held, name) in [
@@ -629,9 +629,17 @@ impl KeybindsConfig {
 /// The Keybinds list row for one catalogue entry.
 pub fn row_label(action: &BindAction, bind: Option<&KeyBind>) -> String {
     match bind {
-        None => format!("{}: Unassigned", action.label()),
-        Some(bind) if bind.global => format!("{}: {}, global", action.label(), bind.key.label()),
-        Some(bind) => format!("{}: {}", action.label(), bind.key.label()),
+        None => t!("{action}: Unassigned", action = action.label()),
+        Some(bind) if bind.global => t!(
+            "{action}: {chord}, global",
+            action = action.label(),
+            chord = bind.key.label()
+        ),
+        Some(bind) => t!(
+            "{action}: {chord}",
+            action = action.label(),
+            chord = bind.key.label()
+        ),
     }
 }
 
