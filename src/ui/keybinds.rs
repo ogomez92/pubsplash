@@ -320,7 +320,7 @@ fn run(app: &Rc<App>, action: &BindAction) {
             } else if app.run.borrow().recording {
                 // Same rule the disabled stream button expresses: streaming and a
                 // standalone recording are mutually exclusive.
-                super::help::announce("Cannot stream while a recording is running");
+                super::help::announce(&t!("Cannot stream while a recording is running"));
             } else {
                 super::start_streaming(app);
             }
@@ -330,12 +330,12 @@ fn run(app: &Rc<App>, action: &BindAction) {
             if recording {
                 app.stop_recording();
             } else if app.is_streaming_or_starting() {
-                super::help::announce("Cannot start a recording while streaming");
+                super::help::announce(&t!("Cannot start a recording while streaming"));
             } else if app.schedule_armed() {
                 // Same rule the disabled record button expresses while a schedule
                 // is armed: a recording running when it fires would block the
                 // stream it was armed for.
-                super::help::announce("Cannot start a recording while a stream is scheduled");
+                super::help::announce(&t!("Cannot start a recording while a stream is scheduled"));
             } else {
                 app.start_recording();
             }

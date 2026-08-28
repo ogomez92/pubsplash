@@ -35,7 +35,7 @@ pub enum Pick {
 /// configured app that is not running is offered as its own row so the setting
 /// stays visible and selecting it is a harmless no-op.
 pub fn pick_application(frame: &Frame, current: &str) -> Pick {
-    let dialog = Dialog::builder(frame, "Application source")
+    let dialog = Dialog::builder(frame, &t!("Application source"))
         .with_style(DialogStyle::DefaultDialogStyle | DialogStyle::ResizeBorder)
         .with_size(460, 420)
         .build();
@@ -46,7 +46,7 @@ pub fn pick_application(frame: &Frame, current: &str) -> Pick {
         .with_label(&t!("Which application should this source capture?"))
         .build();
     let list = ListBox::builder(&panel).build();
-    super::native_acc::install(&list, "Running applications");
+    super::native_acc::install(&list, &t!("Running applications"));
     super::help::tag(&list, "dialog.appPicker.list", "Running applications list");
     let sound_only = CheckBox::builder(&panel)
         .with_label(&t!("Only show apps that have played sound"))
@@ -252,8 +252,8 @@ pub fn pick_application(frame: &Frame, current: &str) -> Pick {
 pub fn type_a_name(parent: &Frame, current: &str) -> Option<String> {
     let entry = TextEntryDialog::builder(
         parent,
-        "Name of the application to capture (for example: firefox):",
-        "Application source",
+        &t!("Name of the application to capture (for example: firefox):"),
+        &t!("Application source"),
     )
     .with_default_value(current)
     .build();

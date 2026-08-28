@@ -52,7 +52,7 @@ pub fn edit(parent: &dyn WxWidget, existing: Option<&Template>) -> Option<Templa
     // A radio box's items are real child windows, so `set_accessible_name` can
     // only reach the group. `install_radio_box` hands the whole group back to
     // OLEACC, which names each button from its own text.
-    super::native_acc::install_radio_box(&kind_choice, "Announcement type");
+    super::native_acc::install_radio_box(&kind_choice, &t!("Announcement type"));
     super::help::tag(
         &kind_choice,
         "dialog.mastodonTemplate.kind",
@@ -135,7 +135,7 @@ pub fn edit(parent: &dyn WxWidget, existing: Option<&Template>) -> Option<Templa
 /// The token reference. Read-only but selectable, so the user can copy a token
 /// straight out of it.
 pub fn show_help(parent: &dyn WxWidget) {
-    let dialog = Dialog::builder(parent, "Template tokens")
+    let dialog = Dialog::builder(parent, &t!("Template tokens"))
         .with_style(DialogStyle::DefaultDialogStyle | DialogStyle::ResizeBorder)
         .with_size(560, 420)
         .build();
@@ -179,7 +179,7 @@ pub fn show_help(parent: &dyn WxWidget) {
 /// Pre-filled and pre-selected so the suggested wording can be replaced by just
 /// typing, the way the Set stream info fields work.
 pub fn prompt_one_shot(parent: &dyn WxWidget) -> Option<String> {
-    let dialog = Dialog::builder(parent, "Post about the resumed stream")
+    let dialog = Dialog::builder(parent, &t!("Post about the resumed stream"))
         .with_style(DialogStyle::DefaultDialogStyle | DialogStyle::ResizeBorder)
         .with_size(520, 300)
         .build();

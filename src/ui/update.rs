@@ -268,7 +268,7 @@ fn offer(app: &Rc<App>, trigger: Trigger, manifest: crate::update::manifest::Man
                  installed in a way Pubsplash can update on its own. Open the download page?",
                 manifest.version
             ),
-            "Update available",
+            &t!("Update available"),
         )
         .with_style(MessageDialogStyle::YesNo | MessageDialogStyle::IconQuestion)
         .build();
@@ -299,7 +299,7 @@ fn offer(app: &Rc<App>, trigger: Trigger, manifest: crate::update::manifest::Man
              Download and install it now?",
             manifest.version
         ),
-        "Update available",
+        &t!("Update available"),
     )
     .with_style(MessageDialogStyle::YesNo | MessageDialogStyle::IconQuestion)
     .build();

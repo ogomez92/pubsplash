@@ -156,9 +156,9 @@ fn ask_about_resuming(app: &Rc<App>) {
     };
     let ask = MessageDialog::builder(
         &frame,
-        "This stream has the same title as the one that just ended. \
-         Would you like to post about resuming it?",
-        "Post to Mastodon",
+        &t!("This stream has the same title as the one that just ended. \
+         Would you like to post about resuming it?"),
+        &t!("Post to Mastodon"),
     )
     .with_style(MessageDialogStyle::YesNo | MessageDialogStyle::IconQuestion)
     .build();
@@ -252,7 +252,7 @@ pub fn authorize(parent: &Dialog, instance: &str) -> Option<Link> {
     let cancel = mastodon::oauth::cancel_flag();
     mastodon::net::authorize(instance.to_string(), tx, cancel.clone());
 
-    let dialog = Dialog::builder(parent, "Authorize with Mastodon")
+    let dialog = Dialog::builder(parent, &t!("Authorize with Mastodon"))
         .with_style(DialogStyle::DefaultDialogStyle)
         .with_size(460, 220)
         .build();
@@ -365,8 +365,8 @@ fn set_status(status: &TextCtrl, text: &str) {
 fn prompt_for_code(parent: &Dialog) -> Option<String> {
     let entry = TextEntryDialog::builder(
         parent,
-        "Paste the authorization code your browser is showing.",
-        "Authorization code",
+        &t!("Paste the authorization code your browser is showing."),
+        &t!("Authorization code"),
     )
     .build();
     let answer = entry.show_modal();

@@ -18,7 +18,7 @@ fn no_plugin_folders() -> String {
 }
 
 pub fn show(app: &Rc<App>, frame: &Frame) {
-    let dialog = Dialog::builder(frame, "Preferences")
+    let dialog = Dialog::builder(frame, &t!("Preferences"))
         .with_style(DialogStyle::DefaultDialogStyle | DialogStyle::ResizeBorder)
         // Wide enough for every tab label to fit on one row. At 560 the eighth
         // tab pushed the row over and wx grew a pair of scroll arrows, which
@@ -1033,7 +1033,7 @@ fn build_sounds_tab(app: &Rc<App>, dialog: &Dialog, panel: &Panel) -> SoundsTab 
             // selection is still parked would apply it afterwards.
             apply_pack();
             let picker = FileDialog::builder(&dialog)
-                .with_message("Import a sound pack")
+                .with_message(&t!("Import a sound pack"))
                 .with_wildcard("Pubsplash sound packs (*.pspack)|*.pspack")
                 .with_style(FileDialogStyle::Open | FileDialogStyle::FileMustExist)
                 .build();
@@ -1053,7 +1053,7 @@ fn build_sounds_tab(app: &Rc<App>, dialog: &Dialog, panel: &Panel) -> SoundsTab 
                                 "A sound pack named {} is already installed. Replace it?",
                                 name.trim_end_matches(".pspack")
                             ),
-                            "Import pack",
+                            &t!("Import pack"),
                         )
                         .with_style(MessageDialogStyle::YesNo | MessageDialogStyle::IconQuestion)
                         .build();
@@ -1108,7 +1108,7 @@ fn build_sounds_tab(app: &Rc<App>, dialog: &Dialog, panel: &Panel) -> SoundsTab 
                     "Remove the sound pack {}?",
                     file_name.trim_end_matches(".pspack")
                 ),
-                "Remove pack",
+                &t!("Remove pack"),
             )
             .with_style(MessageDialogStyle::YesNo | MessageDialogStyle::IconQuestion)
             .build();
@@ -1185,7 +1185,7 @@ fn build_vst_tab(app: &Rc<App>, dialog: &Dialog, panel: &Panel) {
         .with_label(&t!("Plugin folders"))
         .build();
     let folders_list = ListBox::builder(panel).build();
-    super::native_acc::install(&folders_list, "Plugin folders");
+    super::native_acc::install(&folders_list, &t!("Plugin folders"));
     super::help::tag(
         &folders_list,
         "dialog.preferences.vst.folderList",

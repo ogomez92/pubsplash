@@ -31,7 +31,7 @@ pub fn build(app: &Rc<App>, panel: &Panel) -> (ListBox, ListBox) {
     // --- Scenes ---
     let scenes_label = StaticText::builder(panel).with_label(&t!("Scenes")).build();
     let scenes_list = ListBox::builder(panel).build();
-    super::native_acc::install(&scenes_list, "Scenes");
+    super::native_acc::install(&scenes_list, &t!("Scenes"));
     super::help::tag(&scenes_list, "tab.scenes.sceneList", "Scenes list");
     let scenes_buttons = BoxSizer::builder(Orientation::Horizontal).build();
     let scene_up = Button::builder(panel).with_label(&t!("Move up")).build();
@@ -63,7 +63,7 @@ pub fn build(app: &Rc<App>, panel: &Panel) -> (ListBox, ListBox) {
         .with_label(&t!("Sources in selected scene"))
         .build();
     let sources_list = ListBox::builder(panel).build();
-    super::native_acc::install(&sources_list, "Sources in selected scene");
+    super::native_acc::install(&sources_list, &t!("Sources in selected scene"));
     super::help::tag(
         &sources_list,
         "tab.scenes.sourceList",
@@ -360,7 +360,7 @@ fn add_scene(app: &Rc<App>) {
     let Some(frame) = app.widgets(|w| w.frame) else {
         return;
     };
-    let dialog = TextEntryDialog::builder(&frame, "Name for the new scene:", "Add scene").build();
+    let dialog = TextEntryDialog::builder(&frame, &t!("Name for the new scene:"), &t!("Add scene")).build();
     if dialog.show_modal() == ID_OK
         && let Some(name) = dialog.get_value()
     {
@@ -392,7 +392,7 @@ fn rename_scene(app: &Rc<App>, list: &ListBox) {
         };
         scene.name.clone()
     };
-    let dialog = TextEntryDialog::builder(&frame, "New name for the scene:", "Rename scene")
+    let dialog = TextEntryDialog::builder(&frame, &t!("New name for the scene:"), &t!("Rename scene"))
         .with_default_value(&current)
         .build();
     if dialog.show_modal() == ID_OK
@@ -449,12 +449,19 @@ fn remove_source(app: &Rc<App>, list: &ListBox) {
 }
 
 /// Ensures a unique source name within a scene by appending a number.
+///
+/// Never translated, and this is the one naming function in the file that must
+/// not be: `SourceConfig.name` is an identity key — it routes `ExternalFeeds`
+/// and keys TTS speech requests — so a name built in Spanish would not match the
+/// same source built in English, and switching language would orphan every
+/// source in the settings file. What the user actually *sees* is built by
+/// `source_name`, which is translated.
 fn unique_source_name(existing: &[SourceConfig], base: &str) -> String {
     if !existing.iter().any(|s| s.name == base) {
         return base.to_string();
     }
     for n in 2.. {
-        let candidate = t!("{base} {n}", base = base, n = n);
+        let candidate = format!("{base} {n}");
         if !existing.iter().any(|s| s.name == candidate) {
             return candidate;
         }
@@ -475,8 +482,8 @@ fn add_source(app: &Rc<App>) {
         "Media Player",
     ];
     let dialog =
-        SingleChoiceDialog::builder(&frame, "What kind of source?", "Add source", &types).build();
-    super::native_acc::install_in_dialog(&dialog, "What kind of source?");
+        SingleChoiceDialog::builder(&frame, &t!("What kind of source?"), &t!("Add source"), &types).build();
+    super::native_acc::install_in_dialog(&dialog, &t!("What kind of source?"));
     if dialog.show_modal() != ID_OK {
         return;
     }
@@ -601,12 +608,12 @@ fn edit_microphone(
     let label_refs: Vec<&str> = labels.iter().map(String::as_str).collect();
     let dialog = SingleChoiceDialog::builder(
         &frame,
-        "Which microphone should this source use?",
-        "Microphone",
+        &t!("Which microphone should this source use?"),
+        &t!("Microphone"),
         &label_refs,
     )
     .build();
-    super::native_acc::install_in_dialog(&dialog, "Which microphone should this source use?");
+    super::native_acc::install_in_dialog(&dialog, &t!("Which microphone should this source use?"));
     // Preselect the current device.
     let preselect = current
         .as_deref()
@@ -655,7 +662,7 @@ fn edit_desktop_audio(
     };
     let devices = crate::audio::device::render_devices();
 
-    let dialog = Dialog::builder(&frame, "Desktop Audio source")
+    let dialog = Dialog::builder(&frame, &t!("Desktop Audio source"))
         .with_style(DialogStyle::DefaultDialogStyle)
         .with_size(460, 220)
         .build();
@@ -799,7 +806,7 @@ fn edit_tts(app: &Rc<App>, scene_index: usize, source_index: usize, current: Tts
     let Some(frame) = app.widgets(|w| w.frame) else {
         return;
     };
-    let dialog = Dialog::builder(&frame, "Text-to-Speech source")
+    let dialog = Dialog::builder(&frame, &t!("Text-to-Speech source"))
         .with_style(DialogStyle::DefaultDialogStyle | DialogStyle::ResizeBorder)
         .with_size(560, 640)
         .build();
@@ -1762,7 +1769,7 @@ impl TtsProviderControls {
         let (azure_sizer, azure_box) = super::group_box(&azure_panel, &t!("Azure voice settings"));
         let azure_style = Choice::builder(&azure_box).build();
         super::set_accessible_name(&azure_style, &t!("Azure speaking style"));
-        fill_default_choice(&azure_style, &[], &azure.style, "Default speaking style");
+        fill_default_choice(&azure_style, &[], &azure.style, &t!("Default speaking style"));
         super::help::tag(
             &azure_style,
             "dialog.ttsSource.azureStyle",
@@ -1795,7 +1802,7 @@ impl TtsProviderControls {
         azure_sizer.add(&azure_degree, 0, SizerFlag::All, 3);
         let azure_role = Choice::builder(&azure_box).build();
         super::set_accessible_name(&azure_role, &t!("Azure speaking role"));
-        fill_default_choice(&azure_role, &[], &azure.role, "Default speaking role");
+        fill_default_choice(&azure_role, &[], &azure.role, &t!("Default speaking role"));
         super::help::tag(
             &azure_role,
             "dialog.ttsSource.azureRole",
@@ -2034,13 +2041,13 @@ impl TtsProviderControls {
             &self.azure_style,
             styles,
             &wanted_style,
-            "Default speaking style",
+            &t!("Default speaking style"),
         );
         fill_default_choice(
             &self.azure_role,
             roles,
             &wanted_role,
-            "Default speaking role",
+            &t!("Default speaking role"),
         );
         self.refresh_compatibility();
     }
@@ -2092,7 +2099,7 @@ impl TtsProviderControls {
                     &self.azure_style,
                     &choice_values(&self.azure_style),
                     &azure.style,
-                    "Default speaking style",
+                    &t!("Default speaking style"),
                 );
                 self.azure_degree
                     .set_value(azure.style_degree.clamp(0.01, 2.0));
@@ -2100,7 +2107,7 @@ impl TtsProviderControls {
                     &self.azure_role,
                     &choice_values(&self.azure_role),
                     &azure.role,
-                    "Default speaking role",
+                    &t!("Default speaking role"),
                 );
             }
             (engines::GOOGLE, Some(TtsEngineSettings::Google(google))) => {
@@ -2293,7 +2300,7 @@ fn fill_model_choice(choice: &Choice, engine: &str, wanted: &str) {
     } else if let Some(index) = models.iter().position(|model| model.id == wanted) {
         index + 1
     } else {
-        choice.append(&t!("{wanted} (unavailable)", wanted = wanted));
+        choice.append(&format!("{wanted}{}", unavailable_suffix()));
         models.len() + 1
     };
     choice.set_selection(selection as u32);
@@ -2301,29 +2308,46 @@ fn fill_model_choice(choice: &Choice, engine: &str, wanted: &str) {
     // the picker calls it — announcing it as a model would be a third name for
     // the same control.
     let noun = if engine == crate::tts::engines::AWS {
-        "synthesis engine"
+        t!("synthesis engine")
     } else {
-        "model"
+        t!("model")
     };
     super::set_accessible_name(
         choice,
-        &format!("{} {noun}", crate::tts::engines::display_name(engine)),
+        &t!(
+            "{engine} {noun}",
+            engine = crate::tts::engines::display_name(engine),
+            noun = noun
+        ),
     );
 }
 
+/// The marker on a model the catalog does not offer, kept as a message of its
+/// own rather than baked into the row's text.
+///
+/// The row is read back by [`model_choice_value`] to recover the model id, so
+/// whatever decorates it has to be strippable — which means both ends must build
+/// it from the same translated string. Interpolating the id into one larger
+/// message would leave nothing to strip once the sentence around it changed
+/// shape in another language.
+fn unavailable_suffix() -> String {
+    t!(" (unavailable)")
+}
+
 fn model_choice_value(choice: &Choice) -> String {
-    let value = choice
-        .get_selection()
-        .and_then(|index| choice.get_string(index))
-        .unwrap_or_default();
-    if value == "Provider default" {
-        String::new()
-    } else {
-        value
-            .strip_suffix(" (unavailable)")
-            .unwrap_or(&value)
-            .to_string()
+    let Some(index) = choice.get_selection() else {
+        return String::new();
+    };
+    // Row 0 is always "Provider default". Keyed on the index rather than on the
+    // row's text, which is translated and so cannot be compared to a literal.
+    if index == 0 {
+        return String::new();
     }
+    let value = choice.get_string(index).unwrap_or_default();
+    value
+        .strip_suffix(&unavailable_suffix())
+        .unwrap_or(&value)
+        .to_string()
 }
 /// The count line for `engine`, given what is cached for it.
 ///
@@ -2515,7 +2539,7 @@ fn edit_sound_events(
     let Some(frame) = app.widgets(|w| w.frame) else {
         return;
     };
-    let dialog = Dialog::builder(&frame, "Sound Events source")
+    let dialog = Dialog::builder(&frame, &t!("Sound Events source"))
         .with_style(DialogStyle::DefaultDialogStyle)
         .with_size(420, 320)
         .build();
@@ -2646,7 +2670,7 @@ fn edit_media_player(
     let Some(frame) = app.widgets(|w| w.frame) else {
         return;
     };
-    let dialog = Dialog::builder(&frame, "Media Player source")
+    let dialog = Dialog::builder(&frame, &t!("Media Player source"))
         .with_style(DialogStyle::DefaultDialogStyle)
         // Tall enough for the ducking group in full: two sliders, the calibrate
         // button and the wrapped note under them.
@@ -2883,7 +2907,7 @@ fn calibrate_duck(
             seconds: CALIBRATION_SECONDS,
         });
     button.enable(false);
-    super::help::announce("Talk normally for five seconds, starting now.");
+    super::help::announce(&t!("Talk normally for five seconds, starting now."));
 
     let deadline = std::time::Instant::now() + CALIBRATION_PATIENCE;
     let app = app.clone();
@@ -2899,7 +2923,7 @@ fn calibrate_duck(
                 return false;
             }
             button.enable(true);
-            super::help::announce("The audio engine did not answer; nothing was changed.");
+            super::help::announce(&t!("The audio engine did not answer; nothing was changed."));
             return true;
         };
         button.enable(true);
@@ -2915,8 +2939,8 @@ fn calibrate_duck(
             // microphone is muted, is in another scene, or is not there at all.
             // Saying so beats writing a threshold that can never be crossed.
             None => super::help::announce(
-                "Nothing loud enough to be a voice was heard, so the level was left alone. \
-                 Check that your microphone is in this scene, unmuted, and turned up.",
+                &t!("Nothing loud enough to be a voice was heard, so the level was left alone. \
+                 Check that your microphone is in this scene, unmuted, and turned up."),
             ),
         }
         true

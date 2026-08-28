@@ -20,7 +20,7 @@ pub fn build(app: &Rc<App>, panel: &Panel) -> (ListBox, TextCtrl, Button, Button
     // Nothing refreshes this list until a stream starts, so seed the
     // placeholder here rather than leaving it empty (and unannounceable).
     super::list::fill(&chat_list, &[], &no_chats());
-    super::native_acc::install(&chat_list, "Messages");
+    super::native_acc::install(&chat_list, &t!("Messages"));
     super::help::tag(&chat_list, "tab.chat.messageList", "Chat message list");
     let view_button = Button::builder(panel).with_label(&t!("View message")).build();
     super::help::tag(

@@ -145,7 +145,7 @@ pub fn build_tab(app: &Rc<App>, dialog: &Dialog, panel: &Panel) {
 /// rather than arriving on its own mid-broadcast.
 fn compress_logs(parent: &Dialog) {
     let picker = FileDialog::builder(parent)
-        .with_message("Save the collected logs")
+        .with_message(&t!("Save the collected logs"))
         .with_default_dir(&default_dir().to_string_lossy())
         .with_default_file(&archive_filename())
         .with_wildcard("ZIP archive (*.zip)|*.zip")

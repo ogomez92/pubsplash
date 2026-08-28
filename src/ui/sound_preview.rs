@@ -33,7 +33,7 @@ fn event_labels() -> Vec<String> {
 }
 
 pub fn show(parent: &Dialog) {
-    let dialog = Dialog::builder(parent, "Preview sounds")
+    let dialog = Dialog::builder(parent, &t!("Preview sounds"))
         .with_style(DialogStyle::DefaultDialogStyle | DialogStyle::ResizeBorder)
         .with_size(360, 320)
         .build();
@@ -45,7 +45,7 @@ pub fn show(parent: &Dialog) {
     // the list.
     let label = StaticText::builder(&panel).with_label(&t!("Sound event")).build();
     let list = ListBox::builder(&panel).build();
-    super::native_acc::install(&list, "Sound event");
+    super::native_acc::install(&list, &t!("Sound event"));
     super::help::tag(&list, "dialog.soundPreview.list", "Sound event list");
     let labels = event_labels();
     super::list::fill(&list, &labels, &no_sound_events());
@@ -162,8 +162,8 @@ pub fn show(parent: &Dialog) {
                 // rather than arriving on its own, so a modal is right here.
                 let notice = MessageDialog::builder(
                     &dialog,
-                    "This pack has no sound for that event.",
-                    "Preview sound",
+                    &t!("This pack has no sound for that event."),
+                    &t!("Preview sound"),
                 )
                 .with_style(MessageDialogStyle::OK | MessageDialogStyle::IconInformation)
                 .build();

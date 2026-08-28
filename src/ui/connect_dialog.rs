@@ -57,7 +57,7 @@ fn service_type_name(kind: StreamingServiceType) -> &'static str {
 }
 
 pub fn show(app: &Rc<App>, frame: &Frame) {
-    let dialog = Dialog::builder(frame, "Setup streaming services")
+    let dialog = Dialog::builder(frame, &t!("Setup streaming services"))
         .with_style(DialogStyle::DefaultDialogStyle | DialogStyle::ResizeBorder)
         // Grown by one label-and-field row when the listener count URL was
         // added: the services list is the only thing here with a proportion, so
@@ -71,7 +71,7 @@ pub fn show(app: &Rc<App>, frame: &Frame) {
         .with_label(&t!("Streaming services"))
         .build();
     let services_list = ListBox::builder(&panel).build();
-    super::native_acc::install(&services_list, "Streaming services");
+    super::native_acc::install(&services_list, &t!("Streaming services"));
     super::help::tag(
         &services_list,
         "dialog.connect.siteList",
@@ -105,7 +105,7 @@ pub fn show(app: &Rc<App>, frame: &Frame) {
         .with_style(RadioBoxStyle::SpecifyRows)
         .with_major_dimension(1)
         .build();
-    super::native_acc::install_radio_box(&service_type, "Service type");
+    super::native_acc::install_radio_box(&service_type, &t!("Service type"));
     super::help::tag(
         &service_type,
         "dialog.connect.serviceType",
@@ -673,8 +673,8 @@ pub fn show(app: &Rc<App>, frame: &Frame) {
             };
             let entry = TextEntryDialog::builder(
                 &dialog_for_rename,
-                "New service nickname:",
-                "Rename service",
+                &t!("New service nickname:"),
+                &t!("Rename service"),
             )
             .with_default_value(&current_name)
             .build();
@@ -732,7 +732,7 @@ pub fn show(app: &Rc<App>, frame: &Frame) {
         let dialog_for_image = dialog;
         browse_image.on_click(move |_| {
             let picker = FileDialog::builder(&dialog_for_image)
-                .with_message("Choose the still image to send as video")
+                .with_message(&t!("Choose the still image to send as video"))
                 .with_wildcard(
                     "Images (*.png;*.jpg;*.jpeg;*.bmp;*.gif)|*.png;*.jpg;*.jpeg;*.bmp;*.gif\
                      |All files (*.*)|*.*",
@@ -815,7 +815,7 @@ pub fn show(app: &Rc<App>, frame: &Frame) {
 }
 
 fn prompt_new_service(parent: &Dialog) -> Option<(String, StreamingServiceType)> {
-    let dialog = Dialog::builder(parent, "Add streaming service")
+    let dialog = Dialog::builder(parent, &t!("Add streaming service"))
         .with_style(DialogStyle::DefaultDialogStyle)
         .with_size(360, 220)
         .build();
@@ -835,7 +835,7 @@ fn prompt_new_service(parent: &Dialog) -> Option<(String, StreamingServiceType)>
         .with_major_dimension(1)
         .build();
     service_type.set_selection(0);
-    super::native_acc::install_radio_box(&service_type, "Service type");
+    super::native_acc::install_radio_box(&service_type, &t!("Service type"));
     super::help::tag(
         &service_type,
         "dialog.connect.addServiceType",

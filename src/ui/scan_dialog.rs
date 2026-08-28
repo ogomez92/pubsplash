@@ -61,7 +61,7 @@ impl ScanDialog {
     /// needs no borrow of anything and cannot be tripped up by whatever the
     /// pump is in the middle of.
     pub fn show(parent: &Dialog, cancel: Arc<AtomicBool>, skip: Arc<AtomicBool>) -> Self {
-        let dialog = Dialog::builder(parent, "Scanning plugins")
+        let dialog = Dialog::builder(parent, &t!("Scanning plugins"))
             .with_style(DialogStyle::DefaultDialogStyle)
             .with_size(480, 220)
             .build();

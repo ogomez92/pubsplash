@@ -41,7 +41,7 @@ pub fn build(app: &Rc<App>, panel: &Panel) -> (ListBox, Button, Button, ListBox,
     // `refresh_overview` fills this properly during `build`, but never leave a
     // list at zero items — NVDA reads those as "Unknown".
     super::list::fill(&overview, &[], &no_overview());
-    super::native_acc::install(&overview, "Stream overview");
+    super::native_acc::install(&overview, &t!("Stream overview"));
     super::help::tag(&overview, "tab.home.overview", "Stream overview list");
     sizer.add(&overview_label, 0, SizerFlag::All, 4);
     sizer.add(&overview, 1, SizerFlag::Expand | SizerFlag::All, 4);
@@ -55,7 +55,7 @@ pub fn build(app: &Rc<App>, panel: &Panel) -> (ListBox, Button, Button, ListBox,
     // Scenes.
     let scene_label = StaticText::builder(panel).with_label(&t!("Scenes")).build();
     let scene_list = ListBox::builder(panel).build();
-    super::native_acc::install(&scene_list, "Scenes");
+    super::native_acc::install(&scene_list, &t!("Scenes"));
     super::help::tag(&scene_list, "tab.home.sceneList", "Scenes list");
     let switch_button = Button::builder(panel)
         .with_label(&t!("Switch to scene"))
@@ -1210,7 +1210,7 @@ fn strip_for(app: &Rc<App>, target: StripTarget) -> Option<MixerStrip> {
 /// chat list, another tab), so nothing would otherwise tell them what happened.
 pub fn toggle_mute_target(app: &Rc<App>, target: StripTarget) {
     let Some(strip) = strip_for(app, target) else {
-        super::help::announce("That strip is not in the mixer right now");
+        super::help::announce(&t!("That strip is not in the mixer right now"));
         return;
     };
     let muted = !mute_of(app, target);
@@ -1229,7 +1229,7 @@ pub fn toggle_mute_target(app: &Rc<App>, target: StripTarget) {
 /// announces; this only has to find the strip.
 pub fn toggle_monitor_target(app: &Rc<App>, target: StripTarget) {
     let Some(strip) = strip_for(app, target) else {
-        super::help::announce("That strip is not in the mixer right now");
+        super::help::announce(&t!("That strip is not in the mixer right now"));
         return;
     };
     toggle_monitor(app, target, &strip);

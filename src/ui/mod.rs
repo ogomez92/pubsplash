@@ -241,8 +241,8 @@ pub struct StreamInfo {
 impl Default for StreamInfo {
     fn default() -> Self {
         Self {
-            title: "Stream".to_string(),
-            description: "This is just a stream".to_string(),
+            title: t!("Stream"),
+            description: t!("This is just a stream"),
             archive: false,
             record: false,
             announce_start: false,
@@ -1162,7 +1162,7 @@ pub(crate) fn media_open_file(app: &Rc<App>, source_name: &str) {
         .collect::<Vec<_>>()
         .join(";");
     let dialog = FileDialog::builder(&frame)
-        .with_message("Choose a file to play")
+        .with_message(&t!("Choose a file to play"))
         // The folder the source plays is where the user is most likely to be
         // looking, and it costs nothing when they are not.
         .with_default_dir(&media_folder(app, source_name))
@@ -1321,7 +1321,7 @@ fn server_state_line(state: &str) -> String {
         "unknown" => "Pubsplash cannot tell whether the stream is being served. Set the \
              YouTube channel for this service and it will say when the broadcast goes live."
             .to_string(),
-        other => t!("The server reports this stream as {other}.", other = other),
+        other => format!("The server reports this stream as {other}."),
     }
 }
 
@@ -1351,8 +1351,10 @@ fn spoken_gap(seconds: u64) -> String {
 fn audio_link_line(state: &crate::net::AudioLinkState) -> String {
     use crate::net::AudioLinkState;
     match state {
-        AudioLinkState::Interrupted { reason } => t!("Audio connection lost ({reason}). Reconnecting — your stream, its chat and its \
-             recording are being kept.", reason = reason),
+        AudioLinkState::Interrupted { reason } => format!(
+            "Audio connection lost ({reason}). Reconnecting — your stream, its chat and its \
+             recording are being kept."
+        ),
         AudioLinkState::StillRetrying { remaining_seconds } => format!(
             "Still reconnecting. If the connection does not come back within about {}, the \
              stream will end.",
@@ -2000,9 +2002,9 @@ impl App {
         // and the button has to stay live for the cancel to be reachable.
         let armed = run.schedule.is_some();
         let button_label = match &run.stream {
-            StreamState::Idle if armed => "Cancel scheduled stream",
-            StreamState::Idle => "Start streaming",
-            _ => "Stop streaming",
+            StreamState::Idle if armed => t!("Cancel scheduled stream"),
+            StreamState::Idle => t!("Start streaming"),
+            _ => t!("Stop streaming"),
         };
 
         let streaming_or_starting = !matches!(run.stream, StreamState::Idle);
@@ -2015,9 +2017,9 @@ impl App {
         // the engine says the file exists.
         let busy_recording = run.recording || run.recording_pending;
         let record_label = if busy_recording {
-            "Stop recording"
+            t!("Stop recording")
         } else {
-            "Start recording"
+            t!("Start recording")
         };
         drop(run);
 
@@ -2027,7 +2029,7 @@ impl App {
             let mut run = self.run.borrow_mut();
             let shown = &mut run.shown;
             if shown.stream_label != button_label {
-                w.stream_button.set_label(button_label);
+                w.stream_button.set_label(&button_label);
                 shown.stream_label = button_label.to_string();
             }
             // Streaming and standalone recording are mutually exclusive.
@@ -2036,7 +2038,7 @@ impl App {
                 shown.stream_enabled = Some(!busy_recording);
             }
             if shown.record_label != record_label {
-                w.record_button.set_label(record_label);
+                w.record_button.set_label(&record_label);
                 shown.record_label = record_label.to_string();
             }
             // An armed schedule locks recording out too: a recording running
@@ -2109,10 +2111,10 @@ fn recording_filename() -> String {
 fn validate_site_url(raw: &str) -> Result<String, String> {
     let trimmed = raw.trim();
     if trimmed.is_empty() {
-        return Err("Enter a full Audiopub URL starting with https://".to_string());
+        return Err(t!("Enter a full Audiopub URL starting with https://"));
     }
     let url = reqwest::Url::parse(trimmed).map_err(|_| {
-        format!("{trimmed:?} is not a valid URL. It should look like https://audiopub.site")
+        t!("{url} is not a valid URL. It should look like https://audiopub.site", url = format!("{trimmed:?}"))
     })?;
     match url.scheme() {
         "https" => {}
@@ -2121,25 +2123,24 @@ fn validate_site_url(raw: &str) -> Result<String, String> {
             url.host_str().unwrap_or("(no host)")
         ),
         other => {
-            return Err(format!(
-                "{other:?} is not a web address scheme. The URL should start with https://"
+            return Err(t!(
+                "{scheme} is not a web address scheme. The URL should start with https://",
+                scheme = format!("{other:?}")
             ));
         }
     }
     if url.host_str().is_none_or(str::is_empty) {
-        return Err(
+        return Err(t!(
             "That URL has no site name in it. It should look like https://audiopub.site"
-                .to_string(),
-        );
+        ));
     }
     if !url.username().is_empty() || url.password().is_some() {
-        return Err(
+        return Err(t!(
             "Remove the user name and password from the URL; enter them in the fields below."
-                .to_string(),
-        );
+        ));
     }
     if url.fragment().is_some() {
-        return Err("Remove the '#' and everything after it from the URL.".to_string());
+        return Err(t!("Remove the '#' and everything after it from the URL."));
     }
     Ok(trimmed.trim_end_matches('/').to_string())
 }
@@ -2174,7 +2175,7 @@ pub fn service_profile_from(
             let (server, embedded_port) = crate::net::icecast::split_host_port(&typed_server)?;
             let port = embedded_port.unwrap_or(typed_port);
             if site.email.trim().is_empty() || site.password.is_empty() {
-                return Err("Enter your email and password first.".to_string());
+                return Err(t!("Enter your email and password first."));
             }
             // Whether the endpoint above is still the guess. The comparison is
             // against the guess rather than against a stored "was this typed?"
@@ -2203,13 +2204,13 @@ pub fn service_profile_from(
             let (server, typed_port) = crate::net::icecast::split_host_port(&site.icecast_server)?;
             let port = typed_port.unwrap_or(site.icecast_port);
             if port == 0 {
-                return Err("Enter a valid Icecast port.".to_string());
+                return Err(t!("Enter a valid Icecast port."));
             }
             if site.icecast_mount.trim().is_empty() {
-                return Err("Enter the Icecast mount point.".to_string());
+                return Err(t!("Enter the Icecast mount point."));
             }
             if site.icecast_password.is_empty() {
-                return Err("Enter the Icecast password.".to_string());
+                return Err(t!("Enter the Icecast password."));
             }
             let mount = site.icecast_mount.trim().to_string();
             let listener_url = site.icecast_listener_url.trim().to_string();
@@ -2233,21 +2234,21 @@ pub fn service_profile_from(
         StreamingServiceType::Youtube => {
             let url = site.rtmp_url.trim();
             if url.is_empty() {
-                return Err("Enter the RTMP ingest URL.".to_string());
+                return Err(t!("Enter the RTMP ingest URL."));
             }
             if !url.starts_with("rtmp://") && !url.starts_with("rtmps://") {
-                return Err(format!(
-                    "{url:?} is not an RTMP address. It should begin with rtmp:// or rtmps://; \
-                     YouTube's is {}.",
-                    crate::config::DEFAULT_RTMP_URL
+                return Err(t!(
+                    "{url} is not an RTMP address. It should begin with rtmp:// or rtmps://; \
+                     YouTube's is {youtube}.",
+                    url = format!("{url:?}"),
+                    youtube = crate::config::DEFAULT_RTMP_URL
                 ));
             }
             if site.rtmp_key.is_empty() {
-                return Err(
+                return Err(t!(
                     "Enter the stream key. YouTube shows it in Studio, under Go live, \
                      beside the stream URL."
-                        .to_string(),
-                );
+                ));
             }
             // Empty is a legitimate choice — an RTMP target that is not YouTube
             // has no chat to read — so only a value that will not parse is an
@@ -2262,10 +2263,10 @@ pub fn service_profile_from(
                 path => {
                     let path = std::path::PathBuf::from(path);
                     if !path.is_file() {
-                        return Err(format!(
-                            "The still image {} could not be found. Choose another, or clear \
+                        return Err(t!(
+                            "The still image {path} could not be found. Choose another, or clear \
                              the box to send a plain frame instead.",
-                            path.display()
+                            path = path.display()
                         ));
                     }
                     Some(path)
@@ -2438,15 +2439,16 @@ fn recording_failure_message(
         Some(_) => t!("The recording file could not be created in {folder}.\n\n\
              Check that the folder exists and can be written to, or choose another \
              one under Recording folder in Preferences.", folder = folder),
-        None => "The MP3 encoder for the recording could not be created, so nothing \
-                 could be written."
-            .to_string(),
+        None => t!(
+            "The MP3 encoder for the recording could not be created, so nothing \
+             could be written."
+        ),
     };
     let mut message = t!("The recording did not start.\n\n{cause}", cause = cause);
     if streaming {
-        message.push_str("\n\nThe stream itself is unaffected and is still live.");
+        message.push_str(&t!("\n\nThe stream itself is unaffected and is still live."));
     }
-    message.push_str(&format!("\n\nDetails: {detail}"));
+    message.push_str(&t!("\n\nDetails: {detail}", detail = detail));
     message
 }
 
@@ -2619,9 +2621,9 @@ pub fn build(app: Rc<App>) {
             .partition(|f| f.error == fx::SlotError::NotInstalled);
         let mut message = String::new();
         if !uninstalled.is_empty() {
-            message.push_str(
-                "Some plugins used by your buses are not installed on this machine and will be skipped until you install them and rescan:\n",
-            );
+            message.push_str(&t!(
+                "Some plugins used by your buses are not installed on this machine and will be skipped until you install them and rescan:\n"
+            ));
             for failure in &uninstalled {
                 message.push_str(&format!("\n- {}", failure.describe()));
             }
@@ -2630,9 +2632,9 @@ pub fn build(app: Rc<App>) {
             if !message.is_empty() {
                 message.push_str("\n\n");
             }
-            message.push_str(
-                "These plugins are installed but could not be loaded, so they will be skipped:\n",
-            );
+            message.push_str(&t!(
+                "These plugins are installed but could not be loaded, so they will be skipped:\n"
+            ));
             for failure in &failed {
                 message.push_str(&format!("\n- {}", failure.describe()));
             }
@@ -2656,8 +2658,8 @@ pub fn build(app: Rc<App>) {
             if app.is_streaming_or_starting() {
                 let dialog = MessageDialog::builder(
                     &frame_for_close,
-                    "You are currently streaming. Stop the stream and exit?",
-                    "Exit Pubsplash",
+                    &t!("You are currently streaming. Stop the stream and exit?"),
+                    &t!("Exit Pubsplash"),
                 )
                 .with_style(MessageDialogStyle::YesNo | MessageDialogStyle::IconQuestion)
                 .build();
@@ -2676,8 +2678,8 @@ pub fn build(app: Rc<App>) {
                 // never happening.
                 let dialog = MessageDialog::builder(
                     &frame_for_close,
-                    "A stream is scheduled to go live later. Exit and discard it?",
-                    "Exit Pubsplash",
+                    &t!("A stream is scheduled to go live later. Exit and discard it?"),
+                    &t!("Exit Pubsplash"),
                 )
                 .with_style(MessageDialogStyle::YesNo | MessageDialogStyle::IconQuestion)
                 .build();
@@ -3019,9 +3021,9 @@ fn build_menu(app: &Rc<App>, frame: &Frame) {
                 show_info(
                     &frame,
                     &t!("About Pubsplash"),
-                    &format!(
-                        "Pubsplash {}\n\nAn accessibility-first streaming app for Audio Pub.",
-                        env!("CARGO_PKG_VERSION")
+                    &t!(
+                        "Pubsplash {version}\n\nAn accessibility-first streaming app for Audio Pub.",
+                        version = env!("CARGO_PKG_VERSION")
                     ),
                 );
             }
@@ -3046,18 +3048,19 @@ fn build_menu(app: &Rc<App>, frame: &Frame) {
 /// directory and PATH — which either fails with a pathless "os error 2" or, on
 /// an unlucky machine, runs something else entirely.
 fn launch_sound_pack_manager() -> Result<(), String> {
-    let exe = std::env::current_exe().map_err(|e| t!("current_exe failed: {e}", e = e))?;
+    let exe = std::env::current_exe()
+        .map_err(|e| t!("Pubsplash could not find its own program file: {e}", e = e))?;
     let manager = exe.with_file_name("pubsplash-soundpack.exe");
     if !manager.is_file() {
-        return Err(format!(
-            "The Sound Pack Manager ({}) is missing. Reinstall Pubsplash to restore it.",
-            manager.display()
+        return Err(t!(
+            "The Sound Pack Manager ({path}) is missing. Reinstall Pubsplash to restore it.",
+            path = manager.display()
         ));
     }
     std::process::Command::new(&manager)
         .spawn()
         .map(|_| ())
-        .map_err(|e| format!("Could not start {}: {e}", manager.display()))
+        .map_err(|e| t!("Could not start {path}: {e}", path = manager.display(), e = e))
 }
 
 /// Opens a documentation file that ships with Pubsplash, falling back to the
@@ -3075,7 +3078,8 @@ fn open_doc(name: &str, fallback_url: &str) -> Result<(), String> {
             return Ok(());
         }
     }
-    shell_open(fallback_url).map_err(|e| t!("Could not open {fallback_url}: {e}", fallback_url = fallback_url, e = e))
+    shell_open(fallback_url)
+        .map_err(|e| t!("Could not open {url}: {e}", url = fallback_url, e = e))
 }
 
 /// Opens the data directory — settings, logs, crash dumps — in Explorer.
@@ -3085,8 +3089,9 @@ fn open_doc(name: &str, fallback_url: &str) -> Result<(), String> {
 fn open_data_dir() -> Result<(), String> {
     let dir = crate::config::config_dir();
     std::fs::create_dir_all(&dir)
-        .map_err(|e| format!("Could not create {}: {e}", dir.display()))?;
-    shell_open(&dir.to_string_lossy()).map_err(|e| format!("Could not open {}: {e}", dir.display()))
+        .map_err(|e| t!("Could not create {path}: {e}", path = dir.display(), e = e))?;
+    shell_open(&dir.to_string_lossy())
+        .map_err(|e| t!("Could not open {path}: {e}", path = dir.display(), e = e))
 }
 
 /// Finds a documentation file that ships with Pubsplash.
@@ -4194,7 +4199,7 @@ mod stream_phase_tests {
         );
         assert_eq!(
             accepted.announcement(waiting),
-            Some("Streaming started"),
+            Some("Streaming started".to_string()),
             "the server accepting is what 'started' has to mean"
         );
     }

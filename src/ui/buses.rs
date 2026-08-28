@@ -32,7 +32,7 @@ pub fn build(app: &Rc<App>, panel: &Panel) -> (ListBox, ListBox, CheckBox) {
     // --- Buses ---
     let label = StaticText::builder(panel).with_label(&t!("Buses")).build();
     let bus_list = ListBox::builder(panel).build();
-    super::native_acc::install(&bus_list, "Buses");
+    super::native_acc::install(&bus_list, &t!("Buses"));
     super::help::tag(
         &bus_list,
         "tab.buses.busList",
@@ -62,7 +62,7 @@ pub fn build(app: &Rc<App>, panel: &Panel) -> (ListBox, ListBox, CheckBox) {
         .with_label(&t!("Effects on selected bus"))
         .build();
     let fx_list = ListBox::builder(panel).build();
-    super::native_acc::install(&fx_list, "Effects on selected bus");
+    super::native_acc::install(&fx_list, &t!("Effects on selected bus"));
     super::help::tag(
         &fx_list,
         "tab.buses.fxList",
@@ -377,7 +377,7 @@ fn add_bus(app: &Rc<App>) {
     let Some(frame) = app.widgets(|w| w.frame) else {
         return;
     };
-    let dialog = TextEntryDialog::builder(&frame, "Bus name:", "Add bus").build();
+    let dialog = TextEntryDialog::builder(&frame, &t!("Bus name:"), &t!("Add bus")).build();
     if dialog.show_modal() == ID_OK
         && let Some(name) = dialog.get_value()
     {
@@ -417,7 +417,7 @@ fn rename_bus(app: &Rc<App>, list: &ListBox) {
         };
         bus.name.clone()
     };
-    let dialog = TextEntryDialog::builder(&frame, "New bus name:", "Rename bus")
+    let dialog = TextEntryDialog::builder(&frame, &t!("New bus name:"), &t!("Rename bus"))
         .with_default_value(&current)
         .build();
     if dialog.show_modal() == ID_OK
@@ -503,8 +503,8 @@ fn add_plugin(app: &Rc<App>) {
     }
     let labels: Vec<&str> = choices.iter().map(|(name, _)| name.as_str()).collect();
     let dialog =
-        SingleChoiceDialog::builder(&frame, "Add which plugin?", "Add plugin", &labels).build();
-    super::native_acc::install_in_dialog(&dialog, "Add which plugin?");
+        SingleChoiceDialog::builder(&frame, &t!("Add which plugin?"), &t!("Add plugin"), &labels).build();
+    super::native_acc::install_in_dialog(&dialog, &t!("Add which plugin?"));
     if dialog.show_modal() == ID_OK {
         let index = dialog.get_selection() as usize;
         if let Some((name, plugin)) = choices.get(index) {
@@ -667,7 +667,7 @@ fn save_chain_to_library(app: &Rc<App>) {
         return;
     }
     let default_name = target_name(app, target);
-    let dialog = TextEntryDialog::builder(&frame, "Name for this chain:", "Save chain")
+    let dialog = TextEntryDialog::builder(&frame, &t!("Name for this chain:"), &t!("Save chain"))
         .with_default_value(&default_name)
         .build();
     if dialog.show_modal() == ID_OK
@@ -716,7 +716,7 @@ fn load_chain_from_library(app: &Rc<App>) {
 /// the chosen chain index to load, or `None` if the user cancelled or only
 /// deleted.
 fn pick_chain(app: &Rc<App>, frame: &Frame, names: &[String]) -> Option<usize> {
-    let dialog = Dialog::builder(frame, "Load chain")
+    let dialog = Dialog::builder(frame, &t!("Load chain"))
         .with_style(DialogStyle::DefaultDialogStyle)
         .with_size(360, 300)
         .build();
@@ -726,7 +726,7 @@ fn pick_chain(app: &Rc<App>, frame: &Frame, names: &[String]) -> Option<usize> {
         .with_label(&t!("Saved chains"))
         .build();
     let list = ListBox::builder(&panel).build();
-    super::native_acc::install(&list, "Saved chains");
+    super::native_acc::install(&list, &t!("Saved chains"));
     super::help::tag(&list, "dialog.loadChain.list", "Saved FX chains list");
     super::list::fill(&list, names, &no_saved_chains());
     if !names.is_empty() {
@@ -807,7 +807,7 @@ fn import_chain_file(app: &Rc<App>) {
         return;
     };
     let dialog = FileDialog::builder(&frame)
-        .with_message("Import FX chain")
+        .with_message(&t!("Import FX chain"))
         .with_wildcard("Pubsplash FX chain (*.pubfx)|*.pubfx|All files (*.*)|*.*")
         .with_style(FileDialogStyle::Open | FileDialogStyle::FileMustExist)
         .build();
@@ -831,8 +831,8 @@ fn import_chain_file(app: &Rc<App>) {
                 }
                 let apply = MessageDialog::builder(
                     &frame,
-                    "Chain imported and added to your library. Apply it to the selected bus now?",
-                    "Import chain",
+                    &t!("Chain imported and added to your library. Apply it to the selected bus now?"),
+                    &t!("Import chain"),
                 )
                 .with_style(MessageDialogStyle::YesNo | MessageDialogStyle::IconQuestion)
                 .build();
@@ -862,7 +862,7 @@ fn export_chain_file(app: &Rc<App>) {
     }
     let name = target_name(app, target);
     let dialog = FileDialog::builder(&frame)
-        .with_message("Export FX chain")
+        .with_message(&t!("Export FX chain"))
         .with_default_file(&format!("{name}.pubfx"))
         .with_wildcard("Pubsplash FX chain (*.pubfx)|*.pubfx")
         .with_style(FileDialogStyle::Save | FileDialogStyle::OverwritePrompt)
@@ -906,7 +906,7 @@ fn apply_chain(app: &Rc<App>, target: ChainTarget, slots: Vec<crate::config::FxS
 /// to apply the chain with the available subset (only offered when at least
 /// one plugin resolves).
 fn missing_plugin_dialog(frame: &Frame, resolution: &crate::fx::ChainResolution) -> bool {
-    let dialog = Dialog::builder(frame, "Missing plugins")
+    let dialog = Dialog::builder(frame, &t!("Missing plugins"))
         .with_style(DialogStyle::DefaultDialogStyle)
         .with_size(420, 320)
         .build();
@@ -919,7 +919,7 @@ fn missing_plugin_dialog(frame: &Frame, resolution: &crate::fx::ChainResolution)
         ))
         .build();
     let list = ListBox::builder(&panel).build();
-    super::native_acc::install(&list, "Missing plugins");
+    super::native_acc::install(&list, &t!("Missing plugins"));
     super::help::tag(&list, "dialog.missingPlugins.list", "Missing plugins list");
     for plugin in &resolution.missing {
         list.append(&plugin.display());

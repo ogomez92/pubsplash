@@ -254,7 +254,7 @@ pub fn edit_parameters(
         return;
     }
 
-    let dialog = Dialog::builder(&frame, "Plugin parameters")
+    let dialog = Dialog::builder(&frame, &t!("Plugin parameters"))
         .with_style(DialogStyle::DefaultDialogStyle)
         .with_size(460, 320)
         .build();

@@ -16,7 +16,7 @@ const QUALITY_KBPS: [u32; 8] = [48, 64, 96, 128, 160, 192, 256, 320];
 /// Returns true if the user confirmed with OK (info is then stored in
 /// `Runtime::stream_info` and marked as set).
 pub fn show(app: &Rc<App>, parent: &Frame) -> bool {
-    let dialog = Dialog::builder(parent, "Set stream info")
+    let dialog = Dialog::builder(parent, &t!("Set stream info"))
         .with_style(DialogStyle::DefaultDialogStyle | DialogStyle::ResizeBorder)
         .with_size(480, 400)
         .build();

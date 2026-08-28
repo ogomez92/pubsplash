@@ -119,7 +119,7 @@ fn ask(app: &Rc<App>, parent: &Frame) -> Option<Schedule> {
     mode.set_selection(0);
     // A radio box's items are real child windows, so `set_accessible_name` can
     // only reach the group. See `native_acc::install_radio_box`.
-    super::native_acc::install_radio_box(&mode, "Scheduling mode");
+    super::native_acc::install_radio_box(&mode, &t!("Scheduling mode"));
     super::help::tag(&mode, "dialog.schedule.mode", "Scheduling mode selector");
 
     // Each picker gets two accessibility calls, and they answer different
@@ -379,20 +379,64 @@ pub fn cancel(app: &Rc<App>) {
         return;
     }
     app.refresh_stream_ui();
-    super::help::announce("Scheduled stream cancelled");
+    super::help::announce(&t!("Scheduled stream cancelled"));
+}
+
+/// Why an armed schedule could not be honoured.
+///
+/// An enum rather than a string because the two ends of [`abandon`] want the
+/// reason in different languages: the log is English whatever the interface is
+/// set to, since users are asked to send it when something goes wrong, while the
+/// spoken line is the one thing the broadcaster actually hears. Carried rather
+/// than fixed because "the service went away" and "this was hours ago" need
+/// different answers, and a broadcaster who was not watching needs to know
+/// which happened.
+enum Abandoned {
+    /// The moment came and went with nobody in front of the machine.
+    TooLate { late_by: String },
+    /// The streaming service was disconnected after the schedule was armed.
+    ServiceGone,
+}
+
+impl Abandoned {
+    /// The English half, for the log.
+    fn logged(&self) -> String {
+        match self {
+            Abandoned::TooLate { late_by } => {
+                format!("it was due {late_by} ago, which is too late to start a broadcast")
+            }
+            Abandoned::ServiceGone => {
+                "Pubsplash is no longer connected to a streaming service".to_string()
+            }
+        }
+    }
+
+    /// The translated half, for the spoken line.
+    fn spoken(&self) -> String {
+        match self {
+            Abandoned::TooLate { late_by } => t!(
+                "it was due {late_by} ago, which is too late to start a broadcast",
+                late_by = late_by
+            ),
+            Abandoned::ServiceGone => {
+                t!("Pubsplash is no longer connected to a streaming service")
+            }
+        }
+    }
 }
 
 /// Abandons an armed schedule because Pubsplash cannot honour it.
 ///
 /// The log and a spoken line, never a modal: this arrives unbidden, which is the
-/// test CLAUDE.md sets. The reason is carried rather than fixed, because "the
-/// service went away" and "this was hours ago" need different answers and a
-/// broadcaster who was not watching needs to know which happened.
-fn abandon(app: &Rc<App>, reason: &str) {
+/// test CLAUDE.md sets.
+fn abandon(app: &Rc<App>, reason: Abandoned) {
     app.run.borrow_mut().schedule = None;
     app.refresh_stream_ui();
-    log::warn!("Scheduled stream cancelled: {reason}");
-    super::help::announce(&t!("Scheduled stream cancelled, {reason}", reason = reason));
+    log::warn!("Scheduled stream cancelled: {}", reason.logged());
+    super::help::announce(&t!(
+        "Scheduled stream cancelled, {reason}",
+        reason = reason.spoken()
+    ));
 }
 
 /// Acts on the armed schedule, if it is time to. Called once a second.
@@ -412,10 +456,9 @@ pub fn pump(app: &Rc<App>) {
         Stage::Switch { scene } => switch(app, scene),
         Stage::Stale { late_by } => abandon(
             app,
-            &format!(
-                "it was due {} ago, which is too late to start a broadcast",
-                schedule::format_countdown(late_by.as_secs())
-            ),
+            Abandoned::TooLate {
+                late_by: schedule::format_countdown(late_by.as_secs()),
+            },
         ),
         Stage::Done => {
             app.run.borrow_mut().schedule = None;
@@ -430,7 +473,7 @@ fn connect(app: &Rc<App>, scene: Option<String>) {
     // disconnected the service since. Checked here rather than left to
     // `start_streaming`, which would answer with a modal nobody is there to see.
     if app.run.borrow().connected_service.is_none() {
-        abandon(app, "Pubsplash is no longer connected to a streaming service");
+        abandon(app, Abandoned::ServiceGone);
         return;
     }
     // Before the work, so a re-entrant tick cannot start a second stream — and

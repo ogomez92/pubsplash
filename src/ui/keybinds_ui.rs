@@ -31,7 +31,7 @@ pub fn build_tab(app: &Rc<App>, dialog: &Dialog, panel: &Panel) {
     // name — see `native_acc`. It must stay, and must stay immediately in front.
     let list_label = StaticText::builder(panel).with_label(&t!("Keybinds")).build();
     let list = ListBox::builder(panel).build();
-    super::native_acc::install(&list, "Keybinds");
+    super::native_acc::install(&list, &t!("Keybinds"));
     super::help::tag(&list, "dialog.preferences.keybinds.list", "Keybinds list");
 
     let buttons = BoxSizer::builder(Orientation::Horizontal).build();
@@ -150,7 +150,7 @@ pub fn build_tab(app: &Rc<App>, dialog: &Dialog, panel: &Panel) {
             };
             // Already unassigned: nothing to remove, and saying so beats silence.
             if app.config.borrow().keybinds.find(&action).is_none() {
-                super::help::announce("That action has no binding");
+                super::help::announce(&t!("That action has no binding"));
                 return;
             }
             app.config.borrow_mut().keybinds.remove(&action);
@@ -188,7 +188,7 @@ pub fn build_tab(app: &Rc<App>, dialog: &Dialog, panel: &Panel) {
                     Some(_) => "Discard every keybinding and restore the defaults: F9 for streaming, F10 for recording, and CONTROL plus O to open a file on your first media player?",
                     None => "Discard every keybinding and restore the defaults, F9 for streaming and F10 for recording?",
                 },
-                "Reset to defaults",
+                &t!("Reset to defaults"),
             )
             .with_style(MessageDialogStyle::YesNo | MessageDialogStyle::IconQuestion)
             .build();
@@ -205,7 +205,7 @@ pub fn build_tab(app: &Rc<App>, dialog: &Dialog, panel: &Panel) {
             app.save_config();
             super::keybinds::reload(&app.config.borrow());
             refresh(None);
-            super::help::announce("Keybinds reset to defaults");
+            super::help::announce(&t!("Keybinds reset to defaults"));
         });
     }
 }
@@ -550,7 +550,7 @@ fn edit_dialog(app: &Rc<App>, parent: &Dialog, initial: Option<BindAction>) -> O
                             other.label(),
                             action.label()
                         ),
-                        "Shortcut already in use",
+                        &t!("Shortcut already in use"),
                     )
                     .with_style(MessageDialogStyle::YesNo | MessageDialogStyle::IconQuestion)
                     .build();

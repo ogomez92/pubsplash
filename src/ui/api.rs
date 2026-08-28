@@ -78,7 +78,7 @@ pub fn build(app: &Rc<App>, panel: &Panel) -> (ListBox, Button) {
     // Nothing has spoken when the window opens, so seed the placeholder rather
     // than leaving the list empty.
     list::fill(&usage_list, &[], &no_usage());
-    super::native_acc::install(&usage_list, "API usage this session");
+    super::native_acc::install(&usage_list, &t!("API usage this session"));
     super::help::tag(
         &usage_list,
         "tab.api.usageList",

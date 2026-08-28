@@ -76,7 +76,7 @@ impl Drop for ProgressDialog {
 
 impl ProgressDialog {
     fn show(parent: &Dialog, cancel: install::Cancel) -> Self {
-        let dialog = Dialog::builder(parent, "Downloading FFmpeg")
+        let dialog = Dialog::builder(parent, &t!("Downloading FFmpeg"))
             .with_style(DialogStyle::DefaultDialogStyle)
             .with_size(480, 220)
             .build();
@@ -248,7 +248,7 @@ pub fn build_group(app: &Rc<App>, dialog: &Dialog, panel: &Panel) -> StaticBoxSi
         let dialog = *dialog;
         browse.on_click(move |_| {
             let picker = FileDialog::builder(&dialog)
-                .with_message("Choose ffmpeg.exe")
+                .with_message(&t!("Choose ffmpeg.exe"))
                 .with_wildcard("FFmpeg (ffmpeg.exe)|ffmpeg.exe|Programs (*.exe)|*.exe")
                 .with_style(FileDialogStyle::Open | FileDialogStyle::FileMustExist)
                 .build();
@@ -306,7 +306,7 @@ fn begin_download(app: &Rc<App>, dialog: &Dialog, status: TextCtrl, button: Butt
              checksum published beside it.\n\nDownload it now?",
             install::APPROXIMATE_MEGABYTES
         ),
-        "Download FFmpeg",
+        &t!("Download FFmpeg"),
     )
     .with_style(MessageDialogStyle::YesNo | MessageDialogStyle::IconQuestion)
     .build();

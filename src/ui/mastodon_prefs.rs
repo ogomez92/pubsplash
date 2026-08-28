@@ -145,7 +145,7 @@ pub fn build_tab(app: &Rc<App>, dialog: &Dialog, panel: &Panel) {
     let templates_list = ListBox::builder(&templates_box).build();
     // Never `set_accessible_name` on a list — see `ui/native_acc.rs`, which
     // documents at length why that makes every row announce twice.
-    super::native_acc::install(&templates_list, "Templates");
+    super::native_acc::install(&templates_list, &t!("Templates"));
     super::help::tag(
         &templates_list,
         "dialog.preferences.mastodon.templateList",
@@ -334,7 +334,7 @@ pub fn build_tab(app: &Rc<App>, dialog: &Dialog, panel: &Panel) {
                 &dialog,
                 &t!("Remove the authorization for {account}? \
                      Pubsplash will stop posting, and you will have to authorize again to resume.", account = account),
-                "Unlink",
+                &t!("Unlink"),
             )
             .with_style(MessageDialogStyle::YesNo | MessageDialogStyle::IconQuestion)
             .build();

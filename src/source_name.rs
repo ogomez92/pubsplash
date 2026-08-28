@@ -13,6 +13,7 @@
 //! that is not running), and [`strip_labels`] is the concise one that a screen
 //! reader reads out on every mixer strip.
 
+use crate::t;
 use crate::audio::device::{AppProcess, DeviceInfo};
 use crate::config::{SourceConfig, SourceKindConfig};
 use std::collections::{HashMap, HashSet};
@@ -166,7 +167,7 @@ fn voice_display<'a>(
 /// fix instead of waiting a couple of seconds.
 fn with_state(label: String, source: &SourceConfig, ctx: &NameContext) -> String {
     if ctx.failing.contains(&source.name) {
-        format!("{label} (reconnecting)")
+        t!("{label} (reconnecting)", label = label)
     } else {
         label
     }
@@ -192,23 +193,23 @@ pub fn strip_label(source: &SourceConfig, ctx: &NameContext) -> String {
 
 fn base_strip_label(source: &SourceConfig, ctx: &NameContext) -> String {
     match &source.kind {
-        SourceKindConfig::Microphone { device_id: None } => "Microphone".to_string(),
+        SourceKindConfig::Microphone { device_id: None } => t!("Microphone"),
         SourceKindConfig::Microphone {
             device_id: Some(id),
         } => match ctx.device_name(id) {
             Some(name) => name.to_string(),
-            None => "Microphone (unavailable)".to_string(),
+            None => t!("Microphone (unavailable)"),
         },
-        SourceKindConfig::DesktopAudio { device_id: None } => "Desktop Audio".to_string(),
+        SourceKindConfig::DesktopAudio { device_id: None } => t!("Desktop Audio"),
         SourceKindConfig::DesktopAudio {
             device_id: Some(id),
         } => match ctx.render_device_name(id) {
-            Some(name) => format!("Desktop Audio ({name})"),
-            None => "Desktop Audio (unavailable)".to_string(),
+            Some(name) => t!("Desktop Audio ({name})", name = name),
+            None => t!("Desktop Audio (unavailable)"),
         },
         SourceKindConfig::Application { process_name } => {
             if process_name.trim().is_empty() {
-                "Application".to_string()
+                t!("Application")
             } else {
                 match ctx.app(process_name) {
                     Some(app) => app.display_name.clone(),
@@ -217,21 +218,21 @@ fn base_strip_label(source: &SourceConfig, ctx: &NameContext) -> String {
             }
         }
         SourceKindConfig::Tts(tts) => match voice_display(tts, ctx) {
-            VoiceDisplay::Named(voice) => format!("Text-to-Speech ({voice})"),
+            VoiceDisplay::Named(voice) => t!("Text-to-Speech ({voice})", voice = voice),
             // An unresolved opaque id reads exactly like an unset voice here.
             // The strip form is the short one and has no room to explain the
             // difference; the list form below does.
-            VoiceDisplay::Default | VoiceDisplay::Unnamed => "Text-to-Speech".to_string(),
+            VoiceDisplay::Default | VoiceDisplay::Unnamed => t!("Text-to-Speech"),
         },
-        SourceKindConfig::SoundEvents(_) => "Sound Events".to_string(),
+        SourceKindConfig::SoundEvents(_) => t!("Sound Events"),
         // The folder, not the track: this name is spoken again every time it
         // changes (see `home::relabel_source_strips`), and a strip that renamed
         // itself every three minutes would interrupt whoever was using the
         // mixer. What is playing belongs in the list form below, which is
         // refreshed in place.
         SourceKindConfig::MediaPlayer(media) => match folder_name(&media.folder) {
-            Some(folder) => format!("Media Player ({folder})"),
-            None => "Media Player".to_string(),
+            Some(folder) => t!("Media Player ({folder})", folder = folder),
+            None => t!("Media Player"),
         },
     }
 }
@@ -259,34 +260,45 @@ fn list_label(source: &SourceConfig, ctx: &NameContext) -> String {
 fn base_list_label(source: &SourceConfig, ctx: &NameContext) -> String {
     match &source.kind {
         SourceKindConfig::Microphone { device_id: None } => {
-            "Microphone (default device)".to_string()
+            t!("Microphone (default device)")
         }
         SourceKindConfig::Microphone { device_id: Some(_) } => base_strip_label(source, ctx),
         SourceKindConfig::DesktopAudio { device_id: None } => {
-            "Desktop Audio (all output devices)".to_string()
+            t!("Desktop Audio (all output devices)")
         }
         SourceKindConfig::DesktopAudio { device_id: Some(_) } => base_strip_label(source, ctx),
         SourceKindConfig::Application { process_name } => {
             if process_name.trim().is_empty() {
-                "Application: not set".to_string()
+                t!("Application: not set")
             } else {
                 match ctx.app(process_name) {
-                    Some(app) => format!("Application: {} ({})", app.display_name, app.exe),
-                    None => format!("Application: {} (not running)", process_name.trim()),
+                    Some(app) => t!(
+                        "Application: {name} ({exe})",
+                        name = app.display_name,
+                        exe = app.exe
+                    ),
+                    None => t!(
+                        "Application: {name} (not running)",
+                        name = process_name.trim()
+                    ),
                 }
             }
         }
         SourceKindConfig::Tts(tts) => {
             let engine = crate::tts::engines::display_name(&tts.engine);
             match voice_display(tts, ctx) {
-                VoiceDisplay::Default => format!("Text-to-Speech: {engine}, default voice"),
-                VoiceDisplay::Named(voice) => format!("Text-to-Speech: {engine}, {voice}"),
+                VoiceDisplay::Default => {
+                    t!("Text-to-Speech: {engine}, default voice", engine = engine)
+                }
+                VoiceDisplay::Named(voice) => {
+                    t!("Text-to-Speech: {engine}, {voice}", engine = engine, voice = voice)
+                }
                 // A voice *is* configured, so this must not say "default
                 // voice" — the engine name alone, until the catalog resolves it.
-                VoiceDisplay::Unnamed => format!("Text-to-Speech: {engine}"),
+                VoiceDisplay::Unnamed => t!("Text-to-Speech: {engine}", engine = engine),
             }
         }
-        SourceKindConfig::SoundEvents(_) => "Sound Events".to_string(),
+        SourceKindConfig::SoundEvents(_) => t!("Sound Events"),
         SourceKindConfig::MediaPlayer(media) => media_list_label(source, media, ctx),
     }
 }
@@ -304,25 +316,34 @@ fn media_list_label(
 ) -> String {
     use crate::media::player::PlaybackState;
     let Some(folder) = folder_name(&media.folder) else {
-        return "Media Player: no folder set".to_string();
+        return t!("Media Player: no folder set");
     };
     let Some(status) = ctx.media.get(&source.name) else {
-        return format!("Media Player: {folder}");
+        return t!("Media Player: {folder}", folder = folder);
     };
     match (&status.state, &status.track) {
-        (PlaybackState::Playing, Some(track)) => format!("Media Player: {folder}, playing {track}"),
-        (PlaybackState::Paused, Some(track)) => {
-            format!("Media Player: {folder}, paused on {track}")
+        (PlaybackState::Playing, Some(track)) => t!(
+            "Media Player: {folder}, playing {track}",
+            folder = folder,
+            track = track
+        ),
+        (PlaybackState::Paused, Some(track)) => t!(
+            "Media Player: {folder}, paused on {track}",
+            folder = folder,
+            track = track
+        ),
+        (PlaybackState::Paused, None) => {
+            t!("Media Player: {folder}, paused", folder = folder)
         }
-        (PlaybackState::Paused, None) => format!("Media Player: {folder}, paused"),
-        (PlaybackState::NoFiles, _) => {
-            format!("Media Player: {folder} has no audio files Pubsplash can play")
-        }
+        (PlaybackState::NoFiles, _) => t!(
+            "Media Player: {folder} has no audio files Pubsplash can play",
+            folder = folder
+        ),
         // Starting up: the folder has been read but the first track has not
         // been opened yet. A fraction of a second, and never worth its own
         // wording.
         (PlaybackState::Playing, None) | (PlaybackState::NoFolder, _) => {
-            format!("Media Player: {folder}")
+            t!("Media Player: {folder}", folder = folder)
         }
     }
 }
