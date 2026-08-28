@@ -9,6 +9,7 @@ pub mod sse;
 pub mod stats;
 pub mod youtube;
 
+use crate::t;
 use crate::secret::Secret;
 use audiopub::{AudioPubClient, EventsStream, StreamIdentity};
 use icecast::{IcecastConnection, IcecastError, IcecastTarget};
@@ -685,7 +686,7 @@ async fn net_loop(mut commands: tokio_mpsc::UnboundedReceiver<NetCommand>, event
             } => {
                 if connection.is_none() {
                     let _ = events.send(NetEvent::StreamError {
-                        message: "not connected to a streaming service".into(),
+                        message: t!("not connected to a streaming service"),
                     });
                     continue;
                 }
@@ -1242,9 +1243,10 @@ fn spawn_icecast_sender(
                     Step::GiveUp { reason } => {
                         log::error!("Icecast source: giving up ({reason})");
                         let _ = events.send(NetEvent::StreamError {
-                            message: format!(
+                            message: t!(
                                 "The audio connection could not be restored: {reason}. \
-                                 The broadcast has ended."
+                                 The broadcast has ended.",
+                                reason = reason
                             ),
                         });
                         return;
@@ -1419,10 +1421,11 @@ fn spawn_rtmp_sender(
                     let reason = error.explain();
                     log::error!("RTMP: giving up after {early_exits} immediate failures ({reason})");
                     let _ = events.send(NetEvent::StreamError {
-                        message: format!(
-                            "FFmpeg could not publish to {}. Check the stream key and the \
+                        message: t!(
+                            "FFmpeg could not publish to {target}. Check the stream key and the \
                              ingest URL for this service. The broadcast has ended.\n\n{reason}",
-                            target.describe()
+                            target = target.describe(),
+                            reason = reason
                         ),
                     });
                     return;
@@ -1432,10 +1435,11 @@ fn spawn_rtmp_sender(
                     Step::GiveUp { reason } => {
                         log::error!("RTMP: giving up ({reason})");
                         let _ = events.send(NetEvent::StreamError {
-                            message: format!(
-                                "The connection to {} could not be restored: {reason}. \
+                            message: t!(
+                                "The connection to {target} could not be restored: {reason}. \
                                  The broadcast has ended.",
-                                target.describe()
+                                target = target.describe(),
+                                reason = reason
                             ),
                         });
                         return;

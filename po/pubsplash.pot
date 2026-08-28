@@ -1107,6 +1107,13 @@ msgstr ""
 msgid "FFmpeg (ffmpeg.exe)|ffmpeg.exe|Programs (*.exe)|*.exe"
 msgstr ""
 
+#: src/net/mod.rs:1424
+msgid ""
+"FFmpeg could not publish to {target}. Check the stream key and the "
+"ingest URL for this service. The broadcast has ended.\n\n"
+"{reason}"
+msgstr ""
+
 #: src/ui/ffmpeg_prefs.rs:413
 msgid ""
 "FFmpeg is installed and working.\n\n"
@@ -3125,8 +3132,20 @@ msgid ""
 "restore it."
 msgstr ""
 
+#: src/net/mod.rs:1246
+msgid ""
+"The audio connection could not be restored: {reason}. The broadcast has "
+"ended."
+msgstr ""
+
 #: src/ui/scenes.rs:2936
 msgid "The audio engine did not answer; nothing was changed."
+msgstr ""
+
+#: src/net/mod.rs:1438
+msgid ""
+"The connection to {target} could not be restored: {reason}. The "
+"broadcast has ended."
 msgstr ""
 
 #: src/ui/scenes.rs:2528
@@ -3528,6 +3547,10 @@ msgstr ""
 
 #: src/ui/picker_acc.rs:132
 msgid "month"
+msgstr ""
+
+#: src/net/mod.rs:689
+msgid "not connected to a streaming service"
 msgstr ""
 
 #: src/ui/api.rs:316

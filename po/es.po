@@ -63,7 +63,7 @@ msgstr "&Omitir"
 
 #: src/ui/scenes.rs:2768
 msgid "&Calibrate to my voice"
-msgstr "&Calibrar con mi voz"
+msgstr "Calibrar con mi &voz"
 
 #: src/ui/connect_dialog.rs:515
 msgid "&Connect"
@@ -95,7 +95,7 @@ msgstr "&Renombrar bus"
 
 #: src/ui/scenes.rs:75
 msgid "&Sends..."
-msgstr "&Envíos..."
+msgstr "En&víos..."
 
 #: src/ui/scenes.rs:2705
 msgid "&Shuffle the folder"
@@ -1155,6 +1155,16 @@ msgstr ""
 #: src/ui/ffmpeg_prefs.rs:256
 msgid "FFmpeg (ffmpeg.exe)|ffmpeg.exe|Programs (*.exe)|*.exe"
 msgstr "FFmpeg (ffmpeg.exe)|ffmpeg.exe|Programas (*.exe)|*.exe"
+
+#: src/net/mod.rs:1424
+msgid ""
+"FFmpeg could not publish to {target}. Check the stream key and the "
+"ingest URL for this service. The broadcast has ended.\n\n"
+"{reason}"
+msgstr ""
+"FFmpeg no pudo publicar en {target}. Compruebe la clave de emisión y "
+"la URL de ingesta de este servicio. La emisión ha terminado.\n\n"
+"{reason}"
 
 #: src/ui/ffmpeg_prefs.rs:413
 msgid ""
@@ -3245,9 +3255,25 @@ msgstr ""
 "Falta el Gestor de paquetes de sonidos ({path}). Reinstale Pubsplash "
 "para restaurarlo."
 
+#: src/net/mod.rs:1246
+msgid ""
+"The audio connection could not be restored: {reason}. The broadcast has "
+"ended."
+msgstr ""
+"No se pudo restablecer la conexión de audio: {reason}. La emisión ha "
+"terminado."
+
 #: src/ui/scenes.rs:2936
 msgid "The audio engine did not answer; nothing was changed."
 msgstr "El motor de audio no respondió; no se ha cambiado nada."
+
+#: src/net/mod.rs:1438
+msgid ""
+"The connection to {target} could not be restored: {reason}. The "
+"broadcast has ended."
+msgstr ""
+"No se pudo restablecer la conexión con {target}: {reason}. La emisión "
+"ha terminado."
 
 #: src/ui/scenes.rs:2528
 msgid "The engine returned no audio."
@@ -3688,6 +3714,10 @@ msgstr "Modelo"
 #: src/ui/picker_acc.rs:132
 msgid "month"
 msgstr "mes"
+
+#: src/net/mod.rs:689
+msgid "not connected to a streaming service"
+msgstr "sin conexión a un servicio de emisión"
 
 #: src/ui/api.rs:316
 msgid "not fetched, press Refresh balances"
