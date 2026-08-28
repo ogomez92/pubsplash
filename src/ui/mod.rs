@@ -1267,11 +1267,16 @@ fn source_routing(
 /// because that list carries what viewers said and nothing else. Never spoken
 /// either: `speak_chat` feeds TTS sources whose audio may be going out to the
 /// stream, and a Pubsplash status notice must not reach listeners.
+///
+/// Being a log line is also why nothing here goes through `t!`, and the same
+/// goes for [`server_state_line`] and [`audio_link_line`] below: users are asked
+/// to send their log when something goes wrong, and a log in a language the
+/// maintainer cannot read is not a diagnostic. See [`crate::i18n`].
 fn chat_feed_line(state: &crate::net::ChatFeedState) -> String {
     use crate::net::ChatFeedState;
     match state {
         ChatFeedState::Interrupted { reason } => {
-            t!("Chat connection lost ({reason}). Reconnecting.", reason = reason)
+            format!("Chat connection lost ({reason}). Reconnecting.")
         }
         // Deliberately hedged. A reconnect proves this end of the connection is
         // healthy, but it cannot prove messages will flow: the server keeps a

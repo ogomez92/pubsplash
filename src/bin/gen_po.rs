@@ -382,9 +382,17 @@ fn read_literal(chars: &[char], i: &mut usize, line: &mut usize) -> Option<Strin
             Some('\\') => out.push('\\'),
             Some('"') => out.push('"'),
             Some('\'') => out.push('\''),
-            Some('\n') => {
-                // Line continuation: the newline and the indentation that
-                // follows it are not part of the string.
+            // Line continuation: the newline and the indentation that follows
+            // it are not part of the string. `\r\n` counts, and has to: these
+            // sources are CRLF, rustc normalises the line ending before it
+            // lexes, and a scanner that did not would put a carriage return and
+            // a run of indentation inside the msgid — which is then a msgid the
+            // running program can never produce, so the translation of every
+            // wrapped message would silently never apply.
+            Some('\r') | Some('\n') => {
+                if chars.get(*i) == Some(&'\r') && chars.get(*i + 1) == Some(&'\n') {
+                    *i += 1;
+                }
                 *line += 1;
                 *i += 1;
                 while *i < chars.len() && (chars[*i] == ' ' || chars[*i] == '\t') {
@@ -705,6 +713,17 @@ mod tests {
         // wrong produces a msgid with a newline and a run of spaces in it,
         // which no translation would ever match at runtime.
         let source = "let x = t!(\"one two \\\n             three\");";
+        let calls = scan_calls(source);
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].singular, "one two three");
+    }
+
+    #[test]
+    fn a_continuation_is_joined_over_crlf_too() {
+        // Every file in this repository is CRLF, so this is not the edge case
+        // it looks like — it is the normal path. rustc normalises the line
+        // ending before lexing; so must this.
+        let source = "let x = t!(\"one two \\\r\n             three\");";
         let calls = scan_calls(source);
         assert_eq!(calls.len(), 1);
         assert_eq!(calls[0].singular, "one two three");
