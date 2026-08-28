@@ -50,11 +50,11 @@ pub fn progress_line(done: u64, total: u64) -> String {
     if total == 0 {
         return t!("Downloaded {done}.", done = megabytes(done));
     }
-    format!(
-        "Downloaded {} of {} ({}%).",
-        megabytes(done),
-        megabytes(total),
-        download_percent(done, total)
+    t!(
+        "Downloaded {done} of {total} ({percent}%).",
+        done = megabytes(done),
+        total = megabytes(total),
+        percent = download_percent(done, total)
     )
 }
 

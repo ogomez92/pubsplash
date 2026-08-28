@@ -733,10 +733,10 @@ pub fn show(app: &Rc<App>, frame: &Frame) {
         browse_image.on_click(move |_| {
             let picker = FileDialog::builder(&dialog_for_image)
                 .with_message(&t!("Choose the still image to send as video"))
-                .with_wildcard(
+                .with_wildcard(&t!(
                     "Images (*.png;*.jpg;*.jpeg;*.bmp;*.gif)|*.png;*.jpg;*.jpeg;*.bmp;*.gif\
-                     |All files (*.*)|*.*",
-                )
+                     |All files (*.*)|*.*"
+                ))
                 .with_style(FileDialogStyle::Open | FileDialogStyle::FileMustExist)
                 .build();
             if picker.show_modal() == ID_OK

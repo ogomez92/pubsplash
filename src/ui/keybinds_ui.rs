@@ -243,7 +243,7 @@ fn edit_dialog(app: &Rc<App>, parent: &Dialog, initial: Option<BindAction>) -> O
         "Binding category choice",
     );
     for category in Category::ALL {
-        category_choice.append(category.label());
+        category_choice.append(&category.label());
     }
 
     let action_label = StaticText::builder(&panel).with_label(&t!("Action")).build();
@@ -356,8 +356,8 @@ fn edit_dialog(app: &Rc<App>, parent: &Dialog, initial: Option<BindAction>) -> O
                 if !names.is_empty() {
                     specifier_choice.set_selection(index as u32);
                 }
-                specifier_label.set_label(kind.label());
-                super::set_accessible_name(&specifier_choice, kind.label());
+                specifier_label.set_label(&kind.label());
+                super::set_accessible_name(&specifier_choice, &kind.label());
             }
             specifier_label.show(kind != Specifier::None);
             specifier_choice.show(kind != Specifier::None);
@@ -380,7 +380,7 @@ fn edit_dialog(app: &Rc<App>, parent: &Dialog, initial: Option<BindAction>) -> O
             let actions = category.actions();
             action_choice.clear();
             for action in &actions {
-                action_choice.append(action.template_label());
+                action_choice.append(&action.template_label());
             }
             // Compare by template: the wanted action carries a name, the list
             // holds blanks.
@@ -511,9 +511,9 @@ fn edit_dialog(app: &Rc<App>, parent: &Dialog, initial: Option<BindAction>) -> O
                         show_error(
                             &dialog_for_ok,
                             &t!("Add binding"),
-                            &format!(
-                                "Choose which {} this binding applies to. If the list is empty, there are none to choose from yet.",
-                                kind.label().to_lowercase()
+                            &t!(
+                                "Choose which {what} this binding applies to. If the list is empty, there are none to choose from yet.",
+                                what = kind.label().to_lowercase()
                             ),
                         );
                         return;

@@ -394,9 +394,10 @@ fn apply(app: &Rc<App>, plan: ApplyPlan) {
         show_error(
             owner.as_widget(),
             &t!("Update"),
-            &format!(
-                "Could not start the updater ({}): {e}. Nothing has been changed.",
-                helper.display()
+            &t!(
+                "Could not start the updater ({path}): {e}. Nothing has been changed.",
+                path = helper.display(),
+                e = e
             ),
         );
         return;
@@ -410,21 +411,24 @@ fn apply(app: &Rc<App>, plan: ApplyPlan) {
 /// Never run from beside `pubsplash.exe`: for a portable update that directory
 /// is about to be overwritten, and Windows will not replace a running image.
 fn stage_helper() -> Result<std::path::PathBuf, String> {
-    let exe = std::env::current_exe().map_err(|e| t!("current_exe failed: {e}", e = e))?;
+    let exe = std::env::current_exe()
+        .map_err(|e| t!("Pubsplash could not find its own program file: {e}", e = e))?;
     let source = exe.with_file_name(crate::update::HELPER_BINARY);
     if !source.is_file() {
-        return Err(format!(
-            "The updater ({}) is missing. Reinstall Pubsplash to restore it.",
-            source.display()
+        return Err(t!(
+            "The updater ({path}) is missing. Reinstall Pubsplash to restore it.",
+            path = source.display()
         ));
     }
     let dir = crate::update::runner_dir();
-    std::fs::create_dir_all(&dir).map_err(|e| format!("Could not create {}: {e}", dir.display()))?;
+    std::fs::create_dir_all(&dir)
+        .map_err(|e| t!("Could not create {path}: {e}", path = dir.display(), e = e))?;
     let destination = dir.join(crate::update::HELPER_BINARY);
     std::fs::copy(&source, &destination).map_err(|e| {
-        format!(
-            "Could not prepare the updater at {}: {e}",
-            destination.display()
+        t!(
+            "Could not prepare the updater at {path}: {e}",
+            path = destination.display(),
+            e = e
         )
     })?;
     Ok(destination)

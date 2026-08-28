@@ -8,6 +8,7 @@
 //! mixer for volume/mute); row 0 only offers an FX chain.
 
 use crate::t;
+use crate::tn;
 use super::fx::{self, ChainTarget};
 use super::{App, WXK_DELETE, WXK_DOWN, WXK_UP, show_error, show_info};
 use crate::state::{ListEdit, move_down, move_up};
@@ -932,10 +933,10 @@ fn missing_plugin_dialog(frame: &Frame, resolution: &crate::fx::ChainResolution)
     if has_valid {
         let apply = super::ok_button(
             &panel,
-            &format!(
-                "Apply with {} available plugin{}",
-                resolution.valid.len(),
-                if resolution.valid.len() == 1 { "" } else { "s" }
+            &tn!(
+                "Apply with {n} available plugin",
+                "Apply with {n} available plugins",
+                resolution.valid.len()
             ),
         );
         // `ID_CANCEL` is what wx maps Escape to; without it Escape does nothing.

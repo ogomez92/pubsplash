@@ -260,10 +260,10 @@ pub fn authorize(parent: &Dialog, instance: &str) -> Option<Link> {
     let sizer = BoxSizer::builder(Orientation::Vertical).build();
     let status = TextCtrl::builder(&panel)
         .with_style(TextCtrlStyle::MultiLine | TextCtrlStyle::ReadOnly)
-        .with_value(
+        .with_value(&t!(
             "Contacting the server. Your browser will open so you can sign in \
-             and approve Pubsplash.",
-        )
+             and approve Pubsplash."
+        ))
         .build();
     super::set_accessible_name(&status, &t!("Authorization status"));
     super::help::tag(
@@ -308,15 +308,19 @@ pub fn authorize(parent: &Dialog, instance: &str) -> Option<Link> {
                         }
                         set_status(
                             &status,
-                            "Waiting for you to approve Pubsplash in your browser. \
-                             This window closes on its own once you have.",
+                            &t!(
+                                "Waiting for you to approve Pubsplash in your browser. \
+                                 This window closes on its own once you have."
+                            ),
                         );
                     }
                     AuthEvent::NeedCode(reply) => {
                         set_status(
                             &status,
-                            "Your browser is showing an authorization code. \
-                             Copy it and paste it into the box that just opened.",
+                            &t!(
+                                "Your browser is showing an authorization code. \
+                                 Copy it and paste it into the box that just opened."
+                            ),
                         );
                         let code = prompt_for_code(&dialog);
                         let _ = reply.send(code);

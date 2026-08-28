@@ -12,6 +12,7 @@
 //! are all untouched, because none of them is this thread.
 
 use crate::t;
+use crate::tn;
 use std::rc::Rc;
 
 use wxdragon::prelude::*;
@@ -170,10 +171,13 @@ fn compress_logs(parent: &Dialog) {
         Ok(count) => show_info(
             parent,
             &t!("Compress logs"),
-            &format!(
-                "Collected {count} file{} into {path}.\n\nThe archive holds the log files and \
+            &tn!(
+                "Collected {n} file into {path}.\n\nThe archive holds the log files and \
                  any crash reports. It contains no passwords or API keys.",
-                if count == 1 { "" } else { "s" }
+                "Collected {n} files into {path}.\n\nThe archive holds the log files and \
+                 any crash reports. It contains no passwords or API keys.",
+                count,
+                path = path
             ),
         ),
         Err(e) => show_error(parent, &t!("Compress logs"), &e),

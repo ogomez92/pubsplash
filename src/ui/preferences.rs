@@ -122,6 +122,8 @@ pub fn show(app: &Rc<App>, frame: &Frame) {
 fn build_general_tab(app: &Rc<App>, panel: &Panel) {
     let sizer = BoxSizer::builder(Orientation::Vertical).build();
 
+    build_language_group(app, panel, &sizer);
+
     let (updates_group, updates_box) = super::group_box(panel, &t!("Automatic updates"));
 
     let check_on_start = CheckBox::builder(&updates_box)
@@ -165,6 +167,84 @@ fn build_general_tab(app: &Rc<App>, panel: &Panel) {
 
     sizer.add_sizer(&updates_group, 0, SizerFlag::Expand | SizerFlag::All, 4);
     panel.set_sizer(sizer, true);
+}
+
+/// The interface language, on the General tab because it is about the app
+/// rather than about a stream.
+///
+/// Row 0 is "follow Windows", which is the default and stores an empty string;
+/// every other row is one of [`crate::i18n::LANGUAGES`], named in its own
+/// language so somebody who has landed in a UI they cannot read can still find
+/// theirs. Read back by *index*, never by the row's text.
+///
+/// The change takes effect at the next start, and says so: the whole interface
+/// is built with the strings resolved once at startup, and rebuilding every
+/// window under a screen-reader user mid-session would be worse than asking
+/// them to restart. The notice is a modal because it answers something they
+/// just did, which is the test CLAUDE.md sets.
+fn build_language_group(app: &Rc<App>, panel: &Panel, sizer: &BoxSizer) {
+    let (group, group_box) = super::group_box(panel, &t!("Language"));
+
+    let label_text = t!("Interface language");
+    let label = StaticText::builder(&group_box)
+        .with_label(&label_text)
+        .build();
+    let choice = Choice::builder(&group_box).build();
+    super::set_accessible_name(&choice, &label_text);
+    super::help::tag(
+        &choice,
+        "dialog.preferences.general.language",
+        "Interface language combo box",
+    );
+
+    choice.append(&t!("Follow Windows"));
+    for (_, name) in crate::i18n::LANGUAGES {
+        choice.append(name);
+    }
+    let configured = app.config.borrow().interface.language.clone();
+    let selected = crate::i18n::LANGUAGES
+        .iter()
+        .position(|(code, _)| *code == configured)
+        .map(|index| index + 1)
+        .unwrap_or(0);
+    choice.set_selection(selected as u32);
+
+    let explanation = StaticText::builder(&group_box)
+        .with_label(&t!(
+            "Pubsplash follows the language Windows is set to unless you choose one here. \
+             A change takes effect the next time Pubsplash starts."
+        ))
+        .build();
+
+    group.add(&label, 0, SizerFlag::All, 4);
+    group.add(&choice, 0, SizerFlag::Expand | SizerFlag::All, 4);
+    group.add(&explanation, 0, SizerFlag::All, 4);
+    {
+        let app = app.clone();
+        let panel = *panel;
+        choice.on_selection_changed(move |_| {
+            let Some(index) = choice.get_selection() else {
+                return;
+            };
+            let language = (index as usize)
+                .checked_sub(1)
+                .and_then(|i| crate::i18n::LANGUAGES.get(i))
+                .map(|(code, _)| (*code).to_string())
+                .unwrap_or_default();
+            if app.config.borrow().interface.language == language {
+                return;
+            }
+            app.config.borrow_mut().interface.language = language;
+            app.save_config();
+            super::show_info(
+                &panel,
+                &t!("Language"),
+                &t!("Pubsplash will be in the language you chose the next time it starts."),
+            );
+        });
+    }
+
+    sizer.add_sizer(&group, 0, SizerFlag::Expand | SizerFlag::All, 4);
 }
 
 fn build_archiving_tab(app: &Rc<App>, dialog: &Dialog, panel: &Panel) {
@@ -259,7 +339,7 @@ fn build_archiving_tab(app: &Rc<App>, dialog: &Dialog, panel: &Panel) {
             let start = app.config.borrow().archiving.recording_dir();
             let picker = DirDialog::builder(
                 &dialog,
-                "Choose a folder for stream recordings",
+                &t!("Choose a folder for stream recordings"),
                 &start.to_string_lossy(),
             )
             .with_style(DirDialogStyle::MustExist.bits())
@@ -460,7 +540,7 @@ fn build_engine_page(
                 app,
                 page,
                 sizer,
-                "OpenAI API key",
+                &t!("OpenAI API key"),
                 engines::OPENAI,
                 |s| s.openai_api_key.as_str().to_string(),
                 |s, v| s.openai_api_key = Secret::new(v),
@@ -480,7 +560,7 @@ fn build_engine_page(
                 app,
                 page,
                 sizer,
-                "ElevenLabs API key",
+                &t!("ElevenLabs API key"),
                 engines::ELEVENLABS,
                 |s| s.elevenlabs_api_key.as_str().to_string(),
                 |s, v| s.elevenlabs_api_key = Secret::new(v),
@@ -508,7 +588,7 @@ fn build_engine_page(
                 app,
                 page,
                 sizer,
-                "Azure subscription key",
+                &t!("Azure subscription key"),
                 engines::AZURE,
                 |s| s.azure_key.as_str().to_string(),
                 |s, v| s.azure_key = Secret::new(v),
@@ -522,7 +602,7 @@ fn build_engine_page(
                 app,
                 page,
                 sizer,
-                "Azure region, for example eastus",
+                &t!("Azure region, for example eastus"),
                 engines::AZURE,
                 |s| s.azure_region.clone(),
                 |s, v| s.azure_region = v,
@@ -544,7 +624,7 @@ fn build_engine_page(
                 app,
                 page,
                 sizer,
-                "AWS access key ID",
+                &t!("AWS access key ID"),
                 engines::AWS,
                 |s| s.aws_access_key_id.clone(),
                 |s, v| s.aws_access_key_id = v,
@@ -554,7 +634,7 @@ fn build_engine_page(
                 app,
                 page,
                 sizer,
-                "AWS secret access key",
+                &t!("AWS secret access key"),
                 engines::AWS,
                 |s| s.aws_secret_access_key.as_str().to_string(),
                 |s, v| s.aws_secret_access_key = Secret::new(v),
@@ -568,7 +648,7 @@ fn build_engine_page(
                 app,
                 page,
                 sizer,
-                "AWS region, for example us-east-1",
+                &t!("AWS region, for example us-east-1"),
                 engines::AWS,
                 |s| s.aws_region.clone(),
                 |s, v| s.aws_region = v,
@@ -589,7 +669,7 @@ fn build_engine_page(
                 app,
                 page,
                 sizer,
-                "Google Cloud API key",
+                &t!("Google Cloud API key"),
                 engines::GOOGLE,
                 |s| s.google_api_key.as_str().to_string(),
                 |s, v| s.google_api_key = Secret::new(v),
@@ -609,7 +689,7 @@ fn build_engine_page(
                 app,
                 page,
                 sizer,
-                "Star server URL",
+                &t!("Star server URL"),
                 engines::STAR,
                 |s| s.star_host.clone(),
                 |s, v| s.star_host = v,
@@ -1049,9 +1129,9 @@ fn build_sounds_tab(app: &Rc<App>, dialog: &Dialog, panel: &Panel) -> SoundsTab 
                     if crate::soundpack::packs_dir().join(&name).exists() {
                         let confirm = MessageDialog::builder(
                             &dialog,
-                            &format!(
-                                "A sound pack named {} is already installed. Replace it?",
-                                name.trim_end_matches(".pspack")
+                            &t!(
+                                "A sound pack named {name} is already installed. Replace it?",
+                                name = name.trim_end_matches(".pspack")
                             ),
                             &t!("Import pack"),
                         )
@@ -1104,9 +1184,9 @@ fn build_sounds_tab(app: &Rc<App>, dialog: &Dialog, panel: &Panel) -> SoundsTab 
             }
             let confirm = MessageDialog::builder(
                 &dialog,
-                &format!(
-                    "Remove the sound pack {}?",
-                    file_name.trim_end_matches(".pspack")
+                &t!(
+                    "Remove the sound pack {name}?",
+                    name = file_name.trim_end_matches(".pspack")
                 ),
                 &t!("Remove pack"),
             )

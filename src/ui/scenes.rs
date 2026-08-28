@@ -2819,7 +2819,7 @@ fn edit_media_player(
         browse.on_click(move |_| {
             let picker = DirDialog::builder(
                 &dialog,
-                "Choose a folder of music for this source",
+                &t!("Choose a folder of music for this source"),
                 &folder_input.get_value(),
             )
             .with_style(DirDialogStyle::MustExist.bits())

@@ -304,11 +304,11 @@ fn begin_download(app: &Rc<App>, dialog: &Dialog, status: TextCtrl, button: Butt
     }
     let confirm = MessageDialog::builder(
         dialog,
-        &format!(
+        &t!(
             "Pubsplash will download FFmpeg from gyan.dev, which is the Windows build \
-             ffmpeg.org itself points at. It is about {} MB and is checked against the \
+             ffmpeg.org itself points at. It is about {megabytes} MB and is checked against the \
              checksum published beside it.\n\nDownload it now?",
-            install::APPROXIMATE_MEGABYTES
+            megabytes = install::APPROXIMATE_MEGABYTES
         ),
         &t!("Download FFmpeg"),
     )
@@ -365,10 +365,10 @@ pub fn drain(app: &Rc<App>) {
                     .map_or(0, |percent| percent.min(100) as i32);
                 dialog.set(
                     percent,
-                    &format!(
-                        "Downloaded {} MB of {} MB.",
-                        done / 1_000_000,
-                        total / 1_000_000
+                    &t!(
+                        "Downloaded {done} MB of {total} MB.",
+                        done = done / 1_000_000,
+                        total = total / 1_000_000
                     ),
                 );
             }
