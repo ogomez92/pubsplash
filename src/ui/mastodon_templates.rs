@@ -9,6 +9,7 @@
 //! `wxDialogBase`'s own handler would close the dialog behind us. See the doc
 //! comment on `ui::ok_button`.
 
+use crate::t;
 use super::App;
 use crate::mastodon::{self, Template, TemplateKind};
 use std::cell::RefCell;
@@ -37,7 +38,7 @@ pub fn edit(parent: &dyn WxWidget, existing: Option<&Template>) -> Option<Templa
     // mapping below cannot drift apart.
     let kind_labels: Vec<&str> = TemplateKind::ALL.iter().map(|k| k.label()).collect();
     let kind_choice = RadioBox::builder(&panel, &kind_labels)
-        .with_label("Announcement type")
+        .with_label(&t!("Announcement type"))
         .with_style(RadioBoxStyle::SpecifyRows)
         .with_major_dimension(1)
         .build();
@@ -58,12 +59,12 @@ pub fn edit(parent: &dyn WxWidget, existing: Option<&Template>) -> Option<Templa
         "Announcement type selector",
     );
 
-    let text_label = StaticText::builder(&panel).with_label("Template").build();
+    let text_label = StaticText::builder(&panel).with_label(&t!("Template")).build();
     let text_input = TextCtrl::builder(&panel)
         .with_style(TextCtrlStyle::MultiLine)
         .with_value(existing.map(|t| t.text.as_str()).unwrap_or(""))
         .build();
-    super::set_accessible_name(&text_input, "Template");
+    super::set_accessible_name(&text_input, &t!("Template"));
     super::help::tag(
         &text_input,
         "dialog.mastodonTemplate.text",
@@ -71,17 +72,17 @@ pub fn edit(parent: &dyn WxWidget, existing: Option<&Template>) -> Option<Templa
     );
 
     let buttons = BoxSizer::builder(Orientation::Horizontal).build();
-    let help_button = Button::builder(&panel).with_label("Help").build();
+    let help_button = Button::builder(&panel).with_label(&t!("Help")).build();
     super::help::tag(
         &help_button,
         "dialog.mastodonTemplate.help",
         "Token help button",
     );
-    let ok = super::ok_button(&panel, "OK");
+    let ok = super::ok_button(&panel, &t!("OK"));
     // `ID_CANCEL` is what wx maps Escape to; without it Escape does nothing.
     let cancel = Button::builder(&panel)
         .with_id(ID_CANCEL)
-        .with_label("Cancel")
+        .with_label(&t!("Cancel"))
         .build();
     buttons.add(&help_button, 0, SizerFlag::All, 4);
     buttons.add(&ok, 0, SizerFlag::All, 4);
@@ -150,14 +151,14 @@ pub fn show_help(parent: &dyn WxWidget) {
         .with_style(TextCtrlStyle::MultiLine | TextCtrlStyle::ReadOnly)
         .with_value(&mastodon::help_text())
         .build();
-    super::set_accessible_name(&text, "Template tokens");
+    super::set_accessible_name(&text, &t!("Template tokens"));
     super::help::tag(
         &text,
         "dialog.mastodonTokens.text",
         "Template token reference",
     );
 
-    let close = super::dismiss_button(&panel, "Close");
+    let close = super::dismiss_button(&panel, &t!("Close"));
     {
         close.on_click(move |_| dialog.end_modal(ID_CANCEL));
     }
@@ -185,12 +186,12 @@ pub fn prompt_one_shot(parent: &dyn WxWidget) -> Option<String> {
     let panel = Panel::builder(&dialog).build();
     let sizer = BoxSizer::builder(Orientation::Vertical).build();
 
-    let label = StaticText::builder(&panel).with_label("Post").build();
+    let label = StaticText::builder(&panel).with_label(&t!("Post")).build();
     let input = TextCtrl::builder(&panel)
         .with_style(TextCtrlStyle::MultiLine)
         .with_value(RESUME_DEFAULT)
         .build();
-    super::set_accessible_name(&input, "Post");
+    super::set_accessible_name(&input, &t!("Post"));
     super::help::tag(&input, "dialog.mastodonResume.text", "Resumed stream post");
     input.select_all();
     {
@@ -201,16 +202,16 @@ pub fn prompt_one_shot(parent: &dyn WxWidget) -> Option<String> {
     }
 
     let buttons = BoxSizer::builder(Orientation::Horizontal).build();
-    let help_button = Button::builder(&panel).with_label("Help").build();
+    let help_button = Button::builder(&panel).with_label(&t!("Help")).build();
     super::help::tag(
         &help_button,
         "dialog.mastodonResume.help",
         "Token help button on the resumed stream post",
     );
-    let ok = super::ok_button(&panel, "OK");
+    let ok = super::ok_button(&panel, &t!("OK"));
     let cancel = Button::builder(&panel)
         .with_id(ID_CANCEL)
-        .with_label("Cancel")
+        .with_label(&t!("Cancel"))
         .build();
     buttons.add(&help_button, 0, SizerFlag::All, 4);
     buttons.add(&ok, 0, SizerFlag::All, 4);
@@ -236,7 +237,11 @@ pub fn prompt_one_shot(parent: &dyn WxWidget) -> Option<String> {
             // Same rule as a saved template: a bad token is corrected here, not
             // posted as literal braces.
             if let Err(error) = mastodon::validate(&text) {
-                super::show_warning(&dialog, "Post about the resumed stream", &error.to_string());
+                super::show_warning(
+            &dialog,
+            &t!("Post about the resumed stream"),
+            &error.to_string(),
+        );
                 input.set_focus();
                 return;
             }

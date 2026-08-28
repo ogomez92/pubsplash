@@ -1,6 +1,7 @@
 //! Scenes and Sources tab: two lists with move/add/rename/delete controls
 //! and per-type source edit dialogs.
 
+use crate::t;
 use super::home::on_sources_changed;
 use super::slider_uia::SliderAnnouncer;
 use super::{App, WXK_DELETE, WXK_DOWN, WXK_UP, show_error};
@@ -17,22 +18,26 @@ use std::rc::Rc;
 use wxdragon::prelude::*;
 
 /// Shown when a list has nothing in it. See [`super::list`].
-const NO_SCENES: &str = "No scenes";
-const NO_SOURCES: &str = "No sources";
+fn no_scenes() -> String {
+    t!("No scenes")
+}
+fn no_sources() -> String {
+    t!("No sources")
+}
 
 pub fn build(app: &Rc<App>, panel: &Panel) -> (ListBox, ListBox) {
     let sizer = BoxSizer::builder(Orientation::Vertical).build();
 
     // --- Scenes ---
-    let scenes_label = StaticText::builder(panel).with_label("Scenes").build();
+    let scenes_label = StaticText::builder(panel).with_label(&t!("Scenes")).build();
     let scenes_list = ListBox::builder(panel).build();
     super::native_acc::install(&scenes_list, "Scenes");
     super::help::tag(&scenes_list, "tab.scenes.sceneList", "Scenes list");
     let scenes_buttons = BoxSizer::builder(Orientation::Horizontal).build();
-    let scene_up = Button::builder(panel).with_label("Move up").build();
-    let scene_down = Button::builder(panel).with_label("Move down").build();
-    let scene_add = Button::builder(panel).with_label("Add scene").build();
-    let scene_rename = Button::builder(panel).with_label("Rename scene").build();
+    let scene_up = Button::builder(panel).with_label(&t!("Move up")).build();
+    let scene_down = Button::builder(panel).with_label(&t!("Move down")).build();
+    let scene_add = Button::builder(panel).with_label(&t!("Add scene")).build();
+    let scene_rename = Button::builder(panel).with_label(&t!("Rename scene")).build();
     super::help::tag(&scene_up, "tab.scenes.sceneUp", "Move scene up button");
     super::help::tag(
         &scene_down,
@@ -55,7 +60,7 @@ pub fn build(app: &Rc<App>, panel: &Panel) -> (ListBox, ListBox) {
 
     // --- Sources ---
     let sources_label = StaticText::builder(panel)
-        .with_label("Sources in selected scene")
+        .with_label(&t!("Sources in selected scene"))
         .build();
     let sources_list = ListBox::builder(panel).build();
     super::native_acc::install(&sources_list, "Sources in selected scene");
@@ -65,12 +70,12 @@ pub fn build(app: &Rc<App>, panel: &Panel) -> (ListBox, ListBox) {
         "Sources list for the selected scene",
     );
     let sources_buttons = BoxSizer::builder(Orientation::Horizontal).build();
-    let source_add = Button::builder(panel).with_label("&Add source").build();
-    let source_edit = Button::builder(panel).with_label("&Edit").build();
-    let source_sends = Button::builder(panel).with_label("&Sends...").build();
-    let source_remove = Button::builder(panel).with_label("Remove source").build();
-    let source_up = Button::builder(panel).with_label("Move up").build();
-    let source_down = Button::builder(panel).with_label("Move down").build();
+    let source_add = Button::builder(panel).with_label(&t!("&Add source")).build();
+    let source_edit = Button::builder(panel).with_label(&t!("&Edit")).build();
+    let source_sends = Button::builder(panel).with_label(&t!("&Sends...")).build();
+    let source_remove = Button::builder(panel).with_label(&t!("Remove source")).build();
+    let source_up = Button::builder(panel).with_label(&t!("Move up")).build();
+    let source_down = Button::builder(panel).with_label(&t!("Move down")).build();
     super::help::tag(&source_add, "tab.scenes.sourceAdd", "Add source button");
     super::help::tag(&source_edit, "tab.scenes.sourceEdit", "Edit source button");
     super::help::tag(
@@ -248,7 +253,7 @@ pub fn refresh_scenes_list(app: &Rc<App>) {
                 }
             })
             .collect();
-        if super::list::sync(&w.scenes_list, &labels, NO_SCENES) == super::list::Synced::Kept {
+        if super::list::sync(&w.scenes_list, &labels, &no_scenes()) == super::list::Synced::Kept {
             return;
         }
         // Falls back to the first scene, so the list starts out with one
@@ -281,7 +286,7 @@ pub fn refresh_sources_list(app: &Rc<App>) {
     };
     app.widgets(|w| {
         let selected = w.sources_list.get_selection();
-        if super::list::sync(&w.sources_list, &labels, NO_SOURCES) == super::list::Synced::Kept {
+        if super::list::sync(&w.sources_list, &labels, &no_sources()) == super::list::Synced::Kept {
             return;
         }
         // The list itself changed, so the focus context genuinely has too.
@@ -365,8 +370,8 @@ fn add_scene(app: &Rc<App>) {
         } else if !name.trim().is_empty() {
             show_error(
                 &frame,
-                "Add scene",
-                "A scene with that name already exists.",
+                &t!("Add scene"),
+                &t!("A scene with that name already exists."),
             );
         }
     }
@@ -449,7 +454,7 @@ fn unique_source_name(existing: &[SourceConfig], base: &str) -> String {
         return base.to_string();
     }
     for n in 2.. {
-        let candidate = format!("{base} {n}");
+        let candidate = t!("{base} {n}", base = base, n = n);
         if !existing.iter().any(|s| s.name == candidate) {
             return candidate;
         }
@@ -588,7 +593,7 @@ fn edit_microphone(
     };
     let devices = crate::audio::device::capture_devices();
     if devices.is_empty() {
-        show_error(&frame, "Microphone", "No microphones were found.");
+        show_error(&frame, &t!("Microphone"), &t!("No microphones were found."));
         return;
     }
     let mut labels: Vec<String> = vec!["Default microphone".to_string()];
@@ -657,10 +662,12 @@ fn edit_desktop_audio(
     let panel = Panel::builder(&dialog).build();
     let sizer = BoxSizer::builder(Orientation::Vertical).build();
 
-    const CAPTURE_FROM: &str = "Capture from";
-    let label = StaticText::builder(&panel).with_label(CAPTURE_FROM).build();
+    fn capture_from() -> String {
+        t!("Capture from")
+    }
+    let label = StaticText::builder(&panel).with_label(&capture_from()).build();
     let choice = Choice::builder(&panel).build();
-    super::set_accessible_name(&choice, CAPTURE_FROM);
+    super::set_accessible_name(&choice, &capture_from());
     super::help::tag(
         &choice,
         "dialog.desktopAudioSource.device",
@@ -669,7 +676,7 @@ fn edit_desktop_audio(
     // Row 0 is the default and what every Desktop Audio source did before this
     // dialog existed: every endpoint at once, with Pubsplash's own process tree
     // excluded.
-    choice.append("All output devices (Pubsplash excluded)");
+    choice.append(&t!("All output devices (Pubsplash excluded)"));
     for device in &devices {
         choice.append(&device.name);
     }
@@ -680,11 +687,11 @@ fn edit_desktop_audio(
     choice.set_selection(preselect as u32);
 
     let buttons = BoxSizer::builder(Orientation::Horizontal).build();
-    let ok = super::ok_button(&panel, "OK");
+    let ok = super::ok_button(&panel, &t!("OK"));
     // `ID_CANCEL` is what wx maps Escape to; without it Escape does nothing.
     let cancel = Button::builder(&panel)
         .with_id(ID_CANCEL)
-        .with_label("Cancel")
+        .with_label(&t!("Cancel"))
         .build();
     buttons.add(&ok, 0, SizerFlag::All, 4);
     buttons.add(&cancel, 0, SizerFlag::All, 4);
@@ -723,7 +730,7 @@ fn edit_desktop_audio(
                 // this is not a `SingleChoiceDialog`.
                 show_error(
                     &dialog,
-                    "Desktop Audio",
+                    &t!("Desktop Audio"),
                     &format!(
                         "{} is Pubsplash's own output device. Capturing it would feed \
                          Pubsplash's audio — speech, sound cues and monitoring — back into \
@@ -776,10 +783,8 @@ fn edit_application(app: &Rc<App>, scene_index: usize, source_index: usize, curr
     if crate::audio::device::find_process(&process_name).is_none() {
         super::show_info(
             &frame,
-            "Application source",
-            &format!(
-                "{process_name} does not appear to be running. The source will stay silent until it starts, and will be picked up automatically when it does."
-            ),
+            &t!("Application source"),
+            &t!("{process_name} does not appear to be running. The source will stay silent until it starts, and will be picked up automatically when it does.", process_name = process_name),
         );
     }
     set_source_kind(
@@ -810,10 +815,10 @@ fn edit_tts(app: &Rc<App>, scene_index: usize, source_index: usize, current: Tts
     let panel = Panel::builder(&scrolled).build();
     let sizer = BoxSizer::builder(Orientation::Vertical).build();
 
-    let engine_label = StaticText::builder(&panel).with_label("Engine").build();
+    let engine_label = StaticText::builder(&panel).with_label(&t!("Engine")).build();
     let engines = crate::tts::engine_names();
     let engine_choice = Choice::builder(&panel).build();
-    super::set_accessible_name(&engine_choice, "Engine");
+    super::set_accessible_name(&engine_choice, &t!("Engine"));
     super::help::tag(
         &engine_choice,
         "dialog.ttsSource.engine",
@@ -829,7 +834,7 @@ fn edit_tts(app: &Rc<App>, scene_index: usize, source_index: usize, current: Tts
         .unwrap_or(0);
     engine_choice.set_selection(engine_index as u32);
 
-    let voice_label = StaticText::builder(&panel).with_label("Voice").build();
+    let voice_label = StaticText::builder(&panel).with_label(&t!("Voice")).build();
     let voice_choice = Choice::builder(&panel).build();
     super::help::tag(&voice_choice, "dialog.ttsSource.voice", "TTS voice choice");
     // The list backing the picker; index 0 of the control is "Default voice",
@@ -844,14 +849,14 @@ fn edit_tts(app: &Rc<App>, scene_index: usize, source_index: usize, current: Tts
     update_voice_status(&voice_count_label, &voice_choice, selected_id, "");
 
     let volume_label = StaticText::builder(&panel)
-        .with_label("Voice volume")
+        .with_label(&t!("Voice volume"))
         .build();
     let volume_slider = Slider::builder(&panel)
         .with_value(current.volume as i32)
         .with_min_value(0)
         .with_max_value(100)
         .build();
-    super::set_accessible_name(&volume_slider, "Voice volume");
+    super::set_accessible_name(&volume_slider, &t!("Voice volume"));
     super::help::tag(
         &volume_slider,
         "dialog.ttsSource.volume",
@@ -860,14 +865,14 @@ fn edit_tts(app: &Rc<App>, scene_index: usize, source_index: usize, current: Tts
     let volume_announcer = wire_slider(&volume_slider, "Voice volume", "%", 0, 100, 10);
 
     let rate_label = StaticText::builder(&panel)
-        .with_label("Speech rate (-10 to 10)")
+        .with_label(&t!("Speech rate (-10 to 10)"))
         .build();
     let rate_slider = Slider::builder(&panel)
         .with_value(current.rate)
         .with_min_value(-10)
         .with_max_value(10)
         .build();
-    super::set_accessible_name(&rate_slider, "Speech rate");
+    super::set_accessible_name(&rate_slider, &t!("Speech rate"));
     super::help::tag(
         &rate_slider,
         "dialog.ttsSource.rate",
@@ -877,7 +882,7 @@ fn edit_tts(app: &Rc<App>, scene_index: usize, source_index: usize, current: Tts
     let rate_announcer = wire_slider(&rate_slider, "Speech rate", "", -10, 10, 2);
 
     let pitch_label = StaticText::builder(&panel)
-        .with_label("Voice pitch (-50 to 50)")
+        .with_label(&t!("Voice pitch (-50 to 50)"))
         .build();
     let pitch_slider = Slider::builder(&panel)
         .with_value(current.pitch)
@@ -899,11 +904,11 @@ fn edit_tts(app: &Rc<App>, scene_index: usize, source_index: usize, current: Tts
     provider_controls.show(selected_id);
 
     let output_check = CheckBox::builder(&panel)
-        .with_label("Send speech to the stream")
+        .with_label(&t!("Send speech to the stream"))
         .build();
     // The visual label alone is not announced by screen readers here; give
     // the control an explicit accessible name.
-    super::set_accessible_name(&output_check, "Send speech to the stream");
+    super::set_accessible_name(&output_check, &t!("Send speech to the stream"));
     super::help::tag(
         &output_check,
         "dialog.ttsSource.toStream",
@@ -911,14 +916,14 @@ fn edit_tts(app: &Rc<App>, scene_index: usize, source_index: usize, current: Tts
     );
     output_check.set_value(current.output_to_stream);
 
-    let preview = Button::builder(&panel).with_label("Preview voice").build();
-    super::set_accessible_name(&preview, "Preview voice");
+    let preview = Button::builder(&panel).with_label(&t!("Preview voice")).build();
+    super::set_accessible_name(&preview, &t!("Preview voice"));
     super::help::tag(&preview, "dialog.ttsSource.preview", "Preview voice button");
 
     let reset = Button::builder(&panel)
-        .with_label("Reset this engine to defaults")
+        .with_label(&t!("Reset this engine to defaults"))
         .build();
-    super::set_accessible_name(&reset, "Reset this engine to defaults");
+    super::set_accessible_name(&reset, &t!("Reset this engine to defaults"));
     super::help::tag(
         &reset,
         "dialog.ttsSource.reset",
@@ -926,11 +931,11 @@ fn edit_tts(app: &Rc<App>, scene_index: usize, source_index: usize, current: Tts
     );
 
     let buttons = BoxSizer::builder(Orientation::Horizontal).build();
-    let ok = super::ok_button(&panel, "OK");
+    let ok = super::ok_button(&panel, &t!("OK"));
     // `ID_CANCEL` is what wx maps Escape to; without it Escape does nothing.
     let cancel = Button::builder(&panel)
         .with_id(ID_CANCEL)
-        .with_label("Cancel")
+        .with_label(&t!("Cancel"))
         .build();
     buttons.add(&ok, 0, SizerFlag::All, 4);
     buttons.add(&cancel, 0, SizerFlag::All, 4);
@@ -1551,14 +1556,14 @@ impl TtsProviderControls {
         let none_panel = Panel::builder(parent).build();
         let none_sizer = BoxSizer::builder(Orientation::Vertical).build();
         let none_label = StaticText::builder(&none_panel)
-            .with_label("This engine has no additional voice settings.")
+            .with_label(&t!("This engine has no additional voice settings."))
             .build();
         none_sizer.add(&none_label, 0, SizerFlag::All, 4);
         none_panel.set_sizer(none_sizer, true);
 
         let eleven_panel = Panel::builder(parent).build();
         let (eleven_sizer, eleven_box) =
-            super::group_box(&eleven_panel, "ElevenLabs voice settings");
+            super::group_box(&eleven_panel, &t!("ElevenLabs voice settings"));
         let eleven_model = Choice::builder(&eleven_box).build();
         fill_model_choice(
             &eleven_model,
@@ -1567,7 +1572,7 @@ impl TtsProviderControls {
         );
         super::set_accessible_name(
             &eleven_model,
-            "ElevenLabs model; blank uses provider default",
+            &t!("ElevenLabs model; blank uses provider default"),
         );
         super::help::tag(
             &eleven_model,
@@ -1576,7 +1581,7 @@ impl TtsProviderControls {
         );
         eleven_sizer.add(
             &StaticText::builder(&eleven_box)
-                .with_label("Model (blank uses provider default)")
+                .with_label(&t!("Model (blank uses provider default)"))
                 .build(),
             0,
             SizerFlag::All,
@@ -1588,7 +1593,7 @@ impl TtsProviderControls {
             .build();
         super::set_accessible_name(
             &eleven_language,
-            "ElevenLabs language code; blank uses provider default",
+            &t!("ElevenLabs language code; blank uses provider default"),
         );
         super::help::tag(
             &eleven_language,
@@ -1597,7 +1602,7 @@ impl TtsProviderControls {
         );
         eleven_sizer.add(
             &StaticText::builder(&eleven_box)
-                .with_label("Language code (optional)")
+                .with_label(&t!("Language code (optional)"))
                 .build(),
             0,
             SizerFlag::All,
@@ -1606,9 +1611,9 @@ impl TtsProviderControls {
         eleven_sizer.add(&eleven_language, 0, SizerFlag::Expand | SizerFlag::All, 3);
 
         let eleven_stability_override = CheckBox::builder(&eleven_box)
-            .with_label("Override stability")
+            .with_label(&t!("Override stability"))
             .build();
-        super::set_accessible_name(&eleven_stability_override, "Override stability");
+        super::set_accessible_name(&eleven_stability_override, &t!("Override stability"));
         eleven_stability_override.set_value(eleven.stability.is_some());
         let eleven_stability = SpinCtrlDouble::builder(&eleven_box)
             .with_range(0.0, 1.0)
@@ -1617,7 +1622,7 @@ impl TtsProviderControls {
         eleven_stability.set_digits(2);
         eleven_stability.set_increment(0.05);
         eleven_stability.enable(eleven.stability.is_some());
-        super::set_accessible_name(&eleven_stability, "ElevenLabs stability, zero to one");
+        super::set_accessible_name(&eleven_stability, &t!("ElevenLabs stability, zero to one"));
         super::help::tag(
             &eleven_stability,
             "dialog.ttsSource.elevenStability",
@@ -1627,9 +1632,9 @@ impl TtsProviderControls {
         eleven_sizer.add(&eleven_stability, 0, SizerFlag::All, 3);
 
         let eleven_similarity_override = CheckBox::builder(&eleven_box)
-            .with_label("Override similarity boost")
+            .with_label(&t!("Override similarity boost"))
             .build();
-        super::set_accessible_name(&eleven_similarity_override, "Override similarity boost");
+        super::set_accessible_name(&eleven_similarity_override, &t!("Override similarity boost"));
         eleven_similarity_override.set_value(eleven.similarity_boost.is_some());
         let eleven_similarity = SpinCtrlDouble::builder(&eleven_box)
             .with_range(0.0, 1.0)
@@ -1640,7 +1645,7 @@ impl TtsProviderControls {
         eleven_similarity.enable(eleven.similarity_boost.is_some());
         super::set_accessible_name(
             &eleven_similarity,
-            "ElevenLabs similarity boost, zero to one",
+            &t!("ElevenLabs similarity boost, zero to one"),
         );
         super::help::tag(
             &eleven_similarity,
@@ -1651,9 +1656,9 @@ impl TtsProviderControls {
         eleven_sizer.add(&eleven_similarity, 0, SizerFlag::All, 3);
 
         let eleven_style_override = CheckBox::builder(&eleven_box)
-            .with_label("Override style exaggeration")
+            .with_label(&t!("Override style exaggeration"))
             .build();
-        super::set_accessible_name(&eleven_style_override, "Override style exaggeration");
+        super::set_accessible_name(&eleven_style_override, &t!("Override style exaggeration"));
         eleven_style_override.set_value(eleven.style.is_some());
         let eleven_style = SpinCtrlDouble::builder(&eleven_box)
             .with_range(0.0, 1.0)
@@ -1662,7 +1667,7 @@ impl TtsProviderControls {
         eleven_style.set_digits(2);
         eleven_style.set_increment(0.05);
         eleven_style.enable(eleven.style.is_some());
-        super::set_accessible_name(&eleven_style, "ElevenLabs style exaggeration, zero to one");
+        super::set_accessible_name(&eleven_style, &t!("ElevenLabs style exaggeration, zero to one"));
         super::help::tag(
             &eleven_style,
             "dialog.ttsSource.elevenStyle",
@@ -1684,7 +1689,7 @@ impl TtsProviderControls {
             Some(true) => 1,
             Some(false) => 2,
         });
-        super::set_accessible_name(&eleven_boost, "ElevenLabs speaker boost");
+        super::set_accessible_name(&eleven_boost, &t!("ElevenLabs speaker boost"));
         super::help::tag(
             &eleven_boost,
             "dialog.ttsSource.elevenBoost",
@@ -1695,9 +1700,9 @@ impl TtsProviderControls {
         // Last in the panel, so turning it on or off never shifts the controls
         // above it in Tab order.
         let eleven_stream = CheckBox::builder(&eleven_box)
-            .with_label("Stream audio as it is generated")
+            .with_label(&t!("Stream audio as it is generated"))
             .build();
-        super::set_accessible_name(&eleven_stream, "Stream audio as it is generated");
+        super::set_accessible_name(&eleven_stream, &t!("Stream audio as it is generated"));
         eleven_stream.set_value(eleven.stream);
         super::help::tag(
             &eleven_stream,
@@ -1712,17 +1717,17 @@ impl TtsProviderControls {
         bind_optional_double(&eleven_style_override, &eleven_style);
 
         let openai_panel = Panel::builder(parent).build();
-        let (openai_sizer, openai_box) = super::group_box(&openai_panel, "OpenAI voice settings");
+        let (openai_sizer, openai_box) = super::group_box(&openai_panel, &t!("OpenAI voice settings"));
         let openai_model = Choice::builder(&openai_box).build();
         fill_model_choice(&openai_model, crate::tts::engines::OPENAI, &openai.model);
-        super::set_accessible_name(&openai_model, "OpenAI speech model");
+        super::set_accessible_name(&openai_model, &t!("OpenAI speech model"));
         super::help::tag(
             &openai_model,
             "dialog.ttsSource.openaiModel",
             "OpenAI speech model",
         );
         openai_sizer.add(
-            &StaticText::builder(&openai_box).with_label("Model").build(),
+            &StaticText::builder(&openai_box).with_label(&t!("Model")).build(),
             0,
             SizerFlag::All,
             3,
@@ -1731,7 +1736,7 @@ impl TtsProviderControls {
         let openai_instructions = TextCtrl::builder(&openai_box)
             .with_value(&openai.instructions)
             .build();
-        super::set_accessible_name(&openai_instructions, "OpenAI voice instructions");
+        super::set_accessible_name(&openai_instructions, &t!("OpenAI voice instructions"));
         super::help::tag(
             &openai_instructions,
             "dialog.ttsSource.openaiInstructions",
@@ -1739,7 +1744,7 @@ impl TtsProviderControls {
         );
         openai_sizer.add(
             &StaticText::builder(&openai_box)
-                .with_label("Voice instructions (GPT-4o mini TTS)")
+                .with_label(&t!("Voice instructions (GPT-4o mini TTS)"))
                 .build(),
             0,
             SizerFlag::All,
@@ -1754,9 +1759,9 @@ impl TtsProviderControls {
         openai_panel.set_sizer(openai_sizer, true);
 
         let azure_panel = Panel::builder(parent).build();
-        let (azure_sizer, azure_box) = super::group_box(&azure_panel, "Azure voice settings");
+        let (azure_sizer, azure_box) = super::group_box(&azure_panel, &t!("Azure voice settings"));
         let azure_style = Choice::builder(&azure_box).build();
-        super::set_accessible_name(&azure_style, "Azure speaking style");
+        super::set_accessible_name(&azure_style, &t!("Azure speaking style"));
         fill_default_choice(&azure_style, &[], &azure.style, "Default speaking style");
         super::help::tag(
             &azure_style,
@@ -1772,7 +1777,7 @@ impl TtsProviderControls {
         azure_degree.set_increment(0.05);
         super::set_accessible_name(
             &azure_degree,
-            "Azure style intensity, zero point zero one to two",
+            &t!("Azure style intensity, zero point zero one to two"),
         );
         super::help::tag(
             &azure_degree,
@@ -1781,7 +1786,7 @@ impl TtsProviderControls {
         );
         azure_sizer.add(
             &StaticText::builder(&azure_box)
-                .with_label("Style intensity")
+                .with_label(&t!("Style intensity"))
                 .build(),
             0,
             SizerFlag::All,
@@ -1789,7 +1794,7 @@ impl TtsProviderControls {
         );
         azure_sizer.add(&azure_degree, 0, SizerFlag::All, 3);
         let azure_role = Choice::builder(&azure_box).build();
-        super::set_accessible_name(&azure_role, "Azure speaking role");
+        super::set_accessible_name(&azure_role, &t!("Azure speaking role"));
         fill_default_choice(&azure_role, &[], &azure.role, "Default speaking role");
         super::help::tag(
             &azure_role,
@@ -1801,13 +1806,13 @@ impl TtsProviderControls {
 
         let google_panel = Panel::builder(parent).build();
         let (google_sizer, google_box) =
-            super::group_box(&google_panel, "Google Cloud voice settings");
+            super::group_box(&google_panel, &t!("Google Cloud voice settings"));
         let google_language = TextCtrl::builder(&google_box)
             .with_value(&google.language_code)
             .build();
         super::set_accessible_name(
             &google_language,
-            "Google Cloud language code; blank infers it from the voice",
+            &t!("Google Cloud language code; blank infers it from the voice"),
         );
         super::help::tag(
             &google_language,
@@ -1816,7 +1821,7 @@ impl TtsProviderControls {
         );
         google_sizer.add(
             &StaticText::builder(&google_box)
-                .with_label("Language code (blank infers from voice)")
+                .with_label(&t!("Language code (blank infers from voice)"))
                 .build(),
             0,
             SizerFlag::All,
@@ -1824,8 +1829,8 @@ impl TtsProviderControls {
         );
         google_sizer.add(&google_language, 0, SizerFlag::Expand | SizerFlag::All, 3);
         let google_effect = Choice::builder(&google_box).build();
-        super::set_accessible_name(&google_effect, "Google Cloud audio effects profile");
-        google_effect.append("No effects profile");
+        super::set_accessible_name(&google_effect, &t!("Google Cloud audio effects profile"));
+        google_effect.append(&t!("No effects profile"));
         let mut effect_selection = 0;
         for (index, (id, label)) in crate::tts::engines::google::EFFECTS_PROFILES
             .iter()
@@ -1844,7 +1849,7 @@ impl TtsProviderControls {
         );
         google_sizer.add(
             &StaticText::builder(&google_box)
-                .with_label("Audio effects profile")
+                .with_label(&t!("Audio effects profile"))
                 .build(),
             0,
             SizerFlag::All,
@@ -1854,7 +1859,7 @@ impl TtsProviderControls {
         google_panel.set_sizer(google_sizer, true);
 
         let polly_panel = Panel::builder(parent).build();
-        let (polly_sizer, polly_box) = super::group_box(&polly_panel, "AWS Polly voice settings");
+        let (polly_sizer, polly_box) = super::group_box(&polly_panel, &t!("AWS Polly voice settings"));
         let polly_engine = Choice::builder(&polly_box).build();
         // Filled the same way as every other model picker — including its
         // accessible name, so nothing here may pre-populate it: `clear()` is the
@@ -1867,7 +1872,7 @@ impl TtsProviderControls {
         );
         polly_sizer.add(
             &StaticText::builder(&polly_box)
-                .with_label("Synthesis engine")
+                .with_label(&t!("Synthesis engine"))
                 .build(),
             0,
             SizerFlag::All,
@@ -1879,7 +1884,7 @@ impl TtsProviderControls {
             .build();
         super::set_accessible_name(
             &polly_language,
-            "Polly language code; blank uses the voice default",
+            &t!("Polly language code; blank uses the voice default"),
         );
         super::help::tag(
             &polly_language,
@@ -1888,7 +1893,7 @@ impl TtsProviderControls {
         );
         polly_sizer.add(
             &StaticText::builder(&polly_box)
-                .with_label("Language code (optional)")
+                .with_label(&t!("Language code (optional)"))
                 .build(),
             0,
             SizerFlag::All,
@@ -1899,11 +1904,11 @@ impl TtsProviderControls {
 
         let gtts_panel = Panel::builder(parent).build();
         let (gtts_sizer, gtts_box) =
-            super::group_box(&gtts_panel, "Google Translate voice settings");
+            super::group_box(&gtts_panel, &t!("Google Translate voice settings"));
         let gtts_tld = TextCtrl::builder(&gtts_box).with_value(&gtts.tld).build();
         super::set_accessible_name(
             &gtts_tld,
-            "Google Translate accent domain suffix; blank uses com",
+            &t!("Google Translate accent domain suffix; blank uses com"),
         );
         super::help::tag(
             &gtts_tld,
@@ -1912,7 +1917,7 @@ impl TtsProviderControls {
         );
         gtts_sizer.add(
             &StaticText::builder(&gtts_box)
-                .with_label("Accent domain suffix, for example co.uk")
+                .with_label(&t!("Accent domain suffix, for example co.uk"))
                 .build(),
             0,
             SizerFlag::All,
@@ -1920,7 +1925,7 @@ impl TtsProviderControls {
         );
         gtts_sizer.add(&gtts_tld, 0, SizerFlag::Expand | SizerFlag::All, 3);
         let gtts_speed = Choice::builder(&gtts_box).build();
-        super::set_accessible_name(&gtts_speed, "Google Translate speed mode");
+        super::set_accessible_name(&gtts_speed, &t!("Google Translate speed mode"));
         for label in ["Speed: provider default", "Speed: normal", "Speed: slow"] {
             gtts_speed.append(label);
         }
@@ -2274,7 +2279,7 @@ fn builtin_models(engine: &str) -> Vec<crate::tts::catalog::CatalogModel> {
 
 fn fill_model_choice(choice: &Choice, engine: &str, wanted: &str) {
     choice.clear();
-    choice.append("Provider default");
+    choice.append(&t!("Provider default"));
     let mut models = crate::tts::catalog::models(engine);
     if models.is_empty() {
         models = builtin_models(engine);
@@ -2288,7 +2293,7 @@ fn fill_model_choice(choice: &Choice, engine: &str, wanted: &str) {
     } else if let Some(index) = models.iter().position(|model| model.id == wanted) {
         index + 1
     } else {
-        choice.append(&format!("{wanted} (unavailable)"));
+        choice.append(&t!("{wanted} (unavailable)", wanted = wanted));
         models.len() + 1
     };
     choice.set_selection(selection as u32);
@@ -2327,10 +2332,10 @@ fn model_choice_value(choice: &Choice) -> String {
 fn voice_status_text(engine: &str, count: Option<usize>) -> String {
     let name = crate::tts::engines::display_name(engine);
     match count {
-        Some(0) => format!("{name} reported no voices."),
-        Some(1) => format!("1 voice available for {name}."),
-        Some(n) => format!("{n} voices available for {name}."),
-        None => format!("Voice catalog for {name} is refreshing automatically."),
+        Some(0) => t!("{name} reported no voices.", name = name),
+        Some(1) => t!("1 voice available for {name}.", name = name),
+        Some(n) => t!("{n} voices available for {name}.", n = n, name = name),
+        None => t!("Voice catalog for {name} is refreshing automatically.", name = name),
     }
 }
 
@@ -2344,7 +2349,7 @@ fn voice_status_text(engine: &str, count: Option<usize>) -> String {
 fn update_voice_status(label: &StaticText, choice: &Choice, engine: &str, model: &str) {
     let text = voice_status_text(engine, crate::tts::voice_count_for_model(engine, model));
     label.set_label(&text);
-    super::set_accessible_name(choice, &format!("Voice. {text}"));
+    super::set_accessible_name(choice, &t!("Voice. {text}", text = text));
 }
 
 /// Repopulates the voice picker for `engine`, selecting `wanted` if it is
@@ -2362,7 +2367,7 @@ fn fill_voice_choice(
 ) {
     let fetched = crate::tts::cached_voices_for_model(engine, model).unwrap_or_default();
     choice.clear();
-    choice.append("Default voice");
+    choice.append(&t!("Default voice"));
     for voice in &fetched {
         choice.append(&voice.label);
     }
@@ -2488,7 +2493,7 @@ fn preview_voice(
         };
         match result {
             Ok(samples) if samples.is_empty() => {
-                super::show_error(&parent, "Preview voice", "The engine returned no audio.")
+                super::show_error(&parent, &t!("Preview voice"), &t!("The engine returned no audio."))
             }
             Ok(samples) => {
                 // Played through the app's own cue output rather than a mixer
@@ -2496,7 +2501,7 @@ fn preview_voice(
                 // never reach the stream.
                 crate::audio::cue::play_samples_async(std::sync::Arc::new(samples));
             }
-            Err(error) => super::show_error(&parent, "Preview voice", &error.to_string()),
+            Err(error) => super::show_error(&parent, &t!("Preview voice"), &error.to_string()),
         }
         true
     });
@@ -2566,9 +2571,9 @@ fn edit_sound_events(
     );
 
     let output_check = CheckBox::builder(&panel)
-        .with_label("Send these sounds to the stream")
+        .with_label(&t!("Send these sounds to the stream"))
         .build();
-    super::set_accessible_name(&output_check, "Send these sounds to the stream");
+    super::set_accessible_name(&output_check, &t!("Send these sounds to the stream"));
     super::help::tag(
         &output_check,
         "dialog.soundEventsSource.toStream",
@@ -2577,11 +2582,11 @@ fn edit_sound_events(
     output_check.set_value(current.output_to_stream);
 
     let buttons = BoxSizer::builder(Orientation::Horizontal).build();
-    let ok = super::ok_button(&panel, "OK");
+    let ok = super::ok_button(&panel, &t!("OK"));
     // `ID_CANCEL` is what wx maps Escape to; without it Escape does nothing.
     let cancel = Button::builder(&panel)
         .with_id(ID_CANCEL)
-        .with_label("Cancel")
+        .with_label(&t!("Cancel"))
         .build();
     buttons.add(&ok, 0, SizerFlag::All, 4);
     buttons.add(&cancel, 0, SizerFlag::All, 4);
@@ -2650,22 +2655,22 @@ fn edit_media_player(
     let panel = Panel::builder(&dialog).build();
     let sizer = BoxSizer::builder(Orientation::Vertical).build();
 
-    let folder_label = StaticText::builder(&panel).with_label("&Folder").build();
+    let folder_label = StaticText::builder(&panel).with_label(&t!("&Folder")).build();
     let folder_input = TextCtrl::builder(&panel)
         .with_value(&current.folder)
         .build();
-    super::set_accessible_name(&folder_input, "Folder");
+    super::set_accessible_name(&folder_input, &t!("Folder"));
     super::help::tag(
         &folder_input,
         "dialog.mediaPlayerSource.folder",
         "Media player folder box",
     );
-    let browse = Button::builder(&panel).with_label("&Browse...").build();
+    let browse = Button::builder(&panel).with_label(&t!("&Browse...")).build();
 
     let shuffle = CheckBox::builder(&panel)
-        .with_label("&Shuffle the folder")
+        .with_label(&t!("&Shuffle the folder"))
         .build();
-    super::set_accessible_name(&shuffle, "Shuffle the folder");
+    super::set_accessible_name(&shuffle, &t!("Shuffle the folder"));
     super::help::tag(
         &shuffle,
         "dialog.mediaPlayerSource.shuffle",
@@ -2674,24 +2679,24 @@ fn edit_media_player(
     shuffle.set_value(current.shuffle);
 
     let duck = CheckBox::builder(&panel)
-        .with_label("&Turn the music down while other sources are playing")
+        .with_label(&t!("&Turn the music down while other sources are playing"))
         .build();
     super::set_accessible_name(
         &duck,
-        "Turn the music down while other sources are playing",
+        &t!("Turn the music down while other sources are playing"),
     );
     super::help::tag(&duck, "dialog.mediaPlayerSource.duck", "Ducking checkbox");
     duck.set_value(current.duck);
 
     let duck_label = StaticText::builder(&panel)
-        .with_label("Turned-down &level")
+        .with_label(&t!("Turned-down &level"))
         .build();
     let duck_slider = Slider::builder(&panel)
         .with_value(current.duck_percent.min(100) as i32)
         .with_min_value(0)
         .with_max_value(100)
         .build();
-    super::set_accessible_name(&duck_slider, "Turned-down level");
+    super::set_accessible_name(&duck_slider, &t!("Turned-down level"));
     super::help::tag(
         &duck_slider,
         "dialog.mediaPlayerSource.duckLevel",
@@ -2704,14 +2709,14 @@ fn edit_media_player(
     // knows what their own voice measures, and the answer is different for every
     // microphone and every gain setting.
     let threshold_label = StaticText::builder(&panel)
-        .with_label("Start turning down &at")
+        .with_label(&t!("Start turning down &at"))
         .build();
     let threshold_slider = Slider::builder(&panel)
         .with_value(mixer::clamp_threshold_db(current.duck_threshold_db))
         .with_min_value(mixer::DUCK_THRESHOLD_DB_MIN)
         .with_max_value(mixer::DUCK_THRESHOLD_DB_MAX)
         .build();
-    super::set_accessible_name(&threshold_slider, "Start turning down at");
+    super::set_accessible_name(&threshold_slider, &t!("Start turning down at"));
     super::help::tag(
         &threshold_slider,
         "dialog.mediaPlayerSource.duckThreshold",
@@ -2726,7 +2731,7 @@ fn edit_media_player(
         5,
     );
     let calibrate = Button::builder(&panel)
-        .with_label("&Calibrate to my voice")
+        .with_label(&t!("&Calibrate to my voice"))
         .build();
     super::help::tag(
         &calibrate,
@@ -2741,20 +2746,20 @@ fn edit_media_player(
     // microphone through the speakers.
     let note = StaticText::builder(&panel)
         .with_label(
-            "This music is mixed into the stream directly. A Desktop Audio source will not \
+            &t!("This music is mixed into the stream directly. A Desktop Audio source will not \
              capture it a second time, because Desktop Audio leaves Pubsplash's own sound out. \
              If you monitor this source, use headphones: a microphone in the same room will pick \
-             the music up and send it out twice, echoed.",
+             the music up and send it out twice, echoed."),
         )
         .build();
     note.wrap(480);
 
     let buttons = BoxSizer::builder(Orientation::Horizontal).build();
-    let ok = super::ok_button(&panel, "OK");
+    let ok = super::ok_button(&panel, &t!("OK"));
     // `ID_CANCEL` is what wx maps Escape to; without it Escape does nothing.
     let cancel = Button::builder(&panel)
         .with_id(ID_CANCEL)
-        .with_label("Cancel")
+        .with_label(&t!("Cancel"))
         .build();
     buttons.add(&ok, 0, SizerFlag::All, 4);
     buttons.add(&cancel, 0, SizerFlag::All, 4);
@@ -2903,10 +2908,8 @@ fn calibrate_duck(
                 slider.set_value(db);
                 // Set rather than announced: the sentence below is what the
                 // user hears, and two announcements at once would collide.
-                announcer.set_text("Start turning down at", &format!("{db} dB"));
-                super::help::announce(&format!(
-                    "Calibrated. The music will start turning down at {db} decibels."
-                ));
+                announcer.set_text("Start turning down at", &t!("{db} dB", db = db));
+                super::help::announce(&t!("Calibrated. The music will start turning down at {db} decibels.", db = db));
             }
             // Nothing was heard, which is a real answer and a common one: the
             // microphone is muted, is in another scene, or is not there at all.

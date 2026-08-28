@@ -26,13 +26,16 @@
 //! reach back into wx, and a re-entrant tick that found the old state would fire
 //! twice.
 
+use crate::t;
 use super::App;
 use crate::schedule::{self, Advanced, Schedule, Stage};
 use std::cell::RefCell;
 use std::rc::Rc;
 use wxdragon::prelude::*;
 
-const CAPTION: &str = "Schedule stream";
+fn caption() -> String {
+    t!("Schedule stream")
+}
 
 /// Index of the Advanced row in the mode radio box.
 const ADVANCED: i32 = 1;
@@ -43,7 +46,7 @@ const ADVANCED: i32 = 1;
 /// schedule anything is told why rather than made to fill a form in first.
 pub fn show(app: &Rc<App>, parent: &Frame) {
     if let Some(reason) = why_not(app) {
-        super::show_error(parent, CAPTION, &reason);
+        super::show_error(parent, &caption(), &reason);
         return;
     }
     // Asked now rather than at the scheduled moment, which is the whole reason
@@ -60,7 +63,7 @@ pub fn show(app: &Rc<App>, parent: &Frame) {
     app.run.borrow_mut().schedule = Some(schedule);
     app.refresh_stream_ui();
     let remaining = schedule::format_countdown(when.saturating_sub(crate::mastodon::now_unix()));
-    super::help::announce(&format!("Stream scheduled, connecting in {remaining}"));
+    super::help::announce(&t!("Stream scheduled, connecting in {remaining}", remaining = remaining));
 }
 
 /// Why a schedule cannot be armed right now, or `None` if one can.
@@ -101,7 +104,7 @@ fn ask(app: &Rc<App>, parent: &Frame) -> Option<Schedule> {
 
     // Sized for the advanced layout, which is the taller of the two: the fields
     // are hidden rather than removed, so the dialog does not shrink back.
-    let dialog = Dialog::builder(parent, CAPTION)
+    let dialog = Dialog::builder(parent, &caption())
         .with_style(DialogStyle::DefaultDialogStyle | DialogStyle::ResizeBorder)
         .with_size(480, 460)
         .build();
@@ -109,7 +112,7 @@ fn ask(app: &Rc<App>, parent: &Frame) -> Option<Schedule> {
     let sizer = BoxSizer::builder(Orientation::Vertical).build();
 
     let mode = RadioBox::builder(&panel, &["Simple", "Advanced"])
-        .with_label("Scheduling mode")
+        .with_label(&t!("Scheduling mode"))
         .with_style(RadioBoxStyle::SpecifyRows)
         .with_major_dimension(1)
         .build();
@@ -125,9 +128,9 @@ fn ask(app: &Rc<App>, parent: &Frame) -> Option<Schedule> {
     // header records the measurement). `picker_acc::install` is what makes the
     // *fields* speak as the user arrows across them, which Windows does not do on
     // its own — that module's header says why at length.
-    let date_label = StaticText::builder(&panel).with_label("Date").build();
+    let date_label = StaticText::builder(&panel).with_label(&t!("Date")).build();
     let date = DatePickerCtrl::builder(&panel).build();
-    super::set_accessible_name(&date, "Date");
+    super::set_accessible_name(&date, &t!("Date"));
     // Before the value and the range below, and it has to be: identifying the
     // fields sets a probe value and reads back what the control displays, and a
     // range would clamp that probe to something else.
@@ -142,9 +145,9 @@ fn ask(app: &Rc<App>, parent: &Frame) -> Option<Schedule> {
     // Labelled for simple mode; `apply_mode` rewrites both the visible label and
     // the accessible name for advanced, since the field means something more
     // specific there.
-    let first_label = StaticText::builder(&panel).with_label("Time").build();
+    let first_label = StaticText::builder(&panel).with_label(&t!("Time")).build();
     let first_time = TimePickerCtrl::builder(&panel).build();
-    super::set_accessible_name(&first_time, "Time");
+    super::set_accessible_name(&first_time, &t!("Time"));
     super::picker_acc::install(&first_time, super::picker_acc::Kind::Time);
     super::help::tag(
         &first_time,
@@ -153,10 +156,10 @@ fn ask(app: &Rc<App>, parent: &Frame) -> Option<Schedule> {
     );
 
     let second_label = StaticText::builder(&panel)
-        .with_label("Start of stream time")
+        .with_label(&t!("Start of stream time"))
         .build();
     let second_time = TimePickerCtrl::builder(&panel).build();
-    super::set_accessible_name(&second_time, "Start of stream time");
+    super::set_accessible_name(&second_time, &t!("Start of stream time"));
     super::picker_acc::install(&second_time, super::picker_acc::Kind::Time);
     super::help::tag(
         &second_time,
@@ -165,11 +168,11 @@ fn ask(app: &Rc<App>, parent: &Frame) -> Option<Schedule> {
     );
 
     let pre_scene_label = StaticText::builder(&panel)
-        .with_label("Pre-stream scene")
+        .with_label(&t!("Pre-stream scene"))
         .build();
     let pre_scene = Choice::builder(&panel).build();
     let start_scene_label = StaticText::builder(&panel)
-        .with_label("Start of stream scene")
+        .with_label(&t!("Start of stream scene"))
         .build();
     let start_scene = Choice::builder(&panel).build();
     for name in &scenes {
@@ -178,8 +181,8 @@ fn ask(app: &Rc<App>, parent: &Frame) -> Option<Schedule> {
     }
     pre_scene.set_selection(active_index);
     start_scene.set_selection(active_index);
-    super::set_accessible_name(&pre_scene, "Pre-stream scene");
-    super::set_accessible_name(&start_scene, "Start of stream scene");
+    super::set_accessible_name(&pre_scene, &t!("Pre-stream scene"));
+    super::set_accessible_name(&start_scene, &t!("Start of stream scene"));
     super::help::tag(
         &pre_scene,
         "dialog.schedule.preScene",
@@ -192,11 +195,11 @@ fn ask(app: &Rc<App>, parent: &Frame) -> Option<Schedule> {
     );
 
     let buttons = BoxSizer::builder(Orientation::Horizontal).build();
-    let ok = super::ok_button(&panel, "OK");
+    let ok = super::ok_button(&panel, &t!("OK"));
     // `ID_CANCEL` is what wx maps Escape to; without it Escape does nothing.
     let cancel = Button::builder(&panel)
         .with_id(ID_CANCEL)
-        .with_label("Cancel")
+        .with_label(&t!("Cancel"))
         .build();
     buttons.add(&ok, 0, SizerFlag::All, 4);
     buttons.add(&cancel, 0, SizerFlag::All, 4);
@@ -259,14 +262,14 @@ fn ask(app: &Rc<App>, parent: &Frame) -> Option<Schedule> {
             let Some(connect_at) = at(&date, &first_time) else {
                 // No `end_modal`: the warning goes up over a dialog that keeps
                 // every choice the user made, so a correction is one edit away.
-                super::show_warning(&dialog, CAPTION, DOES_NOT_EXIST);
+                super::show_warning(&dialog, &caption(), &does_not_exist());
                 first_time.set_focus();
                 return;
             };
             let now = crate::mastodon::now_unix();
             if !advanced {
                 if let Err(message) = schedule::check_future(connect_at, now) {
-                    super::show_warning(&dialog, CAPTION, &message);
+                    super::show_warning(&dialog, &caption(), &message);
                     first_time.set_focus();
                     return;
                 }
@@ -279,7 +282,7 @@ fn ask(app: &Rc<App>, parent: &Frame) -> Option<Schedule> {
                 return;
             }
             let Some(raw_switch) = at(&date, &second_time) else {
-                super::show_warning(&dialog, CAPTION, DOES_NOT_EXIST);
+                super::show_warning(&dialog, &caption(), &does_not_exist());
                 second_time.set_focus();
                 return;
             };
@@ -287,7 +290,7 @@ fn ask(app: &Rc<App>, parent: &Frame) -> Option<Schedule> {
             {
                 Ok(times) => times,
                 Err(message) => {
-                    super::show_warning(&dialog, CAPTION, &message);
+                    super::show_warning(&dialog, &caption(), &message);
                     first_time.set_focus();
                     return;
                 }
@@ -296,12 +299,12 @@ fn ask(app: &Rc<App>, parent: &Frame) -> Option<Schedule> {
             // and `ScenesConfig::active_scene` address a scene. Re-checked here
             // because the config can be edited while this dialog is open.
             let Some(pre) = chosen(&pre_scene, &scenes) else {
-                super::show_warning(&dialog, CAPTION, NO_SCENE);
+                super::show_warning(&dialog, &caption(), &no_scene());
                 pre_scene.set_focus();
                 return;
             };
             let Some(start) = chosen(&start_scene, &scenes) else {
-                super::show_warning(&dialog, CAPTION, NO_SCENE);
+                super::show_warning(&dialog, &caption(), &no_scene());
                 start_scene.set_focus();
                 return;
             };
@@ -330,11 +333,18 @@ fn ask(app: &Rc<App>, parent: &Frame) -> Option<Schedule> {
     result.borrow_mut().take()
 }
 
-const DOES_NOT_EXIST: &str =
-    "That date and time does not exist. Check the date, and note that clocks going forward skip an \
-     hour.";
-const NO_SCENE: &str = "Choose a scene. If the list is empty, the scene may have been deleted while \
-                        this window was open.";
+fn does_not_exist() -> String {
+    t!(
+        "That date and time does not exist. Check the date, and note that clocks going forward skip an \
+         hour."
+    )
+}
+fn no_scene() -> String {
+    t!(
+        "Choose a scene. If the list is empty, the scene may have been deleted while \
+         this window was open."
+    )
+}
 
 /// The date from `date` and the time from `time` as Unix seconds.
 ///
@@ -382,7 +392,7 @@ fn abandon(app: &Rc<App>, reason: &str) {
     app.run.borrow_mut().schedule = None;
     app.refresh_stream_ui();
     log::warn!("Scheduled stream cancelled: {reason}");
-    super::help::announce(&format!("Scheduled stream cancelled, {reason}"));
+    super::help::announce(&t!("Scheduled stream cancelled, {reason}", reason = reason));
 }
 
 /// Acts on the armed schedule, if it is time to. Called once a second.

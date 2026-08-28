@@ -28,6 +28,7 @@
 //! thread (thread-locals below live there); only the hook proc runs in the OS
 //! hook context, and it touches nothing but atomics.
 
+use crate::t;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::OnceLock;
@@ -61,7 +62,9 @@ const FRAME_SUBCLASS_ID: usize = 0x0A12;
 const HELP_PROP: PCWSTR = w!("PubsplashHelpId");
 
 /// Spoken when a control has no id, or an id with no authored message.
-const GENERIC: &str = "No help available for this control.";
+fn generic() -> String {
+    t!("No help available for this control.")
+}
 
 thread_local! {
     /// Interns help-ids to small indices so each can be stored as a single
@@ -134,7 +137,7 @@ struct HelpEntry {
 }
 
 /// The id -> message map, parsed once. Entries with a blank message are dropped
-/// so those controls fall back to [`GENERIC`].
+/// so those controls fall back to [`generic()`].
 fn messages() -> &'static HashMap<String, String> {
     static MAP: OnceLock<HashMap<String, String>> = OnceLock::new();
     MAP.get_or_init(|| match toml::from_str::<HelpFile>(HELP_TOML) {
@@ -154,11 +157,11 @@ fn messages() -> &'static HashMap<String, String> {
 fn help_for(hwnd: HWND) -> String {
     let raw = unsafe { GetPropW(hwnd, HELP_PROP) }.0 as isize;
     if raw <= 0 {
-        return GENERIC.to_string();
+        return generic().to_string();
     }
     id_for((raw - 1) as usize)
         .and_then(|id| messages().get(&id).cloned())
-        .unwrap_or_else(|| GENERIC.to_string())
+        .unwrap_or_else(|| generic().to_string())
 }
 
 // --- UIA announcer ---------------------------------------------------------

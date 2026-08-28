@@ -1,5 +1,6 @@
 //! Setup streaming services dialog: service list, credentials, connect/disconnect.
 
+use crate::t;
 use super::{App, show_error};
 use crate::config::{MAIN_SITE_URL, SiteConfig, StreamingServiceType};
 use crate::net::NetCommand;
@@ -8,7 +9,9 @@ use std::rc::Rc;
 use wxdragon::prelude::*;
 
 /// Shown when no services are configured. See [`super::list`].
-const NO_SERVICES: &str = "No services";
+fn no_services() -> String {
+    t!("No services")
+}
 
 /// The service-type radio box's rows, in order.
 ///
@@ -65,7 +68,7 @@ pub fn show(app: &Rc<App>, frame: &Frame) {
     let sizer = BoxSizer::builder(Orientation::Vertical).build();
 
     let services_label = StaticText::builder(&panel)
-        .with_label("Streaming services")
+        .with_label(&t!("Streaming services"))
         .build();
     let services_list = ListBox::builder(&panel).build();
     super::native_acc::install(&services_list, "Streaming services");
@@ -75,12 +78,12 @@ pub fn show(app: &Rc<App>, frame: &Frame) {
         "Configured streaming services list",
     );
     let service_buttons = BoxSizer::builder(Orientation::Horizontal).build();
-    let add_service = Button::builder(&panel).with_label("Add service").build();
+    let add_service = Button::builder(&panel).with_label(&t!("Add service")).build();
     let rename_service = Button::builder(&panel)
-        .with_label("Rename service")
+        .with_label(&t!("Rename service"))
         .build();
     let remove_service = Button::builder(&panel)
-        .with_label("Remove service")
+        .with_label(&t!("Remove service"))
         .build();
     super::help::tag(&add_service, "dialog.connect.addSite", "Add service button");
     super::help::tag(
@@ -98,7 +101,7 @@ pub fn show(app: &Rc<App>, frame: &Frame) {
     service_buttons.add(&remove_service, 0, SizerFlag::All, 4);
 
     let service_type = RadioBox::builder(&panel, &service_type_labels())
-        .with_label("Service type")
+        .with_label(&t!("Service type"))
         .with_style(RadioBoxStyle::SpecifyRows)
         .with_major_dimension(1)
         .build();
@@ -110,28 +113,28 @@ pub fn show(app: &Rc<App>, frame: &Frame) {
     );
 
     let url_label = StaticText::builder(&panel)
-        .with_label("Audiopub URL")
+        .with_label(&t!("Audiopub URL"))
         .build();
     let url_input = TextCtrl::builder(&panel).build();
-    super::set_accessible_name(&url_input, "Audiopub URL");
+    super::set_accessible_name(&url_input, &t!("Audiopub URL"));
     super::help::tag(
         &url_input,
         "dialog.connect.url",
         "Audiopub URL for the selected service",
     );
-    let email_label = StaticText::builder(&panel).with_label("Email").build();
+    let email_label = StaticText::builder(&panel).with_label(&t!("Email")).build();
     let email_input = TextCtrl::builder(&panel).build();
-    super::set_accessible_name(&email_input, "Email");
+    super::set_accessible_name(&email_input, &t!("Email"));
     super::help::tag(
         &email_input,
         "dialog.connect.email",
         "Email address for the selected service",
     );
-    let password_label = StaticText::builder(&panel).with_label("Password").build();
+    let password_label = StaticText::builder(&panel).with_label(&t!("Password")).build();
     let password_input = TextCtrl::builder(&panel)
         .with_style(TextCtrlStyle::Password)
         .build();
-    super::set_accessible_name(&password_input, "Password");
+    super::set_accessible_name(&password_input, &t!("Password"));
     super::help::tag(
         &password_input,
         "dialog.connect.password",
@@ -139,116 +142,116 @@ pub fn show(app: &Rc<App>, frame: &Frame) {
     );
 
     let server_label = StaticText::builder(&panel)
-        .with_label("Icecast server")
+        .with_label(&t!("Icecast server"))
         .build();
     let server_input = TextCtrl::builder(&panel).build();
-    super::set_accessible_name(&server_input, "Icecast server");
+    super::set_accessible_name(&server_input, &t!("Icecast server"));
     super::help::tag(
         &server_input,
         "dialog.connect.icecastServer",
         "Icecast server for the selected service",
     );
     let port_label = StaticText::builder(&panel)
-        .with_label("Icecast port")
+        .with_label(&t!("Icecast port"))
         .build();
     let port_input = TextCtrl::builder(&panel).build();
-    super::set_accessible_name(&port_input, "Icecast port");
+    super::set_accessible_name(&port_input, &t!("Icecast port"));
     super::help::tag(
         &port_input,
         "dialog.connect.icecastPort",
         "Icecast port for the selected service",
     );
     let mount_label = StaticText::builder(&panel)
-        .with_label("Icecast mount point")
+        .with_label(&t!("Icecast mount point"))
         .build();
     let mount_input = TextCtrl::builder(&panel).build();
-    super::set_accessible_name(&mount_input, "Icecast mount point");
+    super::set_accessible_name(&mount_input, &t!("Icecast mount point"));
     super::help::tag(
         &mount_input,
         "dialog.connect.icecastMount",
         "Icecast mount point for the selected service",
     );
     let listeners_label = StaticText::builder(&panel)
-        .with_label("Listener count URL (optional)")
+        .with_label(&t!("Listener count URL (optional)"))
         .build();
     let listeners_input = TextCtrl::builder(&panel).build();
-    super::set_accessible_name(&listeners_input, "Listener count URL (optional)");
+    super::set_accessible_name(&listeners_input, &t!("Listener count URL (optional)"));
     super::help::tag(
         &listeners_input,
         "dialog.connect.icecastListeners",
         "Listener count URL for the selected service",
     );
     let username_label = StaticText::builder(&panel)
-        .with_label("Icecast username")
+        .with_label(&t!("Icecast username"))
         .build();
     let username_input = TextCtrl::builder(&panel).build();
-    super::set_accessible_name(&username_input, "Icecast username");
+    super::set_accessible_name(&username_input, &t!("Icecast username"));
     super::help::tag(
         &username_input,
         "dialog.connect.icecastUsername",
         "Icecast username for the selected service",
     );
     let icecast_password_label = StaticText::builder(&panel)
-        .with_label("Icecast password")
+        .with_label(&t!("Icecast password"))
         .build();
     let icecast_password_input = TextCtrl::builder(&panel)
         .with_style(TextCtrlStyle::Password)
         .build();
-    super::set_accessible_name(&icecast_password_input, "Icecast password");
+    super::set_accessible_name(&icecast_password_input, &t!("Icecast password"));
     super::help::tag(
         &icecast_password_input,
         "dialog.connect.icecastPassword",
         "Icecast password for the selected service",
     );
 
-    let rtmp_url_label = StaticText::builder(&panel).with_label("Ingest URL").build();
+    let rtmp_url_label = StaticText::builder(&panel).with_label(&t!("Ingest URL")).build();
     let rtmp_url_input = TextCtrl::builder(&panel).build();
-    super::set_accessible_name(&rtmp_url_input, "Ingest URL");
+    super::set_accessible_name(&rtmp_url_input, &t!("Ingest URL"));
     super::help::tag(
         &rtmp_url_input,
         "dialog.connect.rtmpUrl",
         "RTMP ingest URL for the selected service",
     );
-    let rtmp_key_label = StaticText::builder(&panel).with_label("Stream key").build();
+    let rtmp_key_label = StaticText::builder(&panel).with_label(&t!("Stream key")).build();
     // A password field, because that is what it is: anyone holding a stream key
     // can broadcast to the channel.
     let rtmp_key_input = TextCtrl::builder(&panel)
         .with_style(TextCtrlStyle::Password)
         .build();
-    super::set_accessible_name(&rtmp_key_input, "Stream key");
+    super::set_accessible_name(&rtmp_key_input, &t!("Stream key"));
     super::help::tag(
         &rtmp_key_input,
         "dialog.connect.rtmpKey",
         "RTMP stream key for the selected service",
     );
     let channel_label = StaticText::builder(&panel)
-        .with_label("YouTube channel for chat (optional)")
+        .with_label(&t!("YouTube channel for chat (optional)"))
         .build();
     let channel_input = TextCtrl::builder(&panel).build();
-    super::set_accessible_name(&channel_input, "YouTube channel for chat (optional)");
+    super::set_accessible_name(&channel_input, &t!("YouTube channel for chat (optional)"));
     super::help::tag(
         &channel_input,
         "dialog.connect.youtubeChannel",
         "YouTube channel or video to read chat from",
     );
     let image_label = StaticText::builder(&panel)
-        .with_label("Still image (optional)")
+        .with_label(&t!("Still image (optional)"))
         .build();
     let image_input = TextCtrl::builder(&panel).build();
-    super::set_accessible_name(&image_input, "Still image (optional)");
+    super::set_accessible_name(&image_input, &t!("Still image (optional)"));
     super::help::tag(
         &image_input,
         "dialog.connect.youtubeImage",
         "Still image sent as the video track",
     );
-    let browse_image = Button::builder(&panel).with_label("Choose image").build();
+    let browse_image = Button::builder(&panel).with_label(&t!("Choose image")).build();
     super::help::tag(
         &browse_image,
         "dialog.connect.youtubeImageBrowse",
         "Choose still image button",
     );
 
-    let connect_button = Button::builder(&panel).with_label("Connect").build();
+    let connect_button = Button::builder(&panel).with_label(&t!("Connect")).build();
     super::help::tag(
         &connect_button,
         "dialog.connect.connectButton",
@@ -261,7 +264,7 @@ pub fn show(app: &Rc<App>, frame: &Frame) {
     // Connect deliberately stays off the default item: it starts or stops a live
     // connection, which is not something a stray Enter in the service list or a
     // password field should ever do.
-    let close_button = super::dismiss_button(&panel, "Close");
+    let close_button = super::dismiss_button(&panel, &t!("Close"));
 
     sizer.add(&services_label, 0, SizerFlag::All, 4);
     sizer.add(&services_list, 1, SizerFlag::Expand | SizerFlag::All, 4);
@@ -396,7 +399,7 @@ pub fn show(app: &Rc<App>, frame: &Frame) {
                     label
                 })
                 .collect();
-            let synced = super::list::sync(&services_list, &labels, NO_SERVICES);
+            let synced = super::list::sync(&services_list, &labels, &no_services());
             if services.is_empty() {
                 return;
             }
@@ -661,8 +664,8 @@ pub fn show(app: &Rc<App>, frame: &Frame) {
                 if service.is_main() {
                     show_error(
                         &dialog_for_rename,
-                        "Rename service",
-                        "The main Audiopub service cannot be renamed.",
+                        &t!("Rename service"),
+                        &t!("The main Audiopub service cannot be renamed."),
                     );
                     return;
                 }
@@ -680,7 +683,7 @@ pub fn show(app: &Rc<App>, frame: &Frame) {
             {
                 let name = name.trim();
                 if name.is_empty() {
-                    show_error(&dialog_for_rename, "Rename service", "Enter a nickname.");
+                    show_error(&dialog_for_rename, &t!("Rename service"), &t!("Enter a nickname."));
                     return;
                 }
                 if let Some(service) = app.config.borrow_mut().connection.site_mut(&id) {
@@ -712,8 +715,8 @@ pub fn show(app: &Rc<App>, frame: &Frame) {
                     drop(config);
                     show_error(
                         &dialog_for_remove,
-                        "Remove service",
-                        "The main Audiopub service cannot be removed.",
+                        &t!("Remove service"),
+                        &t!("The main Audiopub service cannot be removed."),
                     );
                     return;
                 }
@@ -778,7 +781,7 @@ pub fn show(app: &Rc<App>, frame: &Frame) {
                     Ok(profile) => profile,
                     Err(message) => {
                         drop(config);
-                        show_error(&dialog_for_connect, "Connect", &message);
+                        show_error(&dialog_for_connect, &t!("Connect"), &message);
                         return;
                     }
                 }
@@ -818,16 +821,16 @@ fn prompt_new_service(parent: &Dialog) -> Option<(String, StreamingServiceType)>
         .build();
     let panel = Panel::builder(&dialog).build();
     let sizer = BoxSizer::builder(Orientation::Vertical).build();
-    let nickname_label = StaticText::builder(&panel).with_label("Nickname").build();
+    let nickname_label = StaticText::builder(&panel).with_label(&t!("Nickname")).build();
     let nickname_input = TextCtrl::builder(&panel).build();
-    super::set_accessible_name(&nickname_input, "Nickname");
+    super::set_accessible_name(&nickname_input, &t!("Nickname"));
     super::help::tag(
         &nickname_input,
         "dialog.connect.nickname",
         "Streaming service nickname",
     );
     let service_type = RadioBox::builder(&panel, &service_type_labels())
-        .with_label("Service type")
+        .with_label(&t!("Service type"))
         .with_style(RadioBoxStyle::SpecifyRows)
         .with_major_dimension(1)
         .build();
@@ -839,10 +842,10 @@ fn prompt_new_service(parent: &Dialog) -> Option<(String, StreamingServiceType)>
         "New service type selector",
     );
     let buttons = BoxSizer::builder(Orientation::Horizontal).build();
-    let ok = super::ok_button(&panel, "OK");
+    let ok = super::ok_button(&panel, &t!("OK"));
     let cancel = Button::builder(&panel)
         .with_id(ID_CANCEL)
-        .with_label("Cancel")
+        .with_label(&t!("Cancel"))
         .build();
     {
         ok.on_click(move |_| dialog.end_modal(ID_OK));
@@ -868,7 +871,7 @@ fn prompt_new_service(parent: &Dialog) -> Option<(String, StreamingServiceType)>
         }
         let nickname = nickname_input.get_value().trim().to_string();
         if nickname.is_empty() {
-            show_error(&dialog, "Add service", "Enter a nickname.");
+            show_error(&dialog, &t!("Add service"), &t!("Enter a nickname."));
             continue;
         }
         let kind = service_type_at(service_type.get_selection());

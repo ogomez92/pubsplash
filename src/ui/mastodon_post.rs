@@ -17,6 +17,7 @@
 //! The flood gate is not here. It lives in `mastodon::net::post`, below every
 //! caller, so that a mistake in the scheduling above cannot reach a timeline.
 
+use crate::t;
 use super::{App, LastStream, StreamState};
 use crate::mastodon::api::Link;
 use crate::mastodon::net::{AuthEvent, Occasion};
@@ -264,7 +265,7 @@ pub fn authorize(parent: &Dialog, instance: &str) -> Option<Link> {
              and approve Pubsplash.",
         )
         .build();
-    super::set_accessible_name(&status, "Authorization status");
+    super::set_accessible_name(&status, &t!("Authorization status"));
     super::help::tag(
         &status,
         "dialog.mastodonAuth.status",
@@ -272,7 +273,7 @@ pub fn authorize(parent: &Dialog, instance: &str) -> Option<Link> {
     );
     // Dismiss-only: Escape and Enter both cancel, which is the only thing this
     // dialog can do on its own.
-    let cancel_button = super::dismiss_button(&panel, "Cancel");
+    let cancel_button = super::dismiss_button(&panel, &t!("Cancel"));
     sizer.add(&status, 1, SizerFlag::Expand | SizerFlag::All, 8);
     sizer.add(&cancel_button, 0, SizerFlag::All, 8);
     panel.set_sizer(sizer, true);
@@ -301,9 +302,7 @@ pub fn authorize(parent: &Dialog, instance: &str) -> Option<Link> {
                         // Opened from the UI thread: `ShellExecuteW` wants an
                         // apartment, and this thread already has one.
                         if let Err(e) = super::shell_open(&url) {
-                            *failure.borrow_mut() = Some(format!(
-                                "Could not open your browser: {e}\r\n\r\nOpen this address by hand:\r\n{url}"
-                            ));
+                            *failure.borrow_mut() = Some(t!("Could not open your browser: {e}\r\n\r\nOpen this address by hand:\r\n{url}", e = e, url = url));
                             dialog.end_modal(ID_CANCEL);
                             return;
                         }
@@ -350,7 +349,7 @@ pub fn authorize(parent: &Dialog, instance: &str) -> Option<Link> {
     dialog.destroy();
 
     if let Some(message) = failure.borrow().clone() {
-        super::show_error(parent, "Authorize", &message);
+        super::show_error(parent, &t!("Authorize"), &message);
     }
 
     outcome.borrow().clone()
@@ -358,7 +357,7 @@ pub fn authorize(parent: &Dialog, instance: &str) -> Option<Link> {
 
 fn set_status(status: &TextCtrl, text: &str) {
     status.set_value(text);
-    super::set_accessible_name(status, &format!("Authorization status, {text}"));
+    super::set_accessible_name(status, &t!("Authorization status, {text}", text = text));
     super::help::announce(text);
 }
 

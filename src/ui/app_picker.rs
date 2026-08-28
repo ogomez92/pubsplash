@@ -8,13 +8,16 @@
 //! typing a name by hand survives as the escape hatch for an app that has not
 //! been started yet.
 
+use crate::t;
 use crate::audio::app_list::{self, AppCandidate};
 use std::cell::RefCell;
 use std::rc::Rc;
 use wxdragon::prelude::*;
 
 /// Shown when no application matches the current view. See [`super::list`].
-const NO_APPLICATIONS: &str = "No applications";
+fn no_applications() -> String {
+    t!("No applications")
+}
 
 /// What the user asked for.
 pub enum Pick {
@@ -40,16 +43,16 @@ pub fn pick_application(frame: &Frame, current: &str) -> Pick {
     let sizer = BoxSizer::builder(Orientation::Vertical).build();
 
     let intro = StaticText::builder(&panel)
-        .with_label("Which application should this source capture?")
+        .with_label(&t!("Which application should this source capture?"))
         .build();
     let list = ListBox::builder(&panel).build();
     super::native_acc::install(&list, "Running applications");
     super::help::tag(&list, "dialog.appPicker.list", "Running applications list");
     let sound_only = CheckBox::builder(&panel)
-        .with_label("Only show apps that have played sound")
+        .with_label(&t!("Only show apps that have played sound"))
         .build();
     sound_only.set_value(true);
-    super::set_accessible_name(&sound_only, "Only show apps that have played sound");
+    super::set_accessible_name(&sound_only, &t!("Only show apps that have played sound"));
     super::help::tag(
         &sound_only,
         "dialog.appPicker.soundOnly",
@@ -59,14 +62,14 @@ pub fn pick_application(frame: &Frame, current: &str) -> Pick {
     let buttons = BoxSizer::builder(Orientation::Horizontal).build();
     // `ui::ok_button` carries the id-plus-`set_default()` rule Enter depends on;
     // see its doc comment for why either half alone is silently useless.
-    let select = super::ok_button(&panel, "Select");
-    let refresh = Button::builder(&panel).with_label("Refresh").build();
+    let select = super::ok_button(&panel, &t!("Select"));
+    let refresh = Button::builder(&panel).with_label(&t!("Refresh")).build();
     let type_name = Button::builder(&panel)
-        .with_label("Type a name...")
+        .with_label(&t!("Type a name..."))
         .build();
     let cancel = Button::builder(&panel)
         .with_id(ID_CANCEL)
-        .with_label("Cancel")
+        .with_label(&t!("Cancel"))
         .build();
     super::help::tag(
         &select,
@@ -126,7 +129,7 @@ pub fn pick_application(frame: &Frame, current: &str) -> Pick {
                     .iter()
                     .any(|a| crate::audio::device::name_matches(&current, &a.exe))
             {
-                rows.push((current.clone(), format!("{current} (not running)")));
+                rows.push((current.clone(), t!("{current} (not running)", current = current)));
             }
             for app in apps.iter() {
                 if only_sounding && !app.has_audio {
@@ -139,7 +142,7 @@ pub fn pick_application(frame: &Frame, current: &str) -> Pick {
             }
 
             let labels: Vec<String> = rows.iter().map(|(_, label)| label.clone()).collect();
-            super::list::fill(&list, &labels, NO_APPLICATIONS);
+            super::list::fill(&list, &labels, &no_applications());
             let keep = keep.or_else(|| (!current.is_empty()).then(|| current.clone()));
             let index = keep
                 .and_then(|want| {

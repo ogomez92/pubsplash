@@ -18,6 +18,7 @@
 //! `http::PROGRESS_INTERVAL` throttles the worker to one report a second in the
 //! first place.
 
+use crate::t;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use wxdragon::prelude::*;
@@ -78,7 +79,7 @@ impl UpdateDialog {
     /// no borrow and cannot be tripped up by whatever the pump is in the middle
     /// of.
     pub fn show(parent: &Frame, version: &str, cancel: Arc<AtomicBool>) -> Self {
-        let dialog = Dialog::builder(parent, &format!("Downloading Pubsplash {version}"))
+        let dialog = Dialog::builder(parent, &t!("Downloading Pubsplash {version}", version = version))
             .with_style(DialogStyle::DefaultDialogStyle)
             .with_size(460, 200)
             .build();
@@ -88,23 +89,23 @@ impl UpdateDialog {
         // A native progress bar reports its own percentage to a screen reader,
         // so all it needs from us is a name. Fed a percentage against a fixed
         // range of 100, so the file size arriving later never re-ranges it.
-        let gauge_label = StaticText::builder(&panel).with_label("Progress").build();
+        let gauge_label = StaticText::builder(&panel).with_label(&t!("Progress")).build();
         let gauge = Gauge::builder(&panel).with_range(100).build();
-        super::set_accessible_name(&gauge, "Download progress");
+        super::set_accessible_name(&gauge, &t!("Download progress"));
         super::help::tag(&gauge, "dialog.update.progress", "Update download progress bar");
 
-        let status_label = StaticText::builder(&panel).with_label("Status").build();
+        let status_label = StaticText::builder(&panel).with_label(&t!("Status")).build();
         let status = TextCtrl::builder(&panel)
             .with_style(TextCtrlStyle::ReadOnly)
             .with_value("Connecting to GitHub...")
             .build();
-        super::set_accessible_name(&status, "Download status");
+        super::set_accessible_name(&status, &t!("Download status"));
         super::help::tag(&status, "dialog.update.status", "Update download status text");
 
         // Cancel is the only button, so it takes both ENTER and ESCAPE through
         // `dismiss_button`. There is nothing to confirm here — the user already
         // said yes — and the one thing they might want is out.
-        let cancel_button = super::dismiss_button(&panel, "Cancel download");
+        let cancel_button = super::dismiss_button(&panel, &t!("Cancel download"));
         super::help::tag(
             &cancel_button,
             "dialog.update.cancel",

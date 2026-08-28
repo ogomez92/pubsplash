@@ -1,6 +1,7 @@
 //! Set stream info dialog: title, description, and whether the stream is
 //! archived on the server. Values live for this session only.
 
+use crate::t;
 use super::App;
 use std::rc::Rc;
 use wxdragon::prelude::*;
@@ -24,9 +25,9 @@ pub fn show(app: &Rc<App>, parent: &Frame) -> bool {
 
     let current = app.run.borrow().stream_info.clone();
 
-    let title_label = StaticText::builder(&panel).with_label("Title").build();
+    let title_label = StaticText::builder(&panel).with_label(&t!("Title")).build();
     let title_input = TextCtrl::builder(&panel).with_value(&current.title).build();
-    super::set_accessible_name(&title_input, "Title");
+    super::set_accessible_name(&title_input, &t!("Title"));
     super::help::tag(
         &title_input,
         "dialog.streamInfo.title",
@@ -34,29 +35,29 @@ pub fn show(app: &Rc<App>, parent: &Frame) -> bool {
     );
 
     let description_label = StaticText::builder(&panel)
-        .with_label("Description")
+        .with_label(&t!("Description"))
         .build();
     let description_input = TextCtrl::builder(&panel)
         .with_style(TextCtrlStyle::MultiLine)
         .with_value(&current.description)
         .build();
-    super::set_accessible_name(&description_input, "Description");
+    super::set_accessible_name(&description_input, &t!("Description"));
     super::help::tag(
         &description_input,
         "dialog.streamInfo.description",
         "Stream description input",
     );
 
-    let quality_label = StaticText::builder(&panel).with_label("Quality").build();
+    let quality_label = StaticText::builder(&panel).with_label(&t!("Quality")).build();
     let quality_choice = Choice::builder(&panel).build();
-    super::set_accessible_name(&quality_choice, "Quality");
+    super::set_accessible_name(&quality_choice, &t!("Quality"));
     super::help::tag(
         &quality_choice,
         "dialog.streamInfo.quality",
         "Stream audio quality (bitrate) choice",
     );
     for kbps in QUALITY_KBPS {
-        quality_choice.append(&format!("{kbps} kbps"));
+        quality_choice.append(&t!("{kbps} kbps", kbps = kbps));
     }
     // Persisted in config (unlike the session-only title/description above).
     let current_bitrate = app.config.borrow().audio.bitrate_kbps;
@@ -67,9 +68,9 @@ pub fn show(app: &Rc<App>, parent: &Frame) -> bool {
     quality_choice.set_selection(quality_index as u32);
 
     let archive_check = CheckBox::builder(&panel)
-        .with_label("Archive the stream")
+        .with_label(&t!("Archive the stream"))
         .build();
-    super::set_accessible_name(&archive_check, "Archive the stream");
+    super::set_accessible_name(&archive_check, &t!("Archive the stream"));
     super::help::tag(
         &archive_check,
         "dialog.streamInfo.archive",
@@ -84,9 +85,9 @@ pub fn show(app: &Rc<App>, parent: &Frame) -> bool {
     archive_check.set_value(default_archive);
 
     let record_check = CheckBox::builder(&panel)
-        .with_label("Record this stream")
+        .with_label(&t!("Record this stream"))
         .build();
-    super::set_accessible_name(&record_check, "Record this stream");
+    super::set_accessible_name(&record_check, &t!("Record this stream"));
     super::help::tag(
         &record_check,
         "dialog.streamInfo.record",
@@ -103,11 +104,11 @@ pub fn show(app: &Rc<App>, parent: &Frame) -> bool {
     // the archive and record boxes above are, and decide on their own from
     // there: unchecking one here silences the announcements for this stream
     // without touching the saved defaults.
-    let (mastodon_group, mastodon_box) = super::group_box(&panel, "Mastodon");
+    let (mastodon_group, mastodon_box) = super::group_box(&panel, &t!("Mastodon"));
     let linked = app.config.borrow().mastodon.is_linked();
 
     let announce_start = CheckBox::builder(&mastodon_box)
-        .with_label("Post to Mastodon when this stream starts")
+        .with_label(&t!("Post to Mastodon when this stream starts"))
         .build();
     super::help::tag(
         &announce_start,
@@ -115,7 +116,7 @@ pub fn show(app: &Rc<App>, parent: &Frame) -> bool {
         "Post to Mastodon when this stream starts checkbox",
     );
     let announce_periodic = CheckBox::builder(&mastodon_box)
-        .with_label("Post periodic still-streaming announcements")
+        .with_label(&t!("Post periodic still-streaming announcements"))
         .build();
     super::help::tag(
         &announce_periodic,
@@ -146,7 +147,7 @@ pub fn show(app: &Rc<App>, parent: &Frame) -> bool {
             &if linked {
                 label.to_string()
             } else {
-                format!("{label}, unavailable until a Mastodon account is linked in Preferences")
+                t!("{label}, unavailable until a Mastodon account is linked in Preferences", label = label)
             },
         );
     }
@@ -154,11 +155,11 @@ pub fn show(app: &Rc<App>, parent: &Frame) -> bool {
     mastodon_group.add(&announce_periodic, 0, SizerFlag::All, 4);
 
     let buttons = BoxSizer::builder(Orientation::Horizontal).build();
-    let ok_button = super::ok_button(&panel, "OK");
+    let ok_button = super::ok_button(&panel, &t!("OK"));
     // `ID_CANCEL` is what wx maps Escape to; without it Escape does nothing.
     let cancel_button = Button::builder(&panel)
         .with_id(ID_CANCEL)
-        .with_label("Cancel")
+        .with_label(&t!("Cancel"))
         .build();
     buttons.add(&ok_button, 0, SizerFlag::All, 4);
     buttons.add(&cancel_button, 0, SizerFlag::All, 4);

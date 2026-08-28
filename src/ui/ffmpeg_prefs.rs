@@ -28,6 +28,7 @@
 //! raises the cancel flag. The same rule the plugin scan follows, and the status
 //! text says so rather than leaving it to be discovered.
 
+use crate::t;
 use super::{App, show_error, show_info};
 use crate::ffmpeg::{self, install};
 use std::rc::Rc;
@@ -82,12 +83,12 @@ impl ProgressDialog {
         let panel = Panel::builder(&dialog).build();
         let sizer = BoxSizer::builder(Orientation::Vertical).build();
 
-        let gauge_label = StaticText::builder(&panel).with_label("Progress").build();
+        let gauge_label = StaticText::builder(&panel).with_label(&t!("Progress")).build();
         let gauge = Gauge::builder(&panel).with_range(100).build();
-        super::set_accessible_name(&gauge, "Download progress");
+        super::set_accessible_name(&gauge, &t!("Download progress"));
         super::help::tag(&gauge, "dialog.ffmpeg.progress", "FFmpeg download progress bar");
 
-        let status_label = StaticText::builder(&panel).with_label("Status").build();
+        let status_label = StaticText::builder(&panel).with_label(&t!("Status")).build();
         let status = TextCtrl::builder(&panel)
             .with_style(TextCtrlStyle::ReadOnly)
             .with_value(&format!(
@@ -95,14 +96,14 @@ impl ProgressDialog {
                 install::APPROXIMATE_MEGABYTES
             ))
             .build();
-        super::set_accessible_name(&status, "Download status");
+        super::set_accessible_name(&status, &t!("Download status"));
         super::help::tag(&status, "dialog.ffmpeg.status", "FFmpeg download status text");
 
         // Dismiss-only in shape, so `dismiss_button` puts both Escape and Enter
         // on it; the click handler holds the flag itself, so cancelling needs no
         // borrow of anything and cannot be tripped up by whatever the pump is
         // doing.
-        let cancel_button = super::dismiss_button(&panel, "Cancel download");
+        let cancel_button = super::dismiss_button(&panel, &t!("Cancel download"));
         {
             let cancel = cancel.clone();
             cancel_button.on_click(move |_| {
@@ -157,30 +158,36 @@ fn describe(app: &App) -> String {
 
 /// Builds the group box. Returns it for the caller to add to its sizer.
 pub fn build_group(app: &Rc<App>, dialog: &Dialog, panel: &Panel) -> StaticBoxSizer {
-    let (group, group_box) = super::group_box(panel, "Streaming to YouTube (FFmpeg)");
+    let (group, group_box) = super::group_box(panel, &t!("Streaming to YouTube (FFmpeg)"));
 
     // Read-only rather than a StaticText, so it is a Tab stop a screen-reader
     // user can land on and read on demand. A StaticText is skipped by Tab and
     // announced only in passing, and this is the one place that says *which*
     // ffmpeg is in use.
-    const STATUS: &str = "FFmpeg status";
-    let status_label = StaticText::builder(&group_box).with_label(STATUS).build();
+    // One binding, read twice: the visible label and the accessible name of the
+    // box beside it have to stay the same words.
+    let status_text = t!("FFmpeg status");
+    let status_label = StaticText::builder(&group_box)
+        .with_label(&status_text)
+        .build();
     let status = TextCtrl::builder(&group_box)
         .with_style(TextCtrlStyle::ReadOnly)
         .build();
-    super::set_accessible_name(&status, STATUS);
+    super::set_accessible_name(&status, &status_text);
     super::help::tag(
         &status,
         "dialog.preferences.audio.ffmpegStatus",
         "FFmpeg status text",
     );
 
-    const LOCATION: &str = "FFmpeg location (leave blank to search automatically)";
-    let location_label = StaticText::builder(&group_box).with_label(LOCATION).build();
+    let location_text = t!("FFmpeg location (leave blank to search automatically)");
+    let location_label = StaticText::builder(&group_box)
+        .with_label(&location_text)
+        .build();
     let location = TextCtrl::builder(&group_box)
         .with_value(&app.config.borrow().connection.ffmpeg_path)
         .build();
-    super::set_accessible_name(&location, LOCATION);
+    super::set_accessible_name(&location, &location_text);
     super::help::tag(
         &location,
         "dialog.preferences.audio.ffmpegPath",
@@ -189,7 +196,7 @@ pub fn build_group(app: &Rc<App>, dialog: &Dialog, panel: &Panel) -> StaticBoxSi
 
     let buttons = BoxSizer::builder(Orientation::Horizontal).build();
     let browse = Button::builder(&group_box)
-        .with_label("Choose FFmpeg")
+        .with_label(&t!("Choose FFmpeg"))
         .build();
     super::help::tag(
         &browse,
@@ -197,7 +204,7 @@ pub fn build_group(app: &Rc<App>, dialog: &Dialog, panel: &Panel) -> StaticBoxSi
         "Choose FFmpeg button",
     );
     let download = Button::builder(&group_box)
-        .with_label("Download FFmpeg")
+        .with_label(&t!("Download FFmpeg"))
         .build();
     super::help::tag(
         &download,
@@ -285,9 +292,9 @@ fn begin_download(app: &Rc<App>, dialog: &Dialog, status: TextCtrl, button: Butt
     {
         show_error(
             dialog,
-            "Download FFmpeg",
-            "Clear the FFmpeg location box first. While it names a file, that file is the \
-             one Pubsplash uses, so a downloaded copy would be ignored.",
+            &t!("Download FFmpeg"),
+            &t!("Clear the FFmpeg location box first. While it names a file, that file is the \
+             one Pubsplash uses, so a downloaded copy would be ignored."),
         );
         return;
     }
@@ -398,11 +405,11 @@ pub fn drain(app: &Rc<App>) {
     match outcome {
         install::Progress::Installed { path, version } => show_info(
             &frame,
-            "Download FFmpeg",
+            &t!("Download FFmpeg"),
             &format!("FFmpeg is installed and working.\n\n{version}\n{}", path.display()),
         ),
         install::Progress::Failed { message } => {
-            show_error(&frame, "Download FFmpeg", &message);
+            show_error(&frame, &t!("Download FFmpeg"), &message);
         }
         install::Progress::Cancelled => {
             log::info!("FFmpeg download cancelled");

@@ -16,6 +16,7 @@
 //! a live stream or a recording. An update prompt during a show is exactly the
 //! modal nobody can afford, and the check is cheap to repeat next launch.
 
+use crate::t;
 use super::{App, show_error, show_info};
 use crate::update::{ApplyPlan, Trigger, UpdateEvent, install_kind};
 use std::rc::Rc;
@@ -160,8 +161,8 @@ pub fn drain_results(app: &Rc<App>) {
                     let version = crate::update::version::current();
                     show_info(
                         owner.as_widget(),
-                        "Check for updates",
-                        &format!("Pubsplash {version} is the latest version."),
+                        &t!("Check for updates"),
+                        &t!("Pubsplash {version} is the latest version.", version = version),
                     );
                 }
             }
@@ -172,7 +173,7 @@ pub fn drain_results(app: &Rc<App>) {
                 // The user did not ask, and an error box on every launch behind
                 // a captive portal or a firewall would be its own bug.
                 if trigger.reports_quiet_outcomes() && let Some(owner) = notice_owner(app) {
-                    show_error(owner.as_widget(), "Check for updates", &message);
+                    show_error(owner.as_widget(), &t!("Check for updates"), &message);
                 }
             }
 
@@ -206,7 +207,7 @@ pub fn drain_results(app: &Rc<App>) {
                 // the window.
                 finish_download(app);
                 if !cancelled && let Some(owner) = notice_owner(app) {
-                    show_error(owner.as_widget(), "Update", &message);
+                    show_error(owner.as_widget(), &t!("Update"), &message);
                 }
             }
 
@@ -312,8 +313,8 @@ fn offer(app: &Rc<App>, trigger: Trigger, manifest: crate::update::manifest::Man
     let Some(install) = install_kind::detect() else {
         show_error(
             owner.as_widget(),
-            "Update",
-            "Could not work out where Pubsplash is installed, so nothing was changed.",
+            &t!("Update"),
+            &t!("Could not work out where Pubsplash is installed, so nothing was changed."),
         );
         return;
     };
@@ -350,7 +351,7 @@ fn apply(app: &Rc<App>, plan: ApplyPlan) {
     let helper = match stage_helper() {
         Ok(helper) => helper,
         Err(message) => {
-            show_error(owner.as_widget(), "Update", &message);
+            show_error(owner.as_widget(), &t!("Update"), &message);
             return;
         }
     };
@@ -389,7 +390,7 @@ fn apply(app: &Rc<App>, plan: ApplyPlan) {
     if let Err(e) = command.spawn() {
         show_error(
             owner.as_widget(),
-            "Update",
+            &t!("Update"),
             &format!(
                 "Could not start the updater ({}): {e}. Nothing has been changed.",
                 helper.display()
@@ -406,7 +407,7 @@ fn apply(app: &Rc<App>, plan: ApplyPlan) {
 /// Never run from beside `pubsplash.exe`: for a portable update that directory
 /// is about to be overwritten, and Windows will not replace a running image.
 fn stage_helper() -> Result<std::path::PathBuf, String> {
-    let exe = std::env::current_exe().map_err(|e| format!("current_exe failed: {e}"))?;
+    let exe = std::env::current_exe().map_err(|e| t!("current_exe failed: {e}", e = e))?;
     let source = exe.with_file_name(crate::update::HELPER_BINARY);
     if !source.is_file() {
         return Err(format!(

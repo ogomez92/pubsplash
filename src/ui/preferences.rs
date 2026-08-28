@@ -6,13 +6,16 @@
 //! arrives on the pump (see `pump_scan_events` in `ui/mod.rs`). Every tab saves
 //! as the user changes a control, so the dialog only needs a Close button.
 
+use crate::t;
 use super::{App, ScanUi, WXK_DELETE, show_error};
 use crate::vst::scan::{self, ScanMode};
 use std::rc::Rc;
 use wxdragon::prelude::*;
 
 /// Shown when no plugin folders are configured. See [`super::list`].
-const NO_PLUGIN_FOLDERS: &str = "No plugin folders";
+fn no_plugin_folders() -> String {
+    t!("No plugin folders")
+}
 
 pub fn show(app: &Rc<App>, frame: &Frame) {
     let dialog = Dialog::builder(frame, "Preferences")
@@ -32,40 +35,40 @@ pub fn show(app: &Rc<App>, frame: &Frame) {
     let notebook = Notebook::builder(&dialog).build();
     // First, and the selected page: exactly one `add_page` may pass `true`.
     let general_panel = Panel::builder(&notebook).build();
-    notebook.add_page(&general_panel, "General", true, None);
+    notebook.add_page(&general_panel, &t!("General"), true, None);
     build_general_tab(app, &general_panel);
     let audio_panel = Panel::builder(&notebook).build();
-    notebook.add_page(&audio_panel, "Audio", false, None);
+    notebook.add_page(&audio_panel, &t!("Audio"), false, None);
     super::audio_prefs::build_tab(app, &dialog, &audio_panel);
     let archiving_panel = Panel::builder(&notebook).build();
-    notebook.add_page(&archiving_panel, "Archiving", false, None);
+    notebook.add_page(&archiving_panel, &t!("Archiving"), false, None);
     build_archiving_tab(app, &dialog, &archiving_panel);
     let mastodon_panel = Panel::builder(&notebook).build();
-    notebook.add_page(&mastodon_panel, "Mastodon", false, None);
+    notebook.add_page(&mastodon_panel, &t!("Mastodon"), false, None);
     super::mastodon_prefs::build_tab(app, &dialog, &mastodon_panel);
     let speech_alive = Rc::new(std::cell::Cell::new(true));
     let speech_panel = Panel::builder(&notebook).build();
-    notebook.add_page(&speech_panel, "Speech", false, None);
+    notebook.add_page(&speech_panel, &t!("Speech"), false, None);
     build_speech_tab(app, &speech_panel, &speech_alive);
     let sounds_panel = Panel::builder(&notebook).build();
-    notebook.add_page(&sounds_panel, "Sound packs", false, None);
+    notebook.add_page(&sounds_panel, &t!("Sound packs"), false, None);
     let sounds = build_sounds_tab(app, &dialog, &sounds_panel);
     let vst_panel = Panel::builder(&notebook).build();
-    notebook.add_page(&vst_panel, "VST plugins", false, None);
+    notebook.add_page(&vst_panel, &t!("VST plugins"), false, None);
     build_vst_tab(app, &dialog, &vst_panel);
     let keybinds_panel = Panel::builder(&notebook).build();
-    notebook.add_page(&keybinds_panel, "Keybinds", false, None);
+    notebook.add_page(&keybinds_panel, &t!("Keybinds"), false, None);
     super::keybinds_ui::build_tab(app, &dialog, &keybinds_panel);
     let logging_panel = Panel::builder(&notebook).build();
     // Doubled deliberately: wx runs a notebook tab's label through the same
     // mnemonic parsing as a button's, so a single `&` is swallowed and
     // underlines the `d`. The tab read "Logging  debugging" until this. This is
     // an escape for a literal ampersand, not a mnemonic — the app has none.
-    notebook.add_page(&logging_panel, "Logging && debugging", false, None);
+    notebook.add_page(&logging_panel, &t!("Logging && debugging"), false, None);
     super::logging_ui::build_tab(app, &dialog, &logging_panel);
 
     // Dismiss-only, so `dismiss_button` puts both Escape and Enter on it.
-    let close_button = super::dismiss_button(&dialog, "Close");
+    let close_button = super::dismiss_button(&dialog, &t!("Close"));
     {
         close_button.on_click(move |_| dialog.end_modal(ID_CANCEL));
     }
@@ -119,12 +122,12 @@ pub fn show(app: &Rc<App>, frame: &Frame) {
 fn build_general_tab(app: &Rc<App>, panel: &Panel) {
     let sizer = BoxSizer::builder(Orientation::Vertical).build();
 
-    let (updates_group, updates_box) = super::group_box(panel, "Automatic updates");
+    let (updates_group, updates_box) = super::group_box(panel, &t!("Automatic updates"));
 
     let check_on_start = CheckBox::builder(&updates_box)
-        .with_label("Check for updates when Pubsplash starts")
+        .with_label(&t!("Check for updates when Pubsplash starts"))
         .build();
-    super::set_accessible_name(&check_on_start, "Check for updates when Pubsplash starts");
+    super::set_accessible_name(&check_on_start, &t!("Check for updates when Pubsplash starts"));
     super::help::tag(
         &check_on_start,
         "dialog.preferences.general.checkOnStart",
@@ -144,9 +147,9 @@ fn build_general_tab(app: &Rc<App>, panel: &Panel) {
     // it answers a press, and a button that can silently do nothing reads as
     // broken.
     let check_now = Button::builder(&updates_box)
-        .with_label("Check for updates now")
+        .with_label(&t!("Check for updates now"))
         .build();
-    super::set_accessible_name(&check_now, "Check for updates now");
+    super::set_accessible_name(&check_now, &t!("Check for updates now"));
     super::help::tag(
         &check_now,
         "dialog.preferences.general.checkNow",
@@ -168,11 +171,11 @@ fn build_archiving_tab(app: &Rc<App>, dialog: &Dialog, panel: &Panel) {
     let sizer = BoxSizer::builder(Orientation::Vertical).build();
 
     // Stream Archiving group.
-    let (stream_group, stream_box) = super::group_box(panel, "Stream Archiving");
+    let (stream_group, stream_box) = super::group_box(panel, &t!("Stream Archiving"));
     let archive_default = CheckBox::builder(&stream_box)
-        .with_label("Archive streams by default")
+        .with_label(&t!("Archive streams by default"))
         .build();
-    super::set_accessible_name(&archive_default, "Archive streams by default");
+    super::set_accessible_name(&archive_default, &t!("Archive streams by default"));
     super::help::tag(
         &archive_default,
         "dialog.preferences.archive.archiveDefault",
@@ -190,12 +193,12 @@ fn build_archiving_tab(app: &Rc<App>, dialog: &Dialog, panel: &Panel) {
     }
 
     // Recording group.
-    let (recording_group, recording_box) = super::group_box(panel, "Recording");
+    let (recording_group, recording_box) = super::group_box(panel, &t!("Recording"));
 
     let record_default = CheckBox::builder(&recording_box)
-        .with_label("Record streams by default")
+        .with_label(&t!("Record streams by default"))
         .build();
-    super::set_accessible_name(&record_default, "Record streams by default");
+    super::set_accessible_name(&record_default, &t!("Record streams by default"));
     super::help::tag(
         &record_default,
         "dialog.preferences.archive.recordDefault",
@@ -213,7 +216,7 @@ fn build_archiving_tab(app: &Rc<App>, dialog: &Dialog, panel: &Panel) {
     }
 
     let folder_label = StaticText::builder(&recording_box)
-        .with_label("Recording folder")
+        .with_label(&t!("Recording folder"))
         .build();
     // The resolved folder rather than the stored string, which a fresh config
     // leaves blank so it can follow a portable copy from one machine to the
@@ -223,7 +226,7 @@ fn build_archiving_tab(app: &Rc<App>, dialog: &Dialog, panel: &Panel) {
     let folder_input = TextCtrl::builder(&recording_box)
         .with_value(&folder.to_string_lossy())
         .build();
-    super::set_accessible_name(&folder_input, "Recording folder");
+    super::set_accessible_name(&folder_input, &t!("Recording folder"));
     super::help::tag(
         &folder_input,
         "dialog.preferences.archive.recordingFolder",
@@ -241,7 +244,7 @@ fn build_archiving_tab(app: &Rc<App>, dialog: &Dialog, panel: &Panel) {
     }
 
     let browse = Button::builder(&recording_box)
-        .with_label("Browse...")
+        .with_label(&t!("Browse..."))
         .build();
     super::help::tag(
         &browse,
@@ -301,21 +304,21 @@ fn build_speech_tab(app: &Rc<App>, panel: &Panel, alive: &Rc<std::cell::Cell<boo
 
     let intro = StaticText::builder(panel)
         .with_label(
-            "Keys entered here are encrypted for your Windows account. \
-             SAPI, Microsoft Edge, and Google Translate need no key.",
+            &t!("Keys entered here are encrypted for your Windows account. \
+             SAPI, Microsoft Edge, and Google Translate need no key."),
         )
         .build();
     sizer.add(&intro, 0, SizerFlag::All, 6);
 
     let engine_label = StaticText::builder(panel)
-        .with_label("Speech engine")
+        .with_label(&t!("Speech engine"))
         .build();
     let engine_choice = Choice::builder(panel).build();
     let engine_list = crate::tts::engine_names();
     for (_, display) in &engine_list {
         engine_choice.append(display);
     }
-    super::set_accessible_name(&engine_choice, "Speech engine");
+    super::set_accessible_name(&engine_choice, &t!("Speech engine"));
     super::help::tag(
         &engine_choice,
         "dialog.preferences.speech.engine",
@@ -366,16 +369,16 @@ fn build_speech_tab(app: &Rc<App>, panel: &Panel, alive: &Rc<std::cell::Cell<boo
 
     // Global, not per-engine: these cap what any network engine will spend, so
     // they stay put no matter which engine the picker names.
-    let (limits, limits_box) = super::group_box(panel, "Limits");
+    let (limits, limits_box) = super::group_box(panel, &t!("Limits"));
 
     let chars_label = StaticText::builder(&limits_box)
-        .with_label("Longest message to speak, in characters")
+        .with_label(&t!("Longest message to speak, in characters"))
         .build();
     let chars = SpinCtrl::builder(&limits_box)
         .with_range(50, 5000)
         .with_initial_value(app.config.borrow().speech.max_chars() as i32)
         .build();
-    super::set_accessible_name(&chars, "Longest message to speak, in characters");
+    super::set_accessible_name(&chars, &t!("Longest message to speak, in characters"));
     super::help::tag(
         &chars,
         "dialog.preferences.speech.maxChars",
@@ -392,13 +395,13 @@ fn build_speech_tab(app: &Rc<App>, panel: &Panel, alive: &Rc<std::cell::Cell<boo
     }
 
     let interval_label = StaticText::builder(&limits_box)
-        .with_label("Shortest gap between requests, in milliseconds")
+        .with_label(&t!("Shortest gap between requests, in milliseconds"))
         .build();
     let interval = SpinCtrl::builder(&limits_box)
         .with_range(0, 10_000)
         .with_initial_value(app.config.borrow().speech.min_request_interval_ms as i32)
         .build();
-    super::set_accessible_name(&interval, "Shortest gap between requests, in milliseconds");
+    super::set_accessible_name(&interval, &t!("Shortest gap between requests, in milliseconds"));
     super::help::tag(
         &interval,
         "dialog.preferences.speech.minInterval",
@@ -627,7 +630,7 @@ fn build_engine_page(
         // one?". The intro text says as much for anyone who tabs past it.
         _ => {
             let none = StaticText::builder(page)
-                .with_label("This engine needs no settings.")
+                .with_label(&t!("This engine needs no settings."))
                 .build();
             sizer.add(&none, 0, SizerFlag::All, 6);
         }
@@ -642,12 +645,12 @@ fn validation_button(
     alive: &Rc<std::cell::Cell<bool>>,
     apply_draft: impl Fn(&mut crate::config::SpeechConfig) + 'static,
 ) {
-    let button = Button::builder(page).with_label("&Validate").build();
-    super::set_accessible_name(&button, "Validate settings");
+    let button = Button::builder(page).with_label(&t!("&Validate")).build();
+    super::set_accessible_name(&button, &t!("Validate settings"));
     let status = StaticText::builder(page)
-        .with_label("Settings not yet validated.")
+        .with_label(&t!("Settings not yet validated."))
         .build();
-    super::set_accessible_name(&status, "Settings validation status: not yet validated");
+    super::set_accessible_name(&status, &t!("Settings validation status: not yet validated"));
     sizer.add(&button, 0, SizerFlag::All, 4);
     sizer.add(&status, 0, SizerFlag::All, 4);
     let apply_draft = Rc::new(apply_draft);
@@ -660,10 +663,10 @@ fn validation_button(
             let mut draft = app.config.borrow().speech.clone();
             apply_draft(&mut draft);
             button_for_click.enable(false);
-            button_for_click.set_label("Validating…");
-            super::set_accessible_name(&button_for_click, "Validating settings");
-            status_for_click.set_label("Validating settings…");
-            super::set_accessible_name(&status_for_click, "Settings validation status: validating");
+            button_for_click.set_label(&t!("Validating…"));
+            super::set_accessible_name(&button_for_click, &t!("Validating settings"));
+            status_for_click.set_label(&t!("Validating settings…"));
+            super::set_accessible_name(&status_for_click, &t!("Settings validation status: validating"));
             let (sender, receiver) = crossbeam_channel::bounded(1);
             std::thread::Builder::new()
                 .name(format!("tts-validate-{engine}"))
@@ -686,8 +689,8 @@ fn validation_button(
                     return false;
                 };
                 button.enable(true);
-                button.set_label("&Validate");
-                super::set_accessible_name(&button, "Validate settings");
+                button.set_label(&t!("&Validate"));
+                super::set_accessible_name(&button, &t!("Validate settings"));
                 match result {
                     Ok((draft, catalog)) => {
                         commit_validated_credentials(
@@ -698,17 +701,17 @@ fn validation_button(
                         crate::tts::catalog::commit_engine(engine, catalog);
                         app.save_config();
                         app.flush_config();
-                        status.set_label("Settings validated and saved.");
+                        status.set_label(&t!("Settings validated and saved."));
                         super::set_accessible_name(
                             &status,
-                            "Settings validation succeeded; settings saved",
+                            &t!("Settings validation succeeded; settings saved"),
                         );
                     }
                     Err(error) => {
-                        status.set_label(&format!("Validation failed: {error}"));
+                        status.set_label(&t!("Validation failed: {error}", error = error));
                         super::set_accessible_name(
                             &status,
-                            &format!("Settings validation failed: {error}"),
+                            &t!("Settings validation failed: {error}", error = error),
                         );
                     }
                 }
@@ -816,10 +819,10 @@ const SETTLE_MS: i32 = 300;
 fn build_sounds_tab(app: &Rc<App>, dialog: &Dialog, panel: &Panel) -> SoundsTab {
     let sizer = BoxSizer::builder(Orientation::Vertical).build();
 
-    let (pack_group, pack_box) = super::group_box(panel, "Sound pack");
+    let (pack_group, pack_box) = super::group_box(panel, &t!("Sound pack"));
 
     let pack_choice = Choice::builder(&pack_box).build();
-    super::set_accessible_name(&pack_choice, "Sound pack");
+    super::set_accessible_name(&pack_choice, &t!("Sound pack"));
     super::help::tag(
         &pack_choice,
         "dialog.preferences.sounds.pack",
@@ -829,13 +832,13 @@ fn build_sounds_tab(app: &Rc<App>, dialog: &Dialog, panel: &Panel) -> SoundsTab 
 
     let pack_buttons = BoxSizer::builder(Orientation::Horizontal).build();
     let import_pack = Button::builder(&pack_box)
-        .with_label("Import pack...")
+        .with_label(&t!("Import pack..."))
         .build();
     let preview_pack = Button::builder(&pack_box)
-        .with_label("Preview sounds...")
+        .with_label(&t!("Preview sounds..."))
         .build();
     let remove_pack = Button::builder(&pack_box)
-        .with_label("Remove pack")
+        .with_label(&t!("Remove pack"))
         .build();
     super::help::tag(
         &import_pack,
@@ -881,7 +884,7 @@ fn build_sounds_tab(app: &Rc<App>, dialog: &Dialog, panel: &Panel) -> SoundsTab 
         Rc::new(move |select: &str| {
             let installed = crate::soundpack::installed_packs();
             pack_choice.clear();
-            pack_choice.append("Built-in default");
+            pack_choice.append(&t!("Built-in default"));
             let mut selection = 0u32;
             for (i, pack) in installed.iter().enumerate() {
                 pack_choice.append(&pack.display_name);
@@ -971,8 +974,8 @@ fn build_sounds_tab(app: &Rc<App>, dialog: &Dialog, panel: &Panel) -> SoundsTab 
                             pack_choice.set_selection(0);
                             show_error(
                                 &dialog,
-                                "Sound pack",
-                                &format!("That sound pack could not be loaded: {e}"),
+                                &t!("Sound pack"),
+                                &t!("That sound pack could not be loaded: {e}", e = e),
                             );
                         } else {
                             log::warn!("Could not load the sound pack {wanted}: {e}");
@@ -1061,7 +1064,7 @@ fn build_sounds_tab(app: &Rc<App>, dialog: &Dialog, panel: &Panel) -> SoundsTab 
                     }
                 }
                 Err(e) => {
-                    show_error(&dialog, "Import pack", &e);
+                    show_error(&dialog, &t!("Import pack"), &e);
                     return;
                 }
             }
@@ -1072,7 +1075,7 @@ fn build_sounds_tab(app: &Rc<App>, dialog: &Dialog, panel: &Panel) -> SoundsTab 
                     // rather than after the settle timer.
                     apply_pack();
                 }
-                Err(e) => show_error(&dialog, "Import pack", &e),
+                Err(e) => show_error(&dialog, &t!("Import pack"), &e),
             }
         });
     }
@@ -1117,7 +1120,7 @@ fn build_sounds_tab(app: &Rc<App>, dialog: &Dialog, panel: &Panel) -> SoundsTab 
             pack_choice.set_selection(0);
             apply_pack();
             if let Err(e) = crate::soundpack::remove(&file_name) {
-                show_error(&dialog, "Remove pack", &e);
+                show_error(&dialog, &t!("Remove pack"), &e);
             }
             refresh_packs("");
         });
@@ -1125,12 +1128,12 @@ fn build_sounds_tab(app: &Rc<App>, dialog: &Dialog, panel: &Panel) -> SoundsTab 
 
     sizer.add_sizer(&pack_group, 0, SizerFlag::Expand | SizerFlag::All, 4);
 
-    let (interface_group, interface_box) = super::group_box(panel, "Interface sounds");
+    let (interface_group, interface_box) = super::group_box(panel, &t!("Interface sounds"));
 
     let startup = CheckBox::builder(&interface_box)
-        .with_label("Play the startup sound")
+        .with_label(&t!("Play the startup sound"))
         .build();
-    super::set_accessible_name(&startup, "Play the startup sound");
+    super::set_accessible_name(&startup, &t!("Play the startup sound"));
     super::help::tag(
         &startup,
         "dialog.preferences.sounds.playStartup",
@@ -1147,9 +1150,9 @@ fn build_sounds_tab(app: &Rc<App>, dialog: &Dialog, panel: &Panel) -> SoundsTab 
     }
 
     let shutdown = CheckBox::builder(&interface_box)
-        .with_label("Play the shut-down sound")
+        .with_label(&t!("Play the shut-down sound"))
         .build();
-    super::set_accessible_name(&shutdown, "Play the shut-down sound");
+    super::set_accessible_name(&shutdown, &t!("Play the shut-down sound"));
     super::help::tag(
         &shutdown,
         "dialog.preferences.sounds.playShutdown",
@@ -1179,7 +1182,7 @@ fn build_vst_tab(app: &Rc<App>, dialog: &Dialog, panel: &Panel) {
     let sizer = BoxSizer::builder(Orientation::Vertical).build();
 
     let folders_label = StaticText::builder(panel)
-        .with_label("Plugin folders")
+        .with_label(&t!("Plugin folders"))
         .build();
     let folders_list = ListBox::builder(panel).build();
     super::native_acc::install(&folders_list, "Plugin folders");
@@ -1190,8 +1193,8 @@ fn build_vst_tab(app: &Rc<App>, dialog: &Dialog, panel: &Panel) {
     );
 
     let folder_buttons = BoxSizer::builder(Orientation::Horizontal).build();
-    let add_folder = Button::builder(panel).with_label("Add folder...").build();
-    let remove_folder = Button::builder(panel).with_label("Remove folder").build();
+    let add_folder = Button::builder(panel).with_label(&t!("Add folder...")).build();
+    let remove_folder = Button::builder(panel).with_label(&t!("Remove folder")).build();
     super::help::tag(
         &add_folder,
         "dialog.preferences.vst.addFolder",
@@ -1207,10 +1210,10 @@ fn build_vst_tab(app: &Rc<App>, dialog: &Dialog, panel: &Panel) {
 
     let scan_buttons = BoxSizer::builder(Orientation::Horizontal).build();
     let scan_new = Button::builder(panel)
-        .with_label("Scan for new plugins")
+        .with_label(&t!("Scan for new plugins"))
         .build();
     let rescan_all = Button::builder(panel)
-        .with_label("Rescan all plugins")
+        .with_label(&t!("Rescan all plugins"))
         .build();
     super::help::tag(
         &scan_new,
@@ -1236,7 +1239,7 @@ fn build_vst_tab(app: &Rc<App>, dialog: &Dialog, panel: &Panel) {
         move |select: Option<&str>| {
             let config = app.config.borrow();
             let folders = &config.plugins.folders;
-            super::list::fill(&folders_list, folders, NO_PLUGIN_FOLDERS);
+            super::list::fill(&folders_list, folders, &no_plugin_folders());
             if !folders.is_empty() {
                 let select_index = folders
                     .iter()
@@ -1275,7 +1278,7 @@ fn build_vst_tab(app: &Rc<App>, dialog: &Dialog, panel: &Panel) {
                     .any(|f| f.eq_ignore_ascii_case(&path))
                 {
                     drop(config);
-                    show_error(&dialog, "Add folder", "That folder is already in the list.");
+                    show_error(&dialog, &t!("Add folder"), &t!("That folder is already in the list."));
                     return;
                 }
                 config.plugins.folders.push(path.clone());
@@ -1329,8 +1332,8 @@ fn begin_scan(app: &Rc<App>, dialog: &Dialog, mode: ScanMode) {
     if folders.is_empty() {
         show_error(
             dialog,
-            "Scan plugins",
-            "Add at least one plugin folder first.",
+            &t!("Scan plugins"),
+            &t!("Add at least one plugin folder first."),
         );
         return;
     }
@@ -1361,7 +1364,7 @@ fn begin_scan(app: &Rc<App>, dialog: &Dialog, mode: ScanMode) {
             // than waiting for the next idle to notice the scan exists.
             super::sync_fast_timer(app);
         }
-        Err(message) => show_error(dialog, "Scan plugins", &message),
+        Err(message) => show_error(dialog, &t!("Scan plugins"), &message),
     }
 }
 

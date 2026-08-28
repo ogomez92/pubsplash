@@ -1,5 +1,6 @@
 //! Home tab: stream overview, mixer, scene switching, start/stop button.
 
+use crate::t;
 use super::slider_uia;
 use super::{
     App, ID_MIXER_BOOST, ID_MIXER_MEDIA_NEXT, ID_MIXER_MEDIA_OPEN, ID_MIXER_MEDIA_PLAY,
@@ -15,11 +16,15 @@ use wxdragon::event::{EventType, WxEvtHandler};
 use wxdragon::prelude::*;
 
 /// Shown when there are no scenes. See [`super::list`].
-const NO_SCENES: &str = "No scenes";
+fn no_scenes() -> String {
+    t!("No scenes")
+}
 
 /// Placeholder for the overview list, which never actually empties: the Status
 /// row is always there. Present only to satisfy [`super::list`].
-const NO_OVERVIEW: &str = "No stream information";
+fn no_overview() -> String {
+    t!("No stream information")
+}
 
 /// Builds the tab; returns (overview list, stream button, record button, scene
 /// list, mixer panel placeholder).
@@ -30,30 +35,30 @@ pub fn build(app: &Rc<App>, panel: &Panel) -> (ListBox, Button, Button, ListBox,
     // rewritten every second while a clock runs, and rewriting a `TextCtrl`
     // resets its caret, so the arrow keys could never reach the end of it.
     let overview_label = StaticText::builder(panel)
-        .with_label("Stream overview")
+        .with_label(&t!("Stream overview"))
         .build();
     let overview = ListBox::builder(panel).build();
     // `refresh_overview` fills this properly during `build`, but never leave a
     // list at zero items — NVDA reads those as "Unknown".
-    super::list::fill(&overview, &[], NO_OVERVIEW);
+    super::list::fill(&overview, &[], &no_overview());
     super::native_acc::install(&overview, "Stream overview");
     super::help::tag(&overview, "tab.home.overview", "Stream overview list");
     sizer.add(&overview_label, 0, SizerFlag::All, 4);
     sizer.add(&overview, 1, SizerFlag::Expand | SizerFlag::All, 4);
 
     // Mixer lives in its own panel so it can be rebuilt when sources change.
-    let mixer_label = StaticText::builder(panel).with_label("Mixer").build();
+    let mixer_label = StaticText::builder(panel).with_label(&t!("Mixer")).build();
     let mixer_panel = Panel::builder(panel).build();
     sizer.add(&mixer_label, 0, SizerFlag::All, 4);
     sizer.add(&mixer_panel, 0, SizerFlag::Expand | SizerFlag::All, 4);
 
     // Scenes.
-    let scene_label = StaticText::builder(panel).with_label("Scenes").build();
+    let scene_label = StaticText::builder(panel).with_label(&t!("Scenes")).build();
     let scene_list = ListBox::builder(panel).build();
     super::native_acc::install(&scene_list, "Scenes");
     super::help::tag(&scene_list, "tab.home.sceneList", "Scenes list");
     let switch_button = Button::builder(panel)
-        .with_label("Switch to scene")
+        .with_label(&t!("Switch to scene"))
         .build();
     super::help::tag(
         &switch_button,
@@ -67,7 +72,7 @@ pub fn build(app: &Rc<App>, panel: &Panel) -> (ListBox, Button, Button, ListBox,
     // Stream toggle, then the standalone record toggle (Tab order: stream
     // first, record second).
     let stream_button = Button::builder(panel)
-        .with_label("Start streaming")
+        .with_label(&t!("Start streaming"))
         .build();
     super::help::tag(
         &stream_button,
@@ -76,7 +81,7 @@ pub fn build(app: &Rc<App>, panel: &Panel) -> (ListBox, Button, Button, ListBox,
     );
     sizer.add(&stream_button, 0, SizerFlag::All, 8);
     let record_button = Button::builder(panel)
-        .with_label("Start recording")
+        .with_label(&t!("Start recording"))
         .build();
     super::help::tag(
         &record_button,
@@ -201,7 +206,7 @@ pub fn switch_to_scene_named(app: &Rc<App>, name: &str) {
     refresh_scene_list(app);
     // Nothing else says which scene is live when the switch came from a
     // keybinding pressed on some other tab.
-    super::help::announce(&format!("Scene {name}"));
+    super::help::announce(&t!("Scene {name}", name = name));
 }
 
 /// The scene after (or before) the active one, wrapping at either end.
@@ -257,7 +262,7 @@ pub fn refresh_scene_list(app: &Rc<App>) {
                 }
             })
             .collect();
-        if super::list::sync(&w.home_scene_list, &labels, NO_SCENES) == super::list::Synced::Kept {
+        if super::list::sync(&w.home_scene_list, &labels, &no_scenes()) == super::list::Synced::Kept {
             return;
         }
         if let Some(index) = selected
@@ -368,7 +373,7 @@ fn overview_rows(state: &OverviewState) -> Vec<(OverviewRow, String)> {
                 _ => "Stopping",
             };
             let base = match recording {
-                Some(word) => format!("{base} and {word}"),
+                Some(word) => t!("{base} and {word}", base = base, word = word),
                 None => base.to_string(),
             };
             // Said plainly, because the alternative is a UI that claims to be
@@ -392,26 +397,26 @@ fn overview_rows(state: &OverviewState) -> Vec<(OverviewRow, String)> {
             // opinion of a stream that is ending anyway.
             let live = matches!(phase, StreamState::Live { .. });
             if state.encoder_failed {
-                format!("{base} (encoder failed, not sending audio)")
+                t!("{base} (encoder failed, not sending audio)", base = base)
             } else if state.audio_link == super::AudioLink::Reconnecting {
-                format!("{base} (reconnecting)")
+                t!("{base} (reconnecting)", base = base)
             } else if !live {
                 base
             } else if state.server_stream == super::ServerStream::Lost {
-                format!("{base} (the server has lost the source)")
+                t!("{base} (the server has lost the source)", base = base)
             } else if state.server_stream == super::ServerStream::Pending {
                 // Said plainly for the same reason the two above are: without
                 // it the Home tab claims a healthy broadcast for the whole
                 // window in which the server has not accepted the source and
                 // listeners hear silence.
-                format!("{base} (waiting for the server to accept the stream)")
+                t!("{base} (waiting for the server to accept the stream)", base = base)
             } else {
                 base
             }
         }
     };
 
-    let mut rows = vec![(OverviewRow::Status, format!("Status: {status}"))];
+    let mut rows = vec![(OverviewRow::Status, t!("Status: {status}", status = status))];
     if let Some((kind, remaining)) = state.countdown {
         let what = match kind {
             Countdown::Connect => "Connecting in",
@@ -559,7 +564,7 @@ fn refresh(app: &App, selected_rows: Selected) {
             .and_then(|index| shown.get(index as usize))
             .map(|(kind, _)| *kind);
         let labels: Vec<String> = rows.iter().map(|(_, label)| label.clone()).collect();
-        super::list::fill(&list, &labels, NO_OVERVIEW);
+        super::list::fill(&list, &labels, &no_overview());
         std::mem::swap(&mut shown, &mut rows);
         if let Some(index) = was_on.and_then(|kind| shown.iter().position(|(k, _)| *k == kind)) {
             list.set_selection(index as u32, true);
@@ -698,7 +703,7 @@ pub fn rebuild_mixer(app: &Rc<App>) {
             app,
             &inner,
             &sizer,
-            &format!("{name} bus"),
+            &t!("{name} bus", name = name),
             *volume,
             *muted,
             *boost,
@@ -781,7 +786,7 @@ pub fn relabel_source_strips(app: &Rc<App>) {
 /// screen reader says which strips are amplified, and which are being listened
 /// to, when tabbing through the mixer.
 fn spoken_name(name: &str, boost: bool, monitor: bool) -> String {
-    let mut spoken = format!("{name} volume");
+    let mut spoken = t!("{name} volume", name = name);
     if boost {
         spoken.push_str(", boost");
     }
@@ -805,9 +810,9 @@ fn apply_strip_name(strip: &MixerStrip, speak_value: bool) {
     // The visible label carries the monitoring state too, so it is there for
     // sighted users and for readers that fall back to the label.
     strip.label.set_label(&if monitor {
-        format!("{name} volume (monitoring)")
+        t!("{name} volume (monitoring)", name = name)
     } else {
-        format!("{name} volume")
+        t!("{name} volume", name = name)
     });
     super::set_accessible_name(&strip.slider, &spoken);
     let value = format!("{}%", strip.slider.value());
@@ -816,7 +821,7 @@ fn apply_strip_name(strip: &MixerStrip, speak_value: bool) {
     } else {
         strip.announcer.set_text(&spoken, &value);
     }
-    super::set_accessible_name(&strip.mute, &format!("Mute {name}"));
+    super::set_accessible_name(&strip.mute, &t!("Mute {name}", name = name));
 }
 
 /// One mixer strip.
@@ -854,7 +859,7 @@ fn add_strip(
     // which is wrong once the range is 0-500 (100 would be read as "20%"). Our
     // own UIA provider speaks the literal value instead.
     let announcer = Rc::new(slider_uia::install(&slider));
-    let mute_check = CheckBox::builder(parent).with_label("Mute").build();
+    let mute_check = CheckBox::builder(parent).with_label(&t!("Mute")).build();
     mute_check.set_value(muted);
 
     let strip = MixerStrip {
@@ -907,7 +912,7 @@ fn add_strip(
     // No mnemonic: this is the Home tab, where a mnemonic on a per-strip control
     // would collide with every other strip's copy of it.
     if let Some(source) = &media_source {
-        let open = Button::builder(parent).with_label("Open file...").build();
+        let open = Button::builder(parent).with_label(&t!("Open file...")).build();
         // Named after the strip, like everything else on it — the identity name
         // the click carries is a routing key and not what the user calls this.
         super::set_accessible_name(&open, &format!("Open a file to play on {}", name.borrow()));
@@ -1044,17 +1049,17 @@ fn add_strip(
                     .append_item(
                         ID_MIXER_MEDIA_PLAY,
                         if paused { "&Play" } else { "&Pause" },
-                        "Start or stop this media player",
+                        &t!("Start or stop this media player"),
                     )
                     .append_item(
                         ID_MIXER_MEDIA_NEXT,
-                        "&Next track",
-                        "Skip to the next track in the folder",
+                        &t!("&Next track"),
+                        &t!("Skip to the next track in the folder"),
                     )
                     .append_item(
                         ID_MIXER_MEDIA_OPEN,
-                        "&Open file...",
-                        "Play a file of your choosing, then carry on with the folder",
+                        &t!("&Open file..."),
+                        &t!("Play a file of your choosing, then carry on with the folder"),
                     );
             }
             let mut menu = builder.build();

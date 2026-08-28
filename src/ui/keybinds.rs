@@ -33,6 +33,7 @@
 //! rings the idle doorbell, and returns; [`pump`] does the real work on the UI
 //! thread from the 100 ms pump. Same shape as `panes.rs`.
 
+use crate::t;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Mutex, OnceLock};
@@ -284,7 +285,7 @@ fn source_target(app: &Rc<App>, name: &str) -> Option<StripTarget> {
     match index {
         Some(index) => Some(StripTarget::Source(index)),
         None => {
-            super::help::announce(&format!("{name} is not in the current scene"));
+            super::help::announce(&t!("{name} is not in the current scene", name = name));
             None
         }
     }
@@ -301,7 +302,7 @@ fn bus_target(app: &Rc<App>, name: &str) -> Option<StripTarget> {
     match index {
         Some(index) => Some(StripTarget::Bus(index)),
         None => {
-            super::help::announce(&format!("There is no bus called {name}"));
+            super::help::announce(&t!("There is no bus called {name}", name = name));
             None
         }
     }
