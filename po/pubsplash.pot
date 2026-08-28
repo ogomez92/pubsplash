@@ -85,6 +85,14 @@ msgstr ""
 msgid "&Open file..."
 msgstr ""
 
+#: src/ui/home.rs:1072
+msgid "&Pause"
+msgstr ""
+
+#: src/ui/home.rs:1072
+msgid "&Play"
+msgstr ""
+
 #: src/ui/buses.rs:44
 msgid "&Rename bus"
 msgstr ""

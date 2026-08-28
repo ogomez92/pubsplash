@@ -1069,7 +1069,7 @@ fn add_strip(
                     .append_separator()
                     .append_item(
                         ID_MIXER_MEDIA_PLAY,
-                        if paused { "&Play" } else { "&Pause" },
+                        &if paused { t!("&Play") } else { t!("&Pause") },
                         &t!("Start or stop this media player"),
                     )
                     .append_item(

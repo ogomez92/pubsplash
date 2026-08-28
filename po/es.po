@@ -83,11 +83,19 @@ msgstr "&Carpeta"
 
 #: src/ui/home.rs:1077
 msgid "&Next track"
-msgstr "&Pista siguiente"
+msgstr "Pista &siguiente"
 
 #: src/ui/home.rs:1082
 msgid "&Open file..."
 msgstr "&Abrir archivo..."
+
+#: src/ui/home.rs:1072
+msgid "&Pause"
+msgstr "&Pausar"
+
+#: src/ui/home.rs:1072
+msgid "&Play"
+msgstr "&Reproducir"
 
 #: src/ui/buses.rs:44
 msgid "&Rename bus"
