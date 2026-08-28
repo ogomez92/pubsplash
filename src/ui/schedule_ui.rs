@@ -70,21 +70,24 @@ pub fn show(app: &Rc<App>, parent: &Frame) {
 fn why_not(app: &Rc<App>) -> Option<String> {
     let run = app.run.borrow();
     if app.schedule_armed() {
-        return Some(
+        return Some(t!(
             "A stream is already scheduled. Cancel it from the Home tab before scheduling another."
-                .into(),
-        );
+        ));
     }
     if !matches!(run.stream, super::StreamState::Idle) {
-        return Some("A stream is already running.".into());
+        return Some(t!("A stream is already running."));
     }
     if run.recording || run.recording_pending {
-        return Some("Stop the recording first: Pubsplash cannot stream while one is running.".into());
+        return Some(t!(
+            "Stop the recording first: Pubsplash cannot stream while one is running."
+        ));
     }
     if run.connected_service.is_none() {
         // Deliberately the same sentence `start_streaming` uses, so the two
         // routes to a stream do not describe the same problem two ways.
-        return Some("Connect to a streaming service first (File > Setup streaming services).".into());
+        return Some(t!(
+            "Connect to a streaming service first (File > Setup streaming services)."
+        ));
     }
     None
 }
@@ -111,7 +114,9 @@ fn ask(app: &Rc<App>, parent: &Frame) -> Option<Schedule> {
     let panel = Panel::builder(&dialog).build();
     let sizer = BoxSizer::builder(Orientation::Vertical).build();
 
-    let mode = RadioBox::builder(&panel, &["Simple", "Advanced"])
+    let modes = [t!("Simple"), t!("Advanced")];
+    let modes: Vec<&str> = modes.iter().map(String::as_str).collect();
+    let mode = RadioBox::builder(&panel, &modes)
         .with_label(&t!("Scheduling mode"))
         .with_style(RadioBoxStyle::SpecifyRows)
         .with_major_dimension(1)
@@ -233,12 +238,12 @@ fn ask(app: &Rc<App>, parent: &Frame) -> Option<Schedule> {
             // does not disturb `picker_acc`, which announces fields from a window
             // subclass and not through the accessible object.
             let first_name = if advanced {
-                "Pre-stream time"
+                t!("Pre-stream time")
             } else {
-                "Time"
+                t!("Time")
             };
-            first_label.set_label(first_name);
-            super::set_accessible_name(&first_time, first_name);
+            first_label.set_label(&first_name);
+            super::set_accessible_name(&first_time, &first_name);
             second_label.show(advanced);
             second_time.show(advanced);
             pre_scene_label.show(advanced);

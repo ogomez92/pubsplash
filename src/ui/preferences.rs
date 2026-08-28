@@ -1034,7 +1034,7 @@ fn build_sounds_tab(app: &Rc<App>, dialog: &Dialog, panel: &Panel) -> SoundsTab 
             apply_pack();
             let picker = FileDialog::builder(&dialog)
                 .with_message(&t!("Import a sound pack"))
-                .with_wildcard("Pubsplash sound packs (*.pspack)|*.pspack")
+                .with_wildcard(&t!("Pubsplash sound packs (*.pspack)|*.pspack"))
                 .with_style(FileDialogStyle::Open | FileDialogStyle::FileMustExist)
                 .build();
             if picker.show_modal() != ID_OK {
@@ -1256,7 +1256,7 @@ fn build_vst_tab(app: &Rc<App>, dialog: &Dialog, panel: &Panel) {
         let dialog = *dialog;
         let refresh_folders = refresh_folders.clone();
         add_folder.on_click(move |_| {
-            let picker = DirDialog::builder(&dialog, "Choose a folder containing VST plugins", "")
+            let picker = DirDialog::builder(&dialog, &t!("Choose a folder containing VST plugins"), "")
                 .with_style(DirDialogStyle::MustExist.bits())
                 .build();
             if picker.show_modal() != ID_OK {

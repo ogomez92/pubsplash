@@ -161,8 +161,8 @@ fn warn_about_colliding_sources(app: &Rc<App>, dialog: &Dialog, devices: &[Devic
     let name = devices
         .iter()
         .find(|d| d.id == device_id)
-        .map(|d| d.name.as_str())
-        .unwrap_or("The system default output device");
+        .map(|d| d.name.clone())
+        .unwrap_or_else(|| t!("The system default output device"));
     show_info(
         dialog,
         &t!("Output device"),

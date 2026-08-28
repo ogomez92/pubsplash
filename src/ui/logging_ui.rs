@@ -80,7 +80,10 @@ pub fn build_tab(app: &Rc<App>, dialog: &Dialog, panel: &Panel) {
     let (diag_group, diag_box) = super::group_box(panel, &t!("Diagnostics"));
 
     let where_text = StaticText::builder(&diag_box)
-        .with_label(&format!("Logs are kept in {}", logging::logs_dir().display()))
+        .with_label(&t!(
+            "Logs are kept in {path}",
+            path = logging::logs_dir().display()
+        ))
         .build();
     diag_group.add(&where_text, 0, SizerFlag::All, 4);
 
@@ -105,7 +108,7 @@ pub fn build_tab(app: &Rc<App>, dialog: &Dialog, panel: &Panel) {
                 show_error(
                     &dialog,
                     &t!("Open logs folder"),
-                    &format!("Could not create {}: {e}", dir.display()),
+                    &t!("Could not create {path}: {e}", path = dir.display(), e = e),
                 );
                 return;
             }
@@ -113,7 +116,7 @@ pub fn build_tab(app: &Rc<App>, dialog: &Dialog, panel: &Panel) {
                 show_error(
                     &dialog,
                     &t!("Open logs folder"),
-                    &format!("Could not open {}: {e}", dir.display()),
+                    &t!("Could not open {path}: {e}", path = dir.display(), e = e),
                 );
             }
         });
@@ -148,7 +151,7 @@ fn compress_logs(parent: &Dialog) {
         .with_message(&t!("Save the collected logs"))
         .with_default_dir(&default_dir().to_string_lossy())
         .with_default_file(&archive_filename())
-        .with_wildcard("ZIP archive (*.zip)|*.zip")
+        .with_wildcard(&t!("ZIP archive (*.zip)|*.zip"))
         .with_style(FileDialogStyle::Save | FileDialogStyle::OverwritePrompt)
         .build();
     if picker.show_modal() != ID_OK {

@@ -315,7 +315,7 @@ pub fn refresh_bus_list(app: &Rc<App>) {
     app.widgets(|w| {
         let config = app.config.borrow();
         let selected = w.bus_list.get_selection();
-        let labels: Vec<String> = std::iter::once("Master output".to_string())
+        let labels: Vec<String> = std::iter::once(t!("Master output"))
             .chain(config.buses.buses.iter().map(|bus| bus.name.clone()))
             .collect();
         // The placeholder is unreachable: the pinned Master row means `labels`
@@ -515,7 +515,7 @@ fn add_plugin(app: &Rc<App>) {
             if let Err(error) = outcome {
                 let reason = match error {
                     fx::SlotError::NotInstalled => {
-                        "it is no longer in the plugin cache. Rescan for plugins in Preferences."
+                        t!("it is no longer in the plugin cache. Rescan for plugins in Preferences.")
                             .to_string()
                     }
                     fx::SlotError::LoadFailed(reason) => reason,
@@ -638,7 +638,7 @@ fn open_interface(app: &Rc<App>, list: &ListBox) {
 /// A human label for the selected chain target, used in dialog messages.
 fn target_name(app: &Rc<App>, target: ChainTarget) -> String {
     match target {
-        ChainTarget::Master => "Master output".to_string(),
+        ChainTarget::Master => t!("Master output"),
         ChainTarget::Bus(i) => app
             .config
             .borrow()
@@ -808,7 +808,7 @@ fn import_chain_file(app: &Rc<App>) {
     };
     let dialog = FileDialog::builder(&frame)
         .with_message(&t!("Import FX chain"))
-        .with_wildcard("Pubsplash FX chain (*.pubfx)|*.pubfx|All files (*.*)|*.*")
+        .with_wildcard(&t!("Pubsplash FX chain (*.pubfx)|*.pubfx|All files (*.*)|*.*"))
         .with_style(FileDialogStyle::Open | FileDialogStyle::FileMustExist)
         .build();
     let path = if dialog.show_modal() == ID_OK {
@@ -864,7 +864,7 @@ fn export_chain_file(app: &Rc<App>) {
     let dialog = FileDialog::builder(&frame)
         .with_message(&t!("Export FX chain"))
         .with_default_file(&format!("{name}.pubfx"))
-        .with_wildcard("Pubsplash FX chain (*.pubfx)|*.pubfx")
+        .with_wildcard(&t!("Pubsplash FX chain (*.pubfx)|*.pubfx"))
         .with_style(FileDialogStyle::Save | FileDialogStyle::OverwritePrompt)
         .build();
     if dialog.show_modal() == ID_OK

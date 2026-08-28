@@ -199,7 +199,7 @@ pub fn build_tab(app: &Rc<App>, dialog: &Dialog, panel: &Panel) {
                     display_server(&config.mastodon.instance)
                 )
             } else {
-                "Not linked. Enter your server and choose Authorize.".to_string()
+                t!("Not linked. Enter your server and choose Authorize.")
             };
             let server = display_server(&config.mastodon.instance);
             drop(config);
@@ -301,7 +301,7 @@ pub fn build_tab(app: &Rc<App>, dialog: &Dialog, panel: &Panel) {
                 super::show_info(
                     &dialog,
                     &t!("Authorize"),
-                    &format!("Pubsplash is linked to {}.", link.account),
+                    &t!("Pubsplash is linked to {account}.", account = link.account),
                 );
             } else {
                 // Whatever went wrong, the address is the thing the user would

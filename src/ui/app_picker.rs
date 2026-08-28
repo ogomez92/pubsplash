@@ -153,10 +153,10 @@ pub fn pick_application(frame: &Frame, current: &str) -> Pick {
             if !rows.is_empty() {
                 list.set_selection(index as u32, true);
             }
-            intro.set_label(if rows.is_empty() {
-                "No applications found. Use Type a name to enter one."
+            intro.set_label(&if rows.is_empty() {
+                t!("No applications found. Use Type a name to enter one.")
             } else {
-                "Which application should this source capture?"
+                t!("Which application should this source capture?")
             });
             *shown.borrow_mut() = rows.into_iter().map(|(exe, _)| exe).collect();
         }

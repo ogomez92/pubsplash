@@ -83,7 +83,7 @@ impl ScanDialog {
         let status_label = StaticText::builder(&panel).with_label(&t!("Status")).build();
         let status = TextCtrl::builder(&panel)
             .with_style(TextCtrlStyle::ReadOnly)
-            .with_value("Looking for plugins in the configured folders...")
+            .with_value(&t!("Looking for plugins in the configured folders..."))
             .build();
         super::set_accessible_name(&status, &t!("Scan status"));
         super::help::tag(&status, "dialog.scan.status", "Scan status text");
@@ -122,7 +122,7 @@ impl ScanDialog {
             let skip = skip.clone();
             skip_button.on_click(move |event| {
                 skip.store(true, Ordering::Relaxed);
-                status.set_value("Skipping this plugin...");
+                status.set_value(&t!("Skipping this plugin..."));
                 // The scan reports back on its own; do not let this reach
                 // wxDialogBase and close the dialog behind us.
                 event.event.skip(false);
@@ -134,7 +134,7 @@ impl ScanDialog {
                 cancel.store(true, Ordering::Relaxed);
                 // A helper that is part-way through a plugin has to finish or
                 // be killed first, so say that rather than vanishing.
-                status.set_value("Cancelling the scan...");
+                status.set_value(&t!("Cancelling the scan..."));
                 event.event.skip(false);
             });
         }

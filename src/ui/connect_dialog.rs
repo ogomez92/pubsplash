@@ -326,19 +326,19 @@ pub fn show(app: &Rc<App>, frame: &Frame) {
             // alongside the visible label, or a screen reader goes on reading
             // the wording the field had when the dialog was built.
             let server_name = if audiopub {
-                "Audiopub Icecast server"
+                t!("Audiopub Icecast server")
             } else {
-                "Icecast server"
+                t!("Icecast server")
             };
             let port_name = if audiopub {
-                "Audiopub Icecast port"
+                t!("Audiopub Icecast port")
             } else {
-                "Icecast port"
+                t!("Icecast port")
             };
-            server_label.set_label(server_name);
-            super::set_accessible_name(&server_input, server_name);
-            port_label.set_label(port_name);
-            super::set_accessible_name(&port_input, port_name);
+            server_label.set_label(&server_name);
+            super::set_accessible_name(&server_input, &server_name);
+            port_label.set_label(&port_name);
+            super::set_accessible_name(&port_input, &port_name);
             email_label.show(audiopub);
             email_input.show(audiopub);
             password_label.show(audiopub);

@@ -167,19 +167,22 @@ pub fn refresh_send_availability(app: &App) {
         w.chat_input.enable(can_send);
         w.chat_send.enable(can_send);
         let label = if can_send {
-            "Send"
+            t!("Send")
         } else {
-            "Send (not available for YouTube)"
+            t!("Send (not available for YouTube)")
         };
         // Only when it changed: `set_label` on a focused button is announced,
         // and this runs on every stream-UI refresh.
         if w.chat_send.get_label() != label {
-            w.chat_send.set_label(label);
-            super::set_accessible_name(&w.chat_input, if can_send {
-                "Send a message"
-            } else {
-                "Send a message (not available for YouTube)"
-            });
+            w.chat_send.set_label(&label);
+            super::set_accessible_name(
+                &w.chat_input,
+                &if can_send {
+                    t!("Send a message")
+                } else {
+                    t!("Send a message (not available for YouTube)")
+                },
+            );
         }
     });
 }

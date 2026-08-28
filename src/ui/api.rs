@@ -313,7 +313,7 @@ fn balance_text(entry: &EngineUsage) -> String {
         // Distinguishing these two matters: one is a button the user has not
         // pressed yet, the other is a provider that will never answer.
         None if usage::reports_balance(entry.engine) => {
-            "not fetched, press Refresh balances".to_string()
+            t!("not fetched, press Refresh balances")
         }
         None => unavailable().to_string(),
     }

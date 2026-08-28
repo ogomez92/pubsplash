@@ -74,6 +74,7 @@
 //! Threading: everything here runs on the UI thread — `install` from dialog
 //! construction, the subclass proc from message dispatch on the same thread.
 
+use crate::t;
 use std::cell::RefCell;
 use std::collections::HashMap;
 
@@ -126,16 +127,16 @@ pub enum Field {
 impl Field {
     /// What to call it. Lower case because it is spoken mid-sentence, and these
     /// are the words the user asked to hear.
-    fn label(self) -> &'static str {
+    fn label(self) -> String {
         match self {
-            Field::Month => "month",
-            Field::Day => "day",
-            Field::Year => "year",
-            Field::Weekday => "day of week",
-            Field::Hour12 | Field::Hour24 => "hour",
-            Field::Minute => "minute",
-            Field::Second => "second",
-            Field::Meridiem => "AM or PM",
+            Field::Month => t!("month"),
+            Field::Day => t!("day"),
+            Field::Year => t!("year"),
+            Field::Weekday => t!("day of week"),
+            Field::Hour12 | Field::Hour24 => t!("hour"),
+            Field::Minute => t!("minute"),
+            Field::Second => t!("second"),
+            Field::Meridiem => t!("AM or PM"),
         }
     }
 

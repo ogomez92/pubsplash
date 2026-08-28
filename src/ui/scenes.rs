@@ -473,14 +473,18 @@ fn add_source(app: &Rc<App>) {
     let Some(frame) = app.widgets(|w| w.frame) else {
         return;
     };
+    // Translated freely: the dialog answers with a row *index*, and the
+    // identity name below is built from `type_display_name`, which stays
+    // English. Nothing reads these strings back.
     let types = [
-        "Microphone",
-        "Desktop Audio",
-        "Application",
-        "Text-to-Speech",
-        "Sound Events",
-        "Media Player",
+        t!("Microphone"),
+        t!("Desktop Audio"),
+        t!("Application"),
+        t!("Text-to-Speech"),
+        t!("Sound Events"),
+        t!("Media Player"),
     ];
+    let types: Vec<&str> = types.iter().map(String::as_str).collect();
     let dialog =
         SingleChoiceDialog::builder(&frame, &t!("What kind of source?"), &t!("Add source"), &types).build();
     super::native_acc::install_in_dialog(&dialog, &t!("What kind of source?"));
@@ -603,7 +607,7 @@ fn edit_microphone(
         show_error(&frame, &t!("Microphone"), &t!("No microphones were found."));
         return;
     }
-    let mut labels: Vec<String> = vec!["Default microphone".to_string()];
+    let mut labels: Vec<String> = vec![t!("Default microphone")];
     labels.extend(devices.iter().map(|d| d.name.clone()));
     let label_refs: Vec<&str> = labels.iter().map(String::as_str).collect();
     let dialog = SingleChoiceDialog::builder(
@@ -869,7 +873,7 @@ fn edit_tts(app: &Rc<App>, scene_index: usize, source_index: usize, current: Tts
         "dialog.ttsSource.volume",
         "TTS voice volume slider",
     );
-    let volume_announcer = wire_slider(&volume_slider, "Voice volume", "%", 0, 100, 10);
+    let volume_announcer = wire_slider(&volume_slider, &t!("Voice volume"), "%", 0, 100, 10);
 
     let rate_label = StaticText::builder(&panel)
         .with_label(&t!("Speech rate (-10 to 10)"))
@@ -886,7 +890,7 @@ fn edit_tts(app: &Rc<App>, scene_index: usize, source_index: usize, current: Tts
         "TTS speech rate slider",
     );
     // Page step of 2 rather than 10: the whole range is only 20 wide.
-    let rate_announcer = wire_slider(&rate_slider, "Speech rate", "", -10, 10, 2);
+    let rate_announcer = wire_slider(&rate_slider, &t!("Speech rate"), "", -10, 10, 2);
 
     let pitch_label = StaticText::builder(&panel)
         .with_label(&t!("Voice pitch (-50 to 50)"))
@@ -901,7 +905,7 @@ fn edit_tts(app: &Rc<App>, scene_index: usize, source_index: usize, current: Tts
         "dialog.ttsSource.pitch",
         "TTS voice pitch slider",
     );
-    let pitch_announcer = wire_slider(&pitch_slider, "Voice pitch", "", -50, 50, 10);
+    let pitch_announcer = wire_slider(&pitch_slider, &t!("Voice pitch"), "", -50, 50, 10);
     // Named per engine: not every engine has a pitch control, and a slider
     // that silently does nothing is worse than one that says so.
     set_pitch_name(&pitch_slider, &pitch_announcer, selected_id);
@@ -1287,7 +1291,7 @@ fn edit_tts(app: &Rc<App>, scene_index: usize, source_index: usize, current: Tts
             apply_engine();
             let engine = selected_engine();
             let synth = crate::tts::engine::SynthRequest {
-                text: "Pubsplash text to speech is working.".into(),
+                text: t!("Pubsplash text to speech is working."),
                 voice: selected_voice(&voice_choice, &voices),
                 rate: rate_slider.value().clamp(-10, 10),
                 volume: volume_slider.value().clamp(0, 100) as u32,
@@ -1685,11 +1689,11 @@ impl TtsProviderControls {
 
         let eleven_boost = Choice::builder(&eleven_box).build();
         for label in [
-            "Speaker boost: provider default",
-            "Speaker boost: on",
-            "Speaker boost: off",
+            t!("Speaker boost: provider default"),
+            t!("Speaker boost: on"),
+            t!("Speaker boost: off"),
         ] {
-            eleven_boost.append(label);
+            eleven_boost.append(&label);
         }
         eleven_boost.set_selection(match eleven.speaker_boost {
             None => 0,
@@ -1933,8 +1937,12 @@ impl TtsProviderControls {
         gtts_sizer.add(&gtts_tld, 0, SizerFlag::Expand | SizerFlag::All, 3);
         let gtts_speed = Choice::builder(&gtts_box).build();
         super::set_accessible_name(&gtts_speed, &t!("Google Translate speed mode"));
-        for label in ["Speed: provider default", "Speed: normal", "Speed: slow"] {
-            gtts_speed.append(label);
+        for label in [
+            t!("Speed: provider default"),
+            t!("Speed: normal"),
+            t!("Speed: slow"),
+        ] {
+            gtts_speed.append(&label);
         }
         gtts_speed.set_selection(match gtts.slow {
             None => 0,
@@ -2423,13 +2431,13 @@ fn selected_voice(
 /// Names the pitch slider, saying so when the engine ignores it.
 fn set_pitch_name(slider: &Slider, announcer: &SliderAnnouncer, engine: &str) {
     let name = if pitch_is_supported(engine) {
-        "Voice pitch"
+        t!("Voice pitch")
     } else {
-        "Voice pitch, not supported by this engine"
+        t!("Voice pitch, not supported by this engine")
     };
-    super::set_accessible_name(slider, name);
+    super::set_accessible_name(slider, &name);
     // The MSAA name above is only half of it — NVDA reads the UIA one.
-    announcer.set_name(name);
+    announcer.set_name(&name);
 }
 
 /// Gives a dialog slider the two things that make it usable with a screen
@@ -2726,7 +2734,7 @@ fn edit_media_player(
         "dialog.mediaPlayerSource.duckLevel",
         "Turned-down level slider",
     );
-    let duck_announcer = wire_slider(&duck_slider, "Turned-down level", "%", 0, 100, 10);
+    let duck_announcer = wire_slider(&duck_slider, &t!("Turned-down level"), "%", 0, 100, 10);
 
     // The threshold sits beside the level it belongs to, and the Calibrate
     // button beside the threshold, because the number is the hard part: nobody
@@ -2748,7 +2756,7 @@ fn edit_media_player(
     );
     let threshold_announcer = wire_slider(
         &threshold_slider,
-        "Start turning down at",
+        &t!("Start turning down at"),
         " dB",
         mixer::DUCK_THRESHOLD_DB_MIN,
         mixer::DUCK_THRESHOLD_DB_MAX,
@@ -2932,7 +2940,7 @@ fn calibrate_duck(
                 slider.set_value(db);
                 // Set rather than announced: the sentence below is what the
                 // user hears, and two announcements at once would collide.
-                announcer.set_text("Start turning down at", &t!("{db} dB", db = db));
+                announcer.set_text(&t!("Start turning down at"), &t!("{db} dB", db = db));
                 super::help::announce(&t!("Calibrated. The music will start turning down at {db} decibels.", db = db));
             }
             // Nothing was heard, which is a real answer and a common one: the

@@ -345,10 +345,18 @@ fn overview_rows(state: &OverviewState) -> Vec<(OverviewRow, String)> {
     let streaming = !matches!(state.stream, StreamState::Idle);
     // Never `recording` and `recording_pending` at once, but ordered so that if
     // they ever were, the confirmed answer wins over the hoped-for one.
+    // An enum rather than the word itself. The idle arm below tells the two
+    // apart by matching on it, and matching on translated text would stop doing
+    // that in every language but English.
+    #[derive(Clone, Copy, PartialEq)]
+    enum Recording {
+        Running,
+        Starting,
+    }
     let recording_word = if state.recording {
-        Some("recording")
+        Some(Recording::Running)
     } else if state.recording_pending {
-        Some("starting a recording")
+        Some(Recording::Starting)
     } else {
         None
     };
@@ -360,21 +368,27 @@ fn overview_rows(state: &OverviewState) -> Vec<(OverviewRow, String)> {
     let status = match (&state.stream, recording_word) {
         // "Not streaming and recording" would be nonsense, so the idle case
         // says what is actually happening instead.
-        (StreamState::Idle, Some("recording")) => "Recording".to_string(),
-        (StreamState::Idle, Some(_)) => "Starting a recording".to_string(),
+        (StreamState::Idle, Some(Recording::Running)) => t!("Recording"),
+        (StreamState::Idle, Some(Recording::Starting)) => t!("Starting a recording"),
         // Recording is locked out while a schedule is armed, so this can never
         // have to combine with the two arms above.
-        (StreamState::Idle, None) if armed => "Stream scheduled".to_string(),
-        (StreamState::Idle, None) => "Not streaming".to_string(),
+        (StreamState::Idle, None) if armed => t!("Stream scheduled"),
+        (StreamState::Idle, None) => t!("Not streaming"),
         (phase, recording) => {
             let base = match phase {
-                StreamState::Starting => "Starting",
-                StreamState::Live { .. } => "Streaming",
-                _ => "Stopping",
+                StreamState::Starting => t!("Starting"),
+                StreamState::Live { .. } => t!("Streaming"),
+                _ => t!("Stopping"),
             };
+            // Whole phrases rather than a word slotted into a frame: Spanish
+            // agrees the second verb with the first, which an interpolated
+            // "{base} and {word}" gives a translator no way to express.
             let base = match recording {
-                Some(word) => t!("{base} and {word}", base = base, word = word),
-                None => base.to_string(),
+                Some(Recording::Running) => t!("{base} and recording", base = base),
+                Some(Recording::Starting) => {
+                    t!("{base} and starting a recording", base = base)
+                }
+                None => base,
             };
             // Said plainly, because the alternative is a UI that claims to be
             // streaming while listeners hear nothing. The duration is
@@ -419,37 +433,41 @@ fn overview_rows(state: &OverviewState) -> Vec<(OverviewRow, String)> {
     let mut rows = vec![(OverviewRow::Status, t!("Status: {status}", status = status))];
     if let Some((kind, remaining)) = state.countdown {
         let what = match kind {
-            Countdown::Connect => "Connecting in",
-            Countdown::SceneSwitch => "Switching scene in",
+            Countdown::Connect => t!("Connecting in"),
+            Countdown::SceneSwitch => t!("Switching scene in"),
         };
         // Worded rather than the Duration row's clock format: this is a time
         // *until* something, which is read aloud, not a stopwatch. See
         // `schedule::format_countdown`.
         rows.push((
             OverviewRow::Countdown,
-            format!(
-                "{what} {}",
-                crate::schedule::format_countdown(remaining.as_secs())
+            t!(
+                "{what} {remaining}",
+                what = what,
+                remaining = crate::schedule::format_countdown(remaining.as_secs())
             ),
         ));
     }
     if streaming {
         // Describes what is going out on the wire, so it is grouped with the
         // listener counts and shares their streaming-only gate.
-        rows.push((OverviewRow::Quality, format!("Quality: {}", state.quality)));
+        rows.push((
+            OverviewRow::Quality,
+            t!("Quality: {quality}", quality = state.quality),
+        ));
         rows.push((
             OverviewRow::Listeners,
-            format!("Listeners: {}", state.listeners),
+            t!("Listeners: {count}", count = state.listeners),
         ));
         rows.push((
             OverviewRow::ListenerPeak,
-            format!("Listener peak: {}", state.listener_peak),
+            t!("Listener peak: {count}", count = state.listener_peak),
         ));
     }
     if let Some(elapsed) = state.elapsed {
         rows.push((
             OverviewRow::Duration,
-            format!("Duration: {}", super::format_duration(elapsed)),
+            t!("Duration: {elapsed}", elapsed = super::format_duration(elapsed)),
         ));
     }
     rows
@@ -915,7 +933,10 @@ fn add_strip(
         let open = Button::builder(parent).with_label(&t!("Open file...")).build();
         // Named after the strip, like everything else on it — the identity name
         // the click carries is a routing key and not what the user calls this.
-        super::set_accessible_name(&open, &format!("Open a file to play on {}", name.borrow()));
+        super::set_accessible_name(
+            &open,
+            &t!("Open a file to play on {source}", source = name.borrow()),
+        );
         super::help::tag(
             &open,
             "tab.home.mixer.strip.openFile",
@@ -1028,13 +1049,13 @@ fn add_strip(
             let mut builder = Menu::builder()
                 .append_check_item(
                     ID_MIXER_BOOST,
-                    "Enable volume boost",
-                    "Allow this strip's volume to go above 100%, up to 500%",
+                    &t!("Enable volume boost"),
+                    &t!("Allow this strip's volume to go above 100%, up to 500%"),
                 )
                 .append_check_item(
                     ID_MIXER_MONITOR,
-                    "Monitor this strip",
-                    "Play this strip through your speakers or headphones",
+                    &t!("Monitor this strip"),
+                    &t!("Play this strip through your speakers or headphones"),
                 );
             // A media player's transport lives here as well as on a keybinding,
             // so it is reachable without one — and it is read from the player

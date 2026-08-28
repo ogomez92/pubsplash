@@ -184,9 +184,13 @@ pub fn build_tab(app: &Rc<App>, dialog: &Dialog, panel: &Panel) {
                 .cloned();
             let confirm = MessageDialog::builder(
                 &dialog,
-                match &media {
-                    Some(_) => "Discard every keybinding and restore the defaults: F9 for streaming, F10 for recording, and CONTROL plus O to open a file on your first media player?",
-                    None => "Discard every keybinding and restore the defaults, F9 for streaming and F10 for recording?",
+                &match &media {
+                    Some(_) => t!(
+                        "Discard every keybinding and restore the defaults: F9 for streaming, F10 for recording, and CONTROL plus O to open a file on your first media player?"
+                    ),
+                    None => t!(
+                        "Discard every keybinding and restore the defaults, F9 for streaming and F10 for recording?"
+                    ),
                 },
                 &t!("Reset to defaults"),
             )
@@ -217,11 +221,11 @@ pub fn build_tab(app: &Rc<App>, dialog: &Dialog, panel: &Panel) {
 fn edit_dialog(app: &Rc<App>, parent: &Dialog, initial: Option<BindAction>) -> Option<BindAction> {
     let editing = initial.is_some();
     let title = if editing {
-        "Edit binding"
+        t!("Edit binding")
     } else {
-        "Add binding"
+        t!("Add binding")
     };
-    let dialog = Dialog::builder(parent, title)
+    let dialog = Dialog::builder(parent, &title)
         .with_style(DialogStyle::DefaultDialogStyle | DialogStyle::ResizeBorder)
         .with_size(460, 380)
         .build();
@@ -412,7 +416,10 @@ fn edit_dialog(app: &Rc<App>, parent: &Dialog, initial: Option<BindAction>) -> O
     {
         chord.set(bind.key);
         shortcut_input.set_value(&bind.key.label());
-        super::set_accessible_name(&shortcut_input, &format!("Shortcut, {}", bind.key.label()));
+        super::set_accessible_name(
+        &shortcut_input,
+        &t!("Shortcut, {chord}", chord = bind.key.label()),
+    );
         global_check.set_value(bind.global);
     }
 

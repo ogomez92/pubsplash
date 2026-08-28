@@ -17,17 +17,25 @@ use std::rc::Rc;
 use wxdragon::prelude::*;
 
 /// Pre-filled into the one-shot dialog when a stream resumes.
-pub const RESUME_DEFAULT: &str = "I've resumed my #Audiopub stream! Tune in at {url}";
+/// The post a resumed stream announces itself with, until the user edits it.
+///
+/// `{url}` is the app's own placeholder, filled in when the post is made, and a
+/// translation has to keep it — `i18n::interpolate` leaves an unknown name
+/// standing rather than dropping it, so a dropped `{url}` shows up as a post
+/// with no link rather than silently losing one.
+pub fn resume_default() -> String {
+    t!("I've resumed my #Audiopub stream! Tune in at {url}")
+}
 
 /// Shows the add/edit dialog. `existing` is `None` for Add.
 pub fn edit(parent: &dyn WxWidget, existing: Option<&Template>) -> Option<Template> {
     let adding = existing.is_none();
     let caption = if adding {
-        "Add template"
+        t!("Add template")
     } else {
-        "Edit template"
+        t!("Edit template")
     };
-    let dialog = Dialog::builder(parent, caption)
+    let dialog = Dialog::builder(parent, &caption)
         .with_style(DialogStyle::DefaultDialogStyle | DialogStyle::ResizeBorder)
         .with_size(520, 340)
         .build();
@@ -110,7 +118,7 @@ pub fn edit(parent: &dyn WxWidget, existing: Option<&Template>) -> Option<Templa
                 // No `end_modal`: the dialog stays open behind the warning with
                 // the user's text intact, so a typo is one correction away
                 // rather than a retype.
-                super::show_warning(&dialog, caption, &error.to_string());
+                super::show_warning(&dialog, &caption, &error.to_string());
                 text_input.set_focus();
                 return;
             }
@@ -189,7 +197,7 @@ pub fn prompt_one_shot(parent: &dyn WxWidget) -> Option<String> {
     let label = StaticText::builder(&panel).with_label(&t!("Post")).build();
     let input = TextCtrl::builder(&panel)
         .with_style(TextCtrlStyle::MultiLine)
-        .with_value(RESUME_DEFAULT)
+        .with_value(&resume_default())
         .build();
     super::set_accessible_name(&input, &t!("Post"));
     super::help::tag(&input, "dialog.mastodonResume.text", "Resumed stream post");
@@ -275,7 +283,11 @@ mod tests {
 
     #[test]
     fn the_resume_suggestion_is_a_valid_template() {
-        assert_eq!(mastodon::validate(super::RESUME_DEFAULT), Ok(()));
-        assert!(super::RESUME_DEFAULT.contains("{url}"));
+        // Asserted on the translated value, so a Spanish default that dropped
+        // `{url}` would fail here rather than post a stream announcement with
+        // no link in it.
+        let suggestion = super::resume_default();
+        assert_eq!(mastodon::validate(&suggestion), Ok(()));
+        assert!(suggestion.contains("{url}"), "got {suggestion:?}");
     }
 }

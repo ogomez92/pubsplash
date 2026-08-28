@@ -91,9 +91,9 @@ impl ProgressDialog {
         let status_label = StaticText::builder(&panel).with_label(&t!("Status")).build();
         let status = TextCtrl::builder(&panel)
             .with_style(TextCtrlStyle::ReadOnly)
-            .with_value(&format!(
-                "Starting. This is about {} MB, and closing Preferences will cancel it.",
-                install::APPROXIMATE_MEGABYTES
+            .with_value(&t!(
+                "Starting. This is about {megabytes} MB, and closing Preferences will cancel it.",
+                megabytes = install::APPROXIMATE_MEGABYTES
             ))
             .build();
         super::set_accessible_name(&status, &t!("Download status"));
@@ -143,14 +143,18 @@ fn describe(app: &App) -> String {
     let configured = app.config.borrow().connection.ffmpeg_path.clone();
     match ffmpeg::locate(&configured) {
         Ok(path) => match ffmpeg::probe(&path) {
-            Ok(caps) => format!(
-                "Using {} — {}, H.264 via {}, AAC via {}.",
-                path.display(),
-                caps.version,
-                caps.h264,
-                caps.aac
+            Ok(caps) => t!(
+                "Using {path} — {version}, H.264 via {h264}, AAC via {aac}.",
+                path = path.display(),
+                version = caps.version,
+                h264 = caps.h264,
+                aac = caps.aac
             ),
-            Err(problem) => format!("Found {} but it cannot be used: {problem}", path.display()),
+            Err(problem) => t!(
+                "Found {path} but it cannot be used: {problem}",
+                path = path.display(),
+                problem = problem
+            ),
         },
         Err(problem) => problem,
     }
@@ -249,7 +253,7 @@ pub fn build_group(app: &Rc<App>, dialog: &Dialog, panel: &Panel) -> StaticBoxSi
         browse.on_click(move |_| {
             let picker = FileDialog::builder(&dialog)
                 .with_message(&t!("Choose ffmpeg.exe"))
-                .with_wildcard("FFmpeg (ffmpeg.exe)|ffmpeg.exe|Programs (*.exe)|*.exe")
+                .with_wildcard(&t!("FFmpeg (ffmpeg.exe)|ffmpeg.exe|Programs (*.exe)|*.exe"))
                 .with_style(FileDialogStyle::Open | FileDialogStyle::FileMustExist)
                 .build();
             if picker.show_modal() != ID_OK {
@@ -369,7 +373,7 @@ pub fn drain(app: &Rc<App>) {
                 );
             }
             install::Progress::Extracting => {
-                dialog.set(100, "Downloaded and checked. Unpacking FFmpeg.");
+                dialog.set(100, &t!("Downloaded and checked. Unpacking FFmpeg."));
             }
             // The three terminal ones end the loop rather than being handled
             // here, so the window and the state are gone before any message box
@@ -406,7 +410,11 @@ pub fn drain(app: &Rc<App>) {
         install::Progress::Installed { path, version } => show_info(
             &frame,
             &t!("Download FFmpeg"),
-            &format!("FFmpeg is installed and working.\n\n{version}\n{}", path.display()),
+            &t!(
+                "FFmpeg is installed and working.\n\n{version}\n{path}",
+                version = version,
+                path = path.display()
+            ),
         ),
         install::Progress::Failed { message } => {
             show_error(&frame, &t!("Download FFmpeg"), &message);

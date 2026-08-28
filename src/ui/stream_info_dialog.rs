@@ -126,14 +126,14 @@ pub fn show(app: &Rc<App>, parent: &Frame) -> bool {
     for (check, label, default) in [
         (
             &announce_start,
-            "Post to Mastodon when this stream starts",
+            &t!("Post to Mastodon when this stream starts"),
             current.announce_start
                 || (!app.run.borrow().stream_info_set
                     && app.config.borrow().mastodon.post_on_start),
         ),
         (
             &announce_periodic,
-            "Post periodic still-streaming announcements",
+            &t!("Post periodic still-streaming announcements"),
             current.announce_periodic
                 || (!app.run.borrow().stream_info_set && app.config.borrow().mastodon.periodic),
         ),

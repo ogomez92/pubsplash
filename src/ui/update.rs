@@ -263,10 +263,11 @@ fn offer(app: &Rc<App>, trigger: Trigger, manifest: crate::update::manifest::Man
         }
         let ask = MessageDialog::builder(
             owner.as_widget(),
-            &format!(
-                "Pubsplash {} is available; you are running {current}. This copy was not \
+            &t!(
+                "Pubsplash {version} is available; you are running {current}. This copy was not \
                  installed in a way Pubsplash can update on its own. Open the download page?",
-                manifest.version
+                version = manifest.version,
+                current = current
             ),
             &t!("Update available"),
         )
@@ -282,22 +283,24 @@ fn offer(app: &Rc<App>, trigger: Trigger, manifest: crate::update::manifest::Man
 
     let what_happens = match kind {
         install_kind::InstallKind::Installed => {
-            "Pubsplash will download it, then close and run the installer."
+            t!("Pubsplash will download it, then close and run the installer.")
         }
         // Named explicitly: the folder being replaced is the surprising half,
         // and someone keeping their own files beside a portable copy deserves
         // to know before they say yes.
         install_kind::InstallKind::Portable => {
-            "Pubsplash will download it, then close, replace its own files, and start again."
+            t!("Pubsplash will download it, then close, replace its own files, and start again.")
         }
         install_kind::InstallKind::Unknown => unreachable!("handled above"),
     };
     let ask = MessageDialog::builder(
         owner.as_widget(),
-        &format!(
-            "Pubsplash {} is available; you are running {current}. {what_happens} \
+        &t!(
+            "Pubsplash {version} is available; you are running {current}. {what_happens} \
              Download and install it now?",
-            manifest.version
+            version = manifest.version,
+            current = current,
+            what_happens = what_happens
         ),
         &t!("Update available"),
     )

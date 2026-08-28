@@ -48,7 +48,7 @@ fn megabytes(bytes: u64) -> String {
 /// Split out from the widget so the wording can be tested without a window.
 pub fn progress_line(done: u64, total: u64) -> String {
     if total == 0 {
-        return format!("Downloaded {}.", megabytes(done));
+        return t!("Downloaded {done}.", done = megabytes(done));
     }
     format!(
         "Downloaded {} of {} ({}%).",
@@ -97,7 +97,7 @@ impl UpdateDialog {
         let status_label = StaticText::builder(&panel).with_label(&t!("Status")).build();
         let status = TextCtrl::builder(&panel)
             .with_style(TextCtrlStyle::ReadOnly)
-            .with_value("Connecting to GitHub...")
+            .with_value(&t!("Connecting to GitHub..."))
             .build();
         super::set_accessible_name(&status, &t!("Download status"));
         super::help::tag(&status, "dialog.update.status", "Update download status text");
@@ -154,7 +154,7 @@ impl UpdateDialog {
     /// hang, so the status says what is actually happening.
     pub fn unpacking(&self) {
         self.gauge.set_value(100);
-        self.status.set_value("Download complete. Unpacking the update...");
+        self.status.set_value(&t!("Download complete. Unpacking the update..."));
     }
 }
 
