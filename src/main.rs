@@ -7,6 +7,7 @@ mod crash;
 mod data_dir;
 mod ffmpeg;
 mod fx;
+mod i18n;
 mod instance;
 mod json_store;
 mod keybind;
@@ -58,6 +59,12 @@ fn main() {
         );
     }
     let config = config::load();
+    // Before the first `t!` anywhere, which in practice means before any window
+    // exists — but also before the sound pack and engine threads below, since a
+    // failure in either reports itself through a translated string. Logging is
+    // already up, so the language actually chosen is visible in the log; nothing
+    // written to the log is itself translated.
+    i18n::init(Some(config.interface.language.as_str()));
     // Before anything can play: the startup cue below is spawned from this
     // function, and a monitoring thread opens the device the moment a strip
     // asks for it. Both read this setting rather than being handed it.
