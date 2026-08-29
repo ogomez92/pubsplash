@@ -23,6 +23,12 @@
 //! Entries are sorted by context and msgid for stable diffs, exactly as
 //! `gen-help` sorts `help.toml`.
 //!
+//! Two placeholder checks run alongside the merge: a translation that has lost
+//! or invented a `{name}` is reported against its msgid, and a call site whose
+//! own message carries a placeholder no argument fills is reported against its
+//! line. The second is the one a user would otherwise meet as braces in the
+//! middle of a sentence.
+//!
 //! The `.po` reader and the string escaper come from `src/i18n.rs` itself,
 //! `#[path]`-included below rather than reimplemented — the same trick
 //! `soundpack.rs` uses for `audio/convert.rs`, and for the same reason: a writer
@@ -84,6 +90,7 @@ fn main() {
     let mut messages: BTreeMap<(Option<String>, String), Message> = BTreeMap::new();
 
     let mut call_sites = 0usize;
+    let mut unfilled = 0usize;
     for file in rust_files(&src_dir) {
         let Ok(text) = fs::read_to_string(&file) else {
             continue;
@@ -95,6 +102,7 @@ fn main() {
             .replace('\\', "/");
         for found in scan_calls(&text) {
             call_sites += 1;
+            unfilled += report_unfilled(&relative, &found);
             let entry = messages
                 .entry((None, found.singular.clone()))
                 .or_insert_with(|| Message {
@@ -111,7 +119,13 @@ fn main() {
             entry.refs.push(format!("{relative}:{}", found.line));
         }
     }
-    println!("Found {call_sites} t!/tn! call sites.");
+    if unfilled == 0 {
+        println!("Found {call_sites} t!/tn! call sites.");
+    } else {
+        println!(
+            "Found {call_sites} t!/tn! call sites, {unfilled} WITH A PLACEHOLDER NOTHING FILLS."
+        );
+    }
 
     let help_added = collect_help(&root, &mut messages);
     println!("Found {help_added} context-help messages in help.toml.");
@@ -172,6 +186,10 @@ struct Call {
     singular: String,
     plural: Option<String>,
     line: usize,
+    /// The `name =` arguments written at the call site, plus `n` for a `tn!`,
+    /// which the macro binds itself. What [`report_unfilled`] checks the
+    /// message's own placeholders against.
+    supplied: Vec<String>,
 }
 
 /// Walks the source for `t!(` and `tn!(` outside comments and string literals,
@@ -286,10 +304,19 @@ fn scan_calls(source: &str) -> Vec<Call> {
                                 "warning: line {call_line}: tn! without two literal forms; skipped"
                             );
                         } else {
+                            // `named_args` is handed the position by value and
+                            // the outer scan stays where it is: the arguments
+                            // may hold a `t!` of their own, which is found by
+                            // walking into them rather than over them.
+                            let mut supplied = named_args(&chars, k);
+                            if plural {
+                                supplied.push("n".to_string());
+                            }
                             out.push(Call {
                                 singular: first,
                                 plural: second,
                                 line: call_line,
+                                supplied,
                             });
                         }
                     }
@@ -425,6 +452,94 @@ fn read_literal(chars: &[char], i: &mut usize, line: &mut usize) -> Option<Strin
         *i += 1;
     }
     None
+}
+
+/// Reads the `name =` arguments of a call whose literal forms have just been
+/// consumed, starting at `from` and stopping at the macro's own closing paren.
+///
+/// Only depth 1 counts, which is the only depth a named argument can be at: an
+/// assignment inside a closure or a nested call is somebody else's `=`, and
+/// counting it would report a placeholder as filled when nothing fills it.
+/// `==`, `!=` and a match arm's `=>` are excluded for the same reason — this
+/// walk decides whether a warning is *suppressed*, so every doubtful case
+/// resolves against suppressing it.
+fn named_args(chars: &[char], from: usize) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut i = from;
+    let mut depth = 1usize;
+    let mut scratch = 0usize;
+    while i < chars.len() && depth > 0 {
+        let c = chars[i];
+        if c == '/' && chars.get(i + 1) == Some(&'/') {
+            while i < chars.len() && chars[i] != '\n' {
+                i += 1;
+            }
+            continue;
+        }
+        if c == '/' && chars.get(i + 1) == Some(&'*') {
+            let mut nested = 1;
+            i += 2;
+            while i < chars.len() && nested > 0 {
+                if chars[i] == '/' && chars.get(i + 1) == Some(&'*') {
+                    nested += 1;
+                    i += 2;
+                } else if chars[i] == '*' && chars.get(i + 1) == Some(&'/') {
+                    nested -= 1;
+                    i += 2;
+                } else {
+                    i += 1;
+                }
+            }
+            continue;
+        }
+        if c == 'r'
+            && !is_ident(chars.get(i.wrapping_sub(1)).copied())
+            && let Some(end) = skip_raw_string(chars, i, &mut scratch)
+        {
+            i = end;
+            continue;
+        }
+        if c == '"' {
+            let mut j = i;
+            read_literal(chars, &mut j, &mut scratch);
+            i = j.max(i + 1);
+            continue;
+        }
+        // A char literal or a lifetime; both are safe to step past one char.
+        if c == '\'' {
+            i += 1;
+            continue;
+        }
+        if c == '(' || c == '[' || c == '{' {
+            depth += 1;
+            i += 1;
+            continue;
+        }
+        if c == ')' || c == ']' || c == '}' {
+            depth -= 1;
+            i += 1;
+            continue;
+        }
+        if is_ident(Some(c)) && !is_ident(chars.get(i.wrapping_sub(1)).copied()) {
+            let start = i;
+            while is_ident(chars.get(i).copied()) {
+                i += 1;
+            }
+            let mut j = i;
+            while chars.get(j).is_some_and(|c| c.is_whitespace()) {
+                j += 1;
+            }
+            if depth == 1
+                && chars.get(j) == Some(&'=')
+                && !matches!(chars.get(j + 1), Some('=') | Some('>'))
+            {
+                out.push(chars[start..i].iter().collect());
+            }
+            continue;
+        }
+        i += 1;
+    }
+    out
 }
 
 fn skip_comma(chars: &[char], i: &mut usize, line: &mut usize) {
@@ -635,6 +750,80 @@ fn write_catalog(
     }
 }
 
+/// Placeholders a message hands on rather than fills: the name is left standing
+/// on purpose, for something further down to substitute.
+///
+/// The one entry today is the default Mastodon announcement, whose text is a
+/// *template* — the user edits it, and `mastodon::expand` fills its tokens when
+/// the post is actually made. Keyed by file as well as by name so a forgotten
+/// `{url}` anywhere else is still reported.
+const FILLED_ELSEWHERE: &[(&str, &str)] = &[("src/ui/mastodon_templates.rs", "url")];
+
+/// Reports a call site whose own message carries a placeholder no argument
+/// fills, and returns how many it found.
+///
+/// `i18n::interpolate` leaves an unknown `{name}` standing rather than dropping
+/// it — the right answer for a translation that invents one, and the reason a
+/// forgotten argument reaches the user as braces in the middle of a sentence.
+/// Nothing else catches it: the message is a valid msgid, it translates, and it
+/// compiles, so the first report is a screen reader reading "{count}" out to
+/// somebody. Both forms of a `tn!` are checked against the same arguments,
+/// since either may be the one chosen at runtime.
+fn report_unfilled(file: &str, call: &Call) -> usize {
+    let mut wanted = placeholder_names(&call.singular);
+    if let Some(plural) = &call.plural {
+        wanted.extend(placeholder_names(plural));
+    }
+    let mut problems = 0;
+    for name in wanted {
+        if call.supplied.iter().any(|arg| *arg == name)
+            || FILLED_ELSEWHERE.contains(&(file, name.as_str()))
+        {
+            continue;
+        }
+        problems += 1;
+        eprintln!(
+            "warning: {file}:{}: nothing fills {{{name}}} in {:?}, so the braces reach the user",
+            call.line,
+            truncate(&call.singular)
+        );
+    }
+    problems
+}
+
+/// The `{name}` placeholders in a message, ignoring `{{` and `}}` escapes.
+fn placeholder_names(text: &str) -> std::collections::BTreeSet<String> {
+    let mut out = std::collections::BTreeSet::new();
+    let chars: Vec<char> = text.chars().collect();
+    let mut i = 0;
+    while i < chars.len() {
+        if chars[i] != '{' {
+            i += 1;
+            continue;
+        }
+        if chars.get(i + 1) == Some(&'{') {
+            i += 2;
+            continue;
+        }
+        let start = i + 1;
+        let mut j = start;
+        while j < chars.len() && chars[j] != '}' {
+            j += 1;
+        }
+        let name: String = chars[start..j.min(chars.len())].iter().collect();
+        if !name.is_empty()
+            && name
+                .chars()
+                .all(|c| c.is_alphanumeric() || c == '_')
+            && !name.chars().next().is_some_and(|c| c.is_ascii_digit())
+        {
+            out.insert(name);
+        }
+        i = j + 1;
+    }
+    out
+}
+
 /// Reports translations whose placeholders do not match their msgid's.
 ///
 /// A dropped `{name}` is the one translation mistake that cannot be seen by
@@ -644,39 +833,6 @@ fn write_catalog(
 /// standing and the user reads the braces. Both are cheap to find here and
 /// expensive to notice in a running app, so `gen-po` looks every time.
 fn check_placeholders(path: &Path) -> usize {
-    /// The names in `{...}`, ignoring `{{` and `}}` escapes.
-    fn names(text: &str) -> std::collections::BTreeSet<String> {
-        let mut out = std::collections::BTreeSet::new();
-        let chars: Vec<char> = text.chars().collect();
-        let mut i = 0;
-        while i < chars.len() {
-            if chars[i] != '{' {
-                i += 1;
-                continue;
-            }
-            if chars.get(i + 1) == Some(&'{') {
-                i += 2;
-                continue;
-            }
-            let start = i + 1;
-            let mut j = start;
-            while j < chars.len() && chars[j] != '}' {
-                j += 1;
-            }
-            let name: String = chars[start..j.min(chars.len())].iter().collect();
-            if !name.is_empty()
-                && name
-                    .chars()
-                    .all(|c| c.is_alphanumeric() || c == '_')
-                && !name.chars().next().is_some_and(|c| c.is_ascii_digit())
-            {
-                out.insert(name);
-            }
-            i = j + 1;
-        }
-        out
-    }
-
     let Ok(text) = fs::read_to_string(path) else {
         return 0;
     };
@@ -685,12 +841,12 @@ fn check_placeholders(path: &Path) -> usize {
         if entry.id.is_empty() {
             continue;
         }
-        let mut wanted = names(&entry.id);
+        let mut wanted = placeholder_names(&entry.id);
         if let Some(plural) = &entry.id_plural {
-            wanted.extend(names(plural));
+            wanted.extend(placeholder_names(plural));
         }
         for form in entry.msgstrs.iter().filter(|s| !s.is_empty()) {
-            let got = names(form);
+            let got = placeholder_names(form);
             if got != wanted {
                 problems += 1;
                 eprintln!(

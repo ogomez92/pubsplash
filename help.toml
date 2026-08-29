@@ -781,6 +781,84 @@ file = "src/ui/schedule_ui.rs"
 message = "The time Pubsplash connects to your streaming service and starts sending audio. In simple mode this is when your stream begins. In advanced mode it is called the pre-stream time, and it is when the first scene goes out, ahead of your content. It has to be in the future, and Pubsplash will not start a stream that is more than two minutes late, so a schedule missed because the computer was asleep is cancelled rather than going live to nobody."
 
 [[control]]
+id = "dialog.scheduleItem.browse"
+label = "Browse for a scheduled file"
+file = "src/ui/scheduler_ui.rs"
+message = "Opens a file picker to choose the audio file this item plays."
+
+[[control]]
+id = "dialog.scheduleItem.enabled"
+label = "Whether the item plays"
+file = "src/ui/scheduler_ui.rs"
+message = "Turn this off to keep the item in the list without playing it. Useful for something seasonal you want back later without setting its time again."
+
+[[control]]
+id = "dialog.scheduleItem.file"
+label = "Scheduled file path box"
+file = "src/ui/scheduler_ui.rs"
+message = "The audio file this item plays. Type the full path or use Browse. Pubsplash plays the same formats as the Media Player source; Opus files are not supported."
+
+[[control]]
+id = "dialog.scheduleItem.interval"
+label = "How often the item plays"
+file = "src/ui/scheduler_ui.rs"
+message = "How often the item plays. Intervals are measured from midnight, so every 15 minutes means at the hour and at 15, 30 and 45 minutes past it, whatever time Pubsplash started."
+
+[[control]]
+id = "dialog.scheduleItem.kind"
+label = "When the item plays"
+file = "src/ui/scheduler_ui.rs"
+message = "Choose between three ways of timing this item: every so many minutes, once an hour, or once a day. The controls below change to match."
+
+[[control]]
+id = "dialog.scheduleItem.minutesPast"
+label = "Minutes past the hour"
+file = "src/ui/scheduler_ui.rs"
+message = "Which minute of every hour this item plays at. Zero means on the hour."
+
+[[control]]
+id = "dialog.scheduleItem.preview"
+label = "Preview the scheduled file"
+file = "src/ui/scheduler_ui.rs"
+message = "Plays the first few seconds of the file through your own speakers or headphones, never into the stream. It uses the same decoder the schedule does, so a file that previews is a file that will play. Press it again to stop."
+
+[[control]]
+id = "dialog.scheduleItem.time"
+label = "Time of day to play at"
+file = "src/ui/scheduler_ui.rs"
+message = "The time of day this item plays, on a 24-hour clock. Use left and right to move between the hour and the minute, and up and down to change them."
+
+[[control]]
+id = "dialog.schedulerSource.add"
+label = "Add scheduled item"
+file = "src/ui/scheduler_ui.rs"
+message = "Adds a file to the schedule and asks when it should play."
+
+[[control]]
+id = "dialog.schedulerSource.duplicate"
+label = "Duplicate scheduled item"
+file = "src/ui/scheduler_ui.rs"
+message = "Copies the selected item just below itself, so you only have to change its time. This is how you play one file at several times of day."
+
+[[control]]
+id = "dialog.schedulerSource.edit"
+label = "Edit scheduled item"
+file = "src/ui/scheduler_ui.rs"
+message = "Changes the selected item's file, timing, or whether it plays."
+
+[[control]]
+id = "dialog.schedulerSource.list"
+label = "Scheduled items list"
+file = "src/ui/scheduler_ui.rs"
+message = "Every file this scheduler plays, and when it plays it. Each row gives the file, the rule that fires it, and whether it is turned on. Use Add, Edit, Duplicate and Remove below. Nothing is saved until you press OK."
+
+[[control]]
+id = "dialog.schedulerSource.remove"
+label = "Remove scheduled item"
+file = "src/ui/scheduler_ui.rs"
+message = "Takes the selected item out of the schedule. If you only want to stop it for now, edit it and clear the Play this item box instead."
+
+[[control]]
 id = "dialog.sends.busList"
 label = "Destinations for this source list"
 file = "src/ui/sends.rs"

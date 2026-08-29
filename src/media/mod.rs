@@ -11,7 +11,10 @@
 //! owns it, because only the engine can see what every *other* source is doing
 //! in the same block (see [`crate::audio::mixer::Ducker`]).
 
+pub mod decode;
 pub mod player;
+pub mod schedule;
+pub mod scheduler;
 
 use rand::seq::SliceRandom;
 use std::path::{Path, PathBuf};

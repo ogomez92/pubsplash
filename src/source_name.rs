@@ -13,7 +13,7 @@
 //! that is not running), and [`strip_labels`] is the concise one that a screen
 //! reader reads out on every mixer strip.
 
-use crate::t;
+use crate::{t, tn};
 use crate::audio::device::{AppProcess, DeviceInfo};
 use crate::config::{SourceConfig, SourceKindConfig};
 use std::collections::{HashMap, HashSet};
@@ -40,6 +40,8 @@ pub struct NameContext {
     /// means no player is running for that source, which is every media player
     /// outside the active scene.
     pub media: HashMap<String, crate::media::player::Status>,
+    /// The same for media schedulers, and absent for the same reason.
+    pub schedulers: HashMap<String, crate::media::scheduler::Status>,
 }
 
 impl NameContext {
@@ -53,6 +55,7 @@ impl NameContext {
         apps: HashMap<String, AppProcess>,
         failing: HashSet<String>,
         media: HashMap<String, crate::media::player::Status>,
+        schedulers: HashMap<String, crate::media::scheduler::Status>,
     ) -> Self {
         let needs_devices = sources
             .iter()
@@ -78,6 +81,7 @@ impl NameContext {
             failing,
             voice_labels: voice_labels_for(sources),
             media,
+            schedulers,
         }
     }
 
@@ -234,6 +238,12 @@ fn base_strip_label(source: &SourceConfig, ctx: &NameContext) -> String {
             Some(folder) => t!("Media Player ({folder})", folder = folder),
             None => t!("Media Player"),
         },
+        // No item count and no clock: a strip is re-labelled in place every
+        // time its name changes (`home::relabel_source_strips`), and a strip
+        // that renamed itself on every tick of the schedule would interrupt
+        // whoever was using the mixer. What it is doing belongs in the list
+        // form below, which is refreshed silently.
+        SourceKindConfig::Scheduler(_) => t!("Media Scheduler"),
     }
 }
 
@@ -300,6 +310,7 @@ fn base_list_label(source: &SourceConfig, ctx: &NameContext) -> String {
         }
         SourceKindConfig::SoundEvents(_) => t!("Sound Events"),
         SourceKindConfig::MediaPlayer(media) => media_list_label(source, media, ctx),
+        SourceKindConfig::Scheduler(scheduler) => scheduler_list_label(source, scheduler, ctx),
     }
 }
 
@@ -345,6 +356,48 @@ fn media_list_label(
         (PlaybackState::Playing, None) | (PlaybackState::NoFolder, _) => {
             t!("Media Player: {folder}", folder = folder)
         }
+    }
+}
+
+/// The Sources list form of a media scheduler: how many items it has, and what
+/// is coming next.
+///
+/// A source in a scene that is not active has no worker running and so no
+/// status — it says how many items it holds and nothing about what is next,
+/// which is the truth: nothing is scheduled to happen, because a scheduler only
+/// fires in the active scene.
+fn scheduler_list_label(
+    source: &SourceConfig,
+    scheduler: &crate::config::SchedulerSourceConfig,
+    ctx: &NameContext,
+) -> String {
+    use crate::media::scheduler::SchedulerState;
+    let live = scheduler.active_items().count();
+    if scheduler.items.is_empty() {
+        return t!("Media Scheduler: nothing scheduled");
+    }
+    // `{n}` in both forms: it is the only name `tn!` binds, and the catalogue
+    // check unions the two English forms and holds every translation to that
+    // set.
+    let items = tn!("{n} item", "{n} items", live);
+    let Some(status) = ctx.schedulers.get(&source.name) else {
+        return t!("Media Scheduler: {items}", items = items);
+    };
+    match (&status.state, &status.playing, &status.next) {
+        (SchedulerState::Playing, Some(file), _) => t!(
+            "Media Scheduler: {items}, playing {file}",
+            items = items,
+            file = file
+        ),
+        (_, _, Some((file, time))) => t!(
+            "Media Scheduler: {items}, next {file} at {time}",
+            items = items,
+            file = file,
+            time = time
+        ),
+        // Every item is disabled or has no file: the list is not empty, so
+        // saying "nothing scheduled" would read as data loss.
+        _ => t!("Media Scheduler: {items}, nothing due", items = items),
     }
 }
 
@@ -439,6 +492,7 @@ mod tests {
                 HashMap::from([("21m00Tcm4TlvDq8ikWAM".to_string(), "Rachel".to_string())]),
             )]),
             media: HashMap::new(),
+            schedulers: HashMap::new(),
         }
     }
 

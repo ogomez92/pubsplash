@@ -153,6 +153,7 @@ fn main() {
             chain_library: RefCell::new(chain_library.clone()),
             cues: Default::default(),
             media: Default::default(),
+            schedulers: Default::default(),
             open_editors: RefCell::new(Vec::new()),
             shutting_down: std::cell::Cell::new(false),
             config_dirty: std::cell::Cell::new(false),

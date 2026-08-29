@@ -23,6 +23,8 @@ mod mastodon_post;
 mod mastodon_prefs;
 mod mastodon_templates;
 mod media;
+mod scheduler;
+mod scheduler_ui;
 mod native_acc;
 mod panes;
 mod picker_acc;
@@ -341,6 +343,10 @@ pub struct Runtime {
     /// media player moving to the next track is the same shape of problem: a
     /// worker thread changed what a label should say.
     pub media_generation: u64,
+    /// The `App::schedulers` generation the source labels were last built from.
+    /// The same problem again: a scheduler's next-due time and what it is
+    /// playing are both in its list row.
+    pub scheduler_generation: u64,
     /// Which mixer strips are being monitored through the local playback
     /// device. Deliberately not persisted — see [`Monitors`].
     pub monitors: Monitors,
@@ -667,6 +673,7 @@ impl Default for Runtime {
             usage_generation: crate::tts::usage::generation(),
             // No media player is running before the first scene is applied.
             media_generation: 0,
+            scheduler_generation: 0,
             monitors: Monitors::default(),
             shown: ShownStreamUi::default(),
             duck_calibration: None,
@@ -867,6 +874,9 @@ pub struct App {
     pub cues: cue_feed::CueFeeds,
     /// One worker per Media Player source in the active scene. See [`media`].
     pub media: media::MediaPlayers,
+    /// One worker per Media Scheduler source in the active scene. See
+    /// [`scheduler`].
+    pub schedulers: scheduler::Schedulers,
     /// Open native plugin editor windows.
     pub open_editors: RefCell<Vec<fx_editor::EditorWindow>>,
     /// Set once the frame is closing. The pump timer keeps firing during the
@@ -1436,8 +1446,15 @@ impl App {
     /// selected, which is not always the active one.
     pub fn name_context(&self, sources: &[crate::config::SourceConfig]) -> NameContext {
         let media = self.media.statuses();
+        let schedulers = self.schedulers.statuses();
         let run = self.run.borrow();
-        NameContext::build(sources, run.apps.clone(), run.failing.clone(), media)
+        NameContext::build(
+            sources,
+            run.apps.clone(),
+            run.failing.clone(),
+            media,
+            schedulers,
+        )
     }
 
     /// Re-enumerates the processes behind every scene's Application sources —
@@ -1750,7 +1767,8 @@ impl App {
                         }
                         SourceKindConfig::Tts(_)
                         | SourceKindConfig::SoundEvents(_)
-                        | SourceKindConfig::MediaPlayer(_) => FeedKind::External,
+                        | SourceKindConfig::MediaPlayer(_)
+                        | SourceKindConfig::Scheduler(_) => FeedKind::External,
                     },
                 }
             })
@@ -2714,6 +2732,7 @@ pub fn build(app: Rc<App>) {
             // whole of the shutdown sound.
             app.cues.stop_all();
             app.media.stop_all();
+            app.schedulers.stop_all();
             // Vanish immediately: the user asked to exit, so the app should
             // look gone while the cue finishes in the background.
             frame_for_close.show(false);
@@ -3641,6 +3660,17 @@ fn pump_events(app: &Rc<App>) {
         let mut run = app.run.borrow_mut();
         if run.media_generation != generation {
             run.media_generation = generation;
+            labels_dirty = true;
+        }
+    }
+
+    // A media scheduler started or finished an item, or the item it is counting
+    // down to changed. Its list row says both, so the label is stale.
+    {
+        let generation = app.schedulers.generation();
+        let mut run = app.run.borrow_mut();
+        if run.scheduler_generation != generation {
+            run.scheduler_generation = generation;
             labels_dirty = true;
         }
     }

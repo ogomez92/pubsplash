@@ -8,8 +8,9 @@ use super::{App, WXK_DELETE, WXK_DOWN, WXK_UP, show_error};
 use crate::audio::mixer;
 use crate::config::{
     AzureTtsSettings, ElevenLabsTtsSettings, GoogleTtsSettings, GttsTtsSettings,
-    MediaPlayerSourceConfig, OpenAiTtsSettings, PollyTtsSettings, SoundEventsSourceConfig,
-    SourceConfig, SourceKindConfig, TtsEngineProfile, TtsEngineSettings, TtsSourceConfig,
+    MediaPlayerSourceConfig, OpenAiTtsSettings, PollyTtsSettings, SchedulerSourceConfig,
+    SoundEventsSourceConfig, SourceConfig, SourceKindConfig, TtsEngineProfile, TtsEngineSettings,
+    TtsSourceConfig,
 };
 use crate::soundpack::StreamEvent;
 use crate::state::{ListEdit, move_down, move_up};
@@ -483,6 +484,7 @@ fn add_source(app: &Rc<App>) {
         t!("Text-to-Speech"),
         t!("Sound Events"),
         t!("Media Player"),
+        t!("Media Scheduler"),
     ];
     let types: Vec<&str> = types.iter().map(String::as_str).collect();
     let dialog =
@@ -500,6 +502,7 @@ fn add_source(app: &Rc<App>) {
         3 => SourceKindConfig::Tts(TtsSourceConfig::default()),
         4 => SourceKindConfig::SoundEvents(SoundEventsSourceConfig::default()),
         5 => SourceKindConfig::MediaPlayer(MediaPlayerSourceConfig::default()),
+        6 => SourceKindConfig::Scheduler(SchedulerSourceConfig::default()),
         _ => return,
     };
 
@@ -569,10 +572,13 @@ fn edit_source(app: &Rc<App>, list: &ListBox) {
         SourceKindConfig::MediaPlayer(settings) => {
             edit_media_player(app, scene_index, index, settings)
         }
+        SourceKindConfig::Scheduler(settings) => {
+            super::scheduler_ui::edit_scheduler(app, scene_index, index, settings)
+        }
     }
 }
 
-fn set_source_kind(app: &Rc<App>, scene_index: usize, source_index: usize, kind: SourceKindConfig) {
+pub(super) fn set_source_kind(app: &Rc<App>, scene_index: usize, source_index: usize, kind: SourceKindConfig) {
     let previous_sources = active_sources(app);
     {
         let mut config = app.config.borrow_mut();

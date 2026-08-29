@@ -13,11 +13,9 @@
 //! ## Decoding
 //!
 //! A track is decoded *as it plays*, one packet at a time, and never held in
-//! memory whole: five minutes of 48 kHz stereo f32 is 115 MB, and a library
-//! folder is hours of it. Each packet is widened to stereo and resampled to
-//! [`SAMPLE_RATE`] through a [`StereoStream`], which carries its interpolation
-//! state across packets — resampling each packet on its own would put a click
-//! at every packet boundary, forty times a second.
+//! memory whole. That part is [`super::decode::stream_file`], shared with the
+//! Media Scheduler; its header has the reasoning. What is left here is the
+//! player around it — the playlist, the transport, and the pacing.
 //!
 //! ## Waiting
 //!
@@ -27,23 +25,15 @@
 //! thing that has no event behind it: the ring filling up, which drains at the
 //! mixer's own pace.
 
-use crate::audio::convert::{StereoStream, convert_to_stereo};
-use crate::audio::mixer::SAMPLE_RATE;
 use crate::audio::{ExternalFeeds, FeedResult};
 use crossbeam_channel::{Receiver, RecvTimeoutError, Sender};
+use std::ops::ControlFlow;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
-use symphonia::core::audio::SampleBuffer;
-use symphonia::core::codecs::DecoderOptions;
-use symphonia::core::errors::Error as SymphoniaError;
-use symphonia::core::formats::FormatOptions;
-use symphonia::core::io::MediaSourceStream;
-use symphonia::core::meta::MetadataOptions;
-use symphonia::core::probe::Hint;
 
-use super::{Playlist, scan_folder, track_title};
+use super::{Playlist, decode, scan_folder, track_title};
 
 /// How far ahead of the mixer this worker is allowed to decode, in samples.
 ///
@@ -466,119 +456,43 @@ impl Worker {
         }
     }
 
+    /// Runs one file through the shared streaming decoder, answering commands
+    /// between packets.
+    ///
+    /// The decoding itself is [`decode::stream_file`], which the Media Scheduler
+    /// shares. What stays here is everything that makes this a *player*: the
+    /// command drain and the pause check between packets, and the [`Flow`] a
+    /// skip produces travelling back out through the sink.
     fn decode(&mut self, path: &Path) -> Result<Flow, String> {
-        let file = std::fs::File::open(path).map_err(|e| e.to_string())?;
-        let stream = MediaSourceStream::new(Box::new(file), Default::default());
-        let mut hint = Hint::new();
-        if let Some(extension) = path.extension().and_then(|e| e.to_str()) {
-            hint.with_extension(extension);
-        }
-        let probed = symphonia::default::get_probe()
-            .format(
-                &hint,
-                stream,
-                // Gapless playback trims the encoder padding an MP3 carries at
-                // both ends, which is the difference between a seamless album
-                // and a click between every track.
-                &FormatOptions {
-                    enable_gapless: true,
-                    ..Default::default()
-                },
-                &MetadataOptions::default(),
-            )
-            .map_err(|e| e.to_string())?;
-        let mut format = probed.format;
-        let track = format
-            .default_track()
-            .ok_or_else(|| "the file has no audio track".to_string())?;
-        let track_id = track.id;
-        let mut decoder = symphonia::default::get_codecs()
-            .make(&track.codec_params, &DecoderOptions::default())
-            .map_err(|e| e.to_string())?;
-
-        let mut buffer: Option<SampleBuffer<f32>> = None;
-        let mut resampler: Option<(u32, StereoStream)> = None;
-        let mut played_anything = false;
-
-        loop {
-            // Commands first, so skip and pause are answered between packets
-            // rather than at the end of the track.
-            match self.drain_commands() {
-                Flow::Go => {}
-                other => return Ok(other),
-            }
-            if self.paused && self.wait_while_paused() == Flow::Stop {
-                return Ok(Flow::Stop);
-            }
-            let packet = match format.next_packet() {
-                Ok(packet) => packet,
-                // Symphonia reports a clean end of stream as an IO error, and a
-                // torn tail is still worth having played, so any error here ends
-                // the track rather than failing it.
-                Err(_) => break,
-            };
-            if packet.track_id() != track_id {
-                continue;
-            }
-            let decoded = match decoder.decode(&packet) {
-                Ok(decoded) => decoded,
-                // A damaged packet is skipped; the format layer has already
-                // resynchronized by the time it says so.
-                Err(SymphoniaError::DecodeError(_)) => continue,
-                Err(e) => {
-                    if played_anything {
-                        break;
-                    }
-                    return Err(e.to_string());
-                }
-            };
-            let spec = *decoded.spec();
-            let buffer = buffer
-                .get_or_insert_with(|| SampleBuffer::<f32>::new(decoded.capacity() as u64, spec));
-            buffer.copy_interleaved_ref(decoded);
-            let channels = spec.channels.count().max(1);
-            let stereo = convert_to_stereo(buffer.samples(), channels)?;
-
-            let samples = if spec.rate == SAMPLE_RATE {
-                stereo
-            } else {
-                // Rebuilt only if the file's rate actually changes mid-stream,
-                // which is legal in a few containers and vanishingly rare.
-                if !matches!(&resampler, Some((rate, _)) if *rate == spec.rate) {
-                    resampler = Some((spec.rate, StereoStream::new(spec.rate)));
-                }
-                match &mut resampler {
-                    Some((_, stream)) => stream.push(&stereo),
-                    None => unreachable!("a resampler was just installed"),
-                }
-            };
-            if samples.is_empty() {
-                continue;
-            }
-            played_anything = true;
-            match self.feed(&samples) {
-                Flow::Go => {}
-                other => return Ok(other),
-            }
-        }
-
-        // The resampler holds back the frame it still needed a neighbour for.
-        if let Some((_, stream)) = &mut resampler {
-            let tail = stream.finish();
-            if !tail.is_empty() {
-                played_anything = true;
-                match self.feed(&tail) {
+        // The sink borrows `self` for as long as it lives, so it is scoped to
+        // the call rather than left in scope for the `self.failures` write below.
+        let interrupted = {
+            let mut sink = |samples: &[f32]| {
+                // Commands first, so skip and pause are answered between packets
+                // rather than at the end of the track.
+                match self.drain_commands() {
                     Flow::Go => {}
-                    other => return Ok(other),
+                    other => return ControlFlow::Break(other),
                 }
+                if self.paused {
+                    match self.wait_while_paused() {
+                        Flow::Go => {}
+                        other => return ControlFlow::Break(other),
+                    }
+                }
+                match self.feed(samples) {
+                    Flow::Go => ControlFlow::Continue(()),
+                    other => ControlFlow::Break(other),
+                }
+            };
+            decode::stream_file(path, &mut sink)?
+        };
+        match interrupted {
+            Some(flow) => Ok(flow),
+            None => {
+                self.failures = 0;
+                Ok(Flow::Go)
             }
-        }
-
-        if played_anything {
-            self.failures = 0;
-            Ok(Flow::Go)
-        } else {
-            Err("no audio could be decoded from it".to_string())
         }
     }
 

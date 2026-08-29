@@ -1394,8 +1394,8 @@ fn active_source_names(app: &Rc<App>) -> std::collections::HashSet<String> {
     }
 }
 
-/// Starts a worker for every media player in the active scene and retires the
-/// rest.
+/// Starts a worker for every media player and media scheduler in the active
+/// scene and retires the rest.
 ///
 /// Called wherever the active scene's source list can have changed — beside
 /// `sync_engine_sources`, which is what installs and removes the rings these
@@ -1410,6 +1410,7 @@ pub fn sync_media_players(app: &Rc<App>) {
         }
     };
     app.media.apply(&sources, &app.engine.external_feeds);
+    app.schedulers.apply(&sources, &app.engine.external_feeds);
 }
 
 #[cfg(test)]

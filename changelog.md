@@ -4,9 +4,25 @@
 
 ### Additions
 
+- **A Media Scheduler source.** It plays chosen files at chosen wall-clock times: at a time of day, at a minute past every hour, or on an interval measured from midnight (every 15 minutes lands on :00, :15, :30 and :45 whatever time Pubsplash started). Add it from the Scenes tab like any other source.
+
+- The Media Scheduler is an ordinary mixer source: it has a strip, a fader, a mute, sends and its own monitor toggle, and it makes a Media Player set to duck get out of its way automatically.
+
+- Each scheduled item can be turned off without being removed, and Duplicate copies an item so only its time has to change — which is how one file is scheduled at several times of day.
+
+- A Preview button in the item editor plays the first 20 seconds of the file locally, through the same decoder the schedule uses, so a file that previews is a file that will play.
+
+- The Sources list says how many items a scheduler holds, what it is playing, and which item is next and when.
+
+- An item the machine slept through is skipped rather than played late, and logged. Two items due at once play in order rather than over each other.
+
+- Maintainers: `gen-po` now also reports a `t!`/`tn!` call site whose own message carries a placeholder no argument fills, which would otherwise reach the user as braces in the middle of a sentence.
+
 ### Fixes
 
 ### Changes
+
+- The Media Player and the Media Scheduler now share one streaming file decoder (`media::decode`).
 
 ## 2.0.0
 

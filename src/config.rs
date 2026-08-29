@@ -7,6 +7,7 @@
 //! and replaced with defaults so the app always starts.
 
 use crate::secret::Secret;
+use crate::{t, tn};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
@@ -49,8 +50,10 @@ impl Config {
             for source in &mut scene.sources {
                 source.sends.retain(|s| names.contains(&s.bus));
                 source.volume = clamp_volume(source.volume, source.boost);
-                if let SourceKindConfig::MediaPlayer(media) = &mut source.kind {
-                    media.fix_up();
+                match &mut source.kind {
+                    SourceKindConfig::MediaPlayer(media) => media.fix_up(),
+                    SourceKindConfig::Scheduler(scheduler) => scheduler.fix_up(),
+                    _ => {}
                 }
             }
         }
@@ -896,6 +899,7 @@ pub enum SourceKindConfig {
     Tts(TtsSourceConfig),
     SoundEvents(SoundEventsSourceConfig),
     MediaPlayer(MediaPlayerSourceConfig),
+    Scheduler(SchedulerSourceConfig),
 }
 
 impl SourceKindConfig {
@@ -907,6 +911,7 @@ impl SourceKindConfig {
             SourceKindConfig::Tts(_) => "Text-to-Speech",
             SourceKindConfig::SoundEvents(_) => "Sound Events",
             SourceKindConfig::MediaPlayer(_) => "Media Player",
+            SourceKindConfig::Scheduler(_) => "Media Scheduler",
         }
     }
 }
@@ -1825,6 +1830,119 @@ mod tests {
         assert_eq!(kind, SourceKindConfig::DesktopAudio { device_id: None });
     }
 
+    /// The three trigger shapes are what a settings file carries, so their JSON
+    /// is a contract: a schedule written by one build has to mean the same
+    /// thing to the next.
+    #[test]
+    fn every_schedule_trigger_roundtrips() {
+        for trigger in [
+            ScheduleTrigger::EveryMinutes { minutes: 15 },
+            ScheduleTrigger::Hourly { minute: 30 },
+            ScheduleTrigger::DailyAt { hour: 13, minute: 45 },
+        ] {
+            let json = serde_json::to_string(&trigger).unwrap();
+            assert_eq!(
+                serde_json::from_str::<ScheduleTrigger>(&json).unwrap(),
+                trigger,
+                "{json}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_scheduler_source_roundtrips_through_the_settings_file() {
+        let kind = SourceKindConfig::Scheduler(SchedulerSourceConfig {
+            items: vec![ScheduleItem {
+                file: r"O:\radio\hours\09.mp3".into(),
+                enabled: true,
+                trigger: ScheduleTrigger::DailyAt { hour: 9, minute: 0 },
+            }],
+        });
+        let json = serde_json::to_string(&kind).unwrap();
+        assert_eq!(
+            serde_json::from_str::<SourceKindConfig>(&json).unwrap(),
+            kind,
+            "{json}"
+        );
+    }
+
+    /// The shape the schedule is written in has to be the shape a hand-edited
+    /// or generated file can use, so this pins the field names rather than
+    /// only round-tripping through our own serializer.
+    #[test]
+    fn a_hand_written_schedule_loads() {
+        let kind: SourceKindConfig = serde_json::from_str(
+            r#"{"type":"scheduler","items":[
+                 {"file":"O:\\r\\01.mp3","enabled":true,
+                  "trigger":{"type":"daily_at","hour":1,"minute":0}},
+                 {"file":"O:\\r\\j.mp3","enabled":false,
+                  "trigger":{"type":"every_minutes","minutes":15}},
+                 {"file":"O:\\r\\h.mp3","enabled":true,
+                  "trigger":{"type":"hourly","minute":30}}
+               ]}"#,
+        )
+        .unwrap();
+        let SourceKindConfig::Scheduler(scheduler) = kind else {
+            panic!("not a scheduler");
+        };
+        assert_eq!(scheduler.items.len(), 3);
+        assert_eq!(
+            scheduler.items[0].trigger,
+            ScheduleTrigger::DailyAt { hour: 1, minute: 0 }
+        );
+        // The disabled one is kept but does not count as live.
+        assert_eq!(scheduler.active_items().count(), 2);
+    }
+
+    /// An item with no file is inert rather than an error, the same way a media
+    /// player with no folder is.
+    #[test]
+    fn an_item_with_no_file_is_not_live() {
+        let scheduler = SchedulerSourceConfig {
+            items: vec![
+                ScheduleItem {
+                    file: "   ".into(),
+                    ..Default::default()
+                },
+                ScheduleItem::default(),
+            ],
+        };
+        assert_eq!(scheduler.active_items().count(), 0);
+    }
+
+    /// A hand-edited file must not be able to park an item on an hour that does
+    /// not exist, or divide the interval grid by zero.
+    #[test]
+    fn fix_up_holds_a_schedule_to_the_clock() {
+        let mut scheduler = SchedulerSourceConfig {
+            items: vec![
+                ScheduleItem {
+                    trigger: ScheduleTrigger::DailyAt {
+                        hour: 99,
+                        minute: 99,
+                    },
+                    ..Default::default()
+                },
+                ScheduleItem {
+                    trigger: ScheduleTrigger::EveryMinutes { minutes: 0 },
+                    ..Default::default()
+                },
+            ],
+        };
+        scheduler.fix_up();
+        assert_eq!(
+            scheduler.items[0].trigger,
+            ScheduleTrigger::DailyAt {
+                hour: 23,
+                minute: 59
+            }
+        );
+        assert_eq!(
+            scheduler.items[1].trigger,
+            ScheduleTrigger::EveryMinutes { minutes: 1 }
+        );
+    }
+
     #[test]
     fn a_pinned_desktop_audio_source_roundtrips() {
         let kind = SourceKindConfig::DesktopAudio {
@@ -2096,5 +2214,132 @@ impl MediaPlayerSourceConfig {
     pub fn fix_up(&mut self) {
         self.duck_percent = self.duck_percent.min(100);
         self.duck_threshold_db = crate::audio::mixer::clamp_threshold_db(self.duck_threshold_db);
+    }
+}
+
+/// Settings for one Media Scheduler source: a list of files, each with a rule
+/// saying when it plays.
+///
+/// The list is the whole of it. There is no folder and no playlist — a
+/// scheduler is silent between its items by design, which is what makes it a
+/// scheduler and not a second Media Player, and what lets it sit in the same
+/// scene as one and interrupt it. (It does so through the engine's ordinary
+/// ducking: a scheduler is a duck *trigger* like every other source, so a media
+/// player set to duck gets out of its way without either of them being told
+/// about the other.)
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(default)]
+pub struct SchedulerSourceConfig {
+    pub items: Vec<ScheduleItem>,
+}
+
+impl SchedulerSourceConfig {
+    pub fn fix_up(&mut self) {
+        for item in &mut self.items {
+            item.trigger.fix_up();
+        }
+    }
+
+    /// The items that can actually fire: enabled, and with a file named.
+    pub fn active_items(&self) -> impl Iterator<Item = &ScheduleItem> {
+        self.items
+            .iter()
+            .filter(|item| item.enabled && !item.file.trim().is_empty())
+    }
+}
+
+/// One scheduled file.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(default)]
+pub struct ScheduleItem {
+    /// The audio file played. Absolute, because a scheduler has no folder for a
+    /// relative path to be relative to. Empty means unconfigured, which is an
+    /// item that never fires rather than an error.
+    pub file: String,
+    /// Off keeps the item in the list without ever firing it — the point being
+    /// that a seasonal jingle can be stood down without losing its time.
+    pub enabled: bool,
+    pub trigger: ScheduleTrigger,
+}
+
+impl Default for ScheduleItem {
+    fn default() -> Self {
+        Self {
+            file: String::new(),
+            enabled: true,
+            trigger: ScheduleTrigger::default(),
+        }
+    }
+}
+
+/// When one scheduled item plays.
+///
+/// Three rules rather than a cron expression: every one of them is a sentence a
+/// user can read back off a list row, which a cron line is not. The arithmetic
+/// over them is [`crate::media::schedule`], which is where the awkward parts
+/// (midnight, month ends, the hour a spring-forward skips) are decided and
+/// tested.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum ScheduleTrigger {
+    /// Every `minutes` minutes, measured from midnight — so 15 fires at :00,
+    /// :15, :30 and :45 of every hour, on the clock rather than on however long
+    /// ago Pubsplash happened to start.
+    EveryMinutes { minutes: u32 },
+    /// Once an hour, `minute` minutes past.
+    Hourly { minute: u32 },
+    /// Once a day, at this local time.
+    DailyAt { hour: u32, minute: u32 },
+}
+
+impl Default for ScheduleTrigger {
+    fn default() -> Self {
+        Self::Hourly { minute: 0 }
+    }
+}
+
+impl ScheduleTrigger {
+    /// Holds a hand-edited value to the grid. The arithmetic clamps as it goes
+    /// too, so this is about what the dialog shows rather than about safety.
+    pub fn fix_up(&mut self) {
+        use crate::media::schedule::{clamp_hour, clamp_interval, clamp_minute};
+        match self {
+            ScheduleTrigger::EveryMinutes { minutes } => *minutes = clamp_interval(*minutes),
+            ScheduleTrigger::Hourly { minute } => *minute = clamp_minute(*minute),
+            ScheduleTrigger::DailyAt { hour, minute } => {
+                *hour = clamp_hour(*hour);
+                *minute = clamp_minute(*minute);
+            }
+        }
+    }
+
+    /// The sentence shown on the item's row and read out by a screen reader.
+    pub fn describe(&self) -> String {
+        use crate::media::schedule::{clamp_hour, clamp_interval, clamp_minute, format_time};
+        match *self {
+            // The count goes in as `{n}` and under no other name: that is the
+            // one placeholder `tn!` binds, so a form written with `{count}`
+            // reaches the user with the braces still in it. Both forms carry
+            // it because the catalogue check unions the two English forms and
+            // holds every translation to that set. The counts that read badly
+            // with a number in them ("Every 1 minute") get a sentence of their
+            // own instead.
+            ScheduleTrigger::EveryMinutes { minutes } => match clamp_interval(minutes) {
+                1 => t!("Every minute"),
+                minutes => tn!("Every {n} minute", "Every {n} minutes", minutes),
+            },
+            ScheduleTrigger::Hourly { minute } => match clamp_minute(minute) {
+                0 => t!("Every hour, on the hour"),
+                minute => tn!(
+                    "Every hour, {n} minute past",
+                    "Every hour, {n} minutes past",
+                    minute
+                ),
+            },
+            ScheduleTrigger::DailyAt { hour, minute } => t!(
+                "Every day at {time}",
+                time = format_time(clamp_hour(hour) * 60 + clamp_minute(minute))
+            ),
+        }
     }
 }
