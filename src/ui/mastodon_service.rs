@@ -1,42 +1,104 @@
-//! The Mastodon tab of Preferences: link an account, choose when Pubsplash
-//! announces a stream, and keep a library of templates.
+//! One streaming service's Mastodon settings: link an account, choose when
+//! Pubsplash announces a stream to it, and keep that service's templates.
+//!
+//! Opened from the Mastodon button in the Setup streaming services dialog, and
+//! from nowhere else. **A Mastodon account belongs to a streaming service**, not
+//! to the app — a broadcast is announced by the account belonging to the place
+//! it is going to — so this is a dialog about the service the user has
+//! highlighted rather than a tab of Preferences. It used to be the latter, with
+//! a single account shared by every service.
+//!
+//! Everything here is addressed by service **id** and re-read from the config on
+//! each use rather than held in a captured `SiteConfig`: the dialog is modal
+//! over the services dialog, but the pump goes on running underneath it, so a
+//! copy taken at build time could be stale by the time a button is pressed. A
+//! service that has gone away is a no-op everywhere, never a panic.
 //!
 //! Three `group_box` groups, and **every control is parented on the group's
-//! `StaticBox`, not on the tab panel** — that is what makes a screen reader
-//! announce "Account", "Announcements" or "Templates" as focus enters, and wx
-//! asserts once per control if it is done the other way.
+//! `StaticBox`, not on the panel** — that is what makes a screen reader announce
+//! "Account", "Announcements" or "Templates" as focus enters, and wx asserts
+//! once per control if it is done the other way.
 //!
 //! No `&` mnemonics anywhere in here, as everywhere else in the app. The
 //! buttons are all Tab-reachable, which is what matters.
 
 use crate::t;
 use super::{App, WXK_DELETE, show_error};
+use crate::config::MastodonConfig;
 use crate::mastodon::{self, Template};
 use std::rc::Rc;
 use wxdragon::prelude::*;
 
-/// Shown when the user has no templates of their own. See [`super::list`].
+/// Shown when the service has no templates of its own. See [`super::list`].
 fn no_templates() -> String {
     t!("No templates")
 }
 
-pub fn build_tab(app: &Rc<App>, dialog: &Dialog, panel: &Panel) {
+/// This service's Mastodon settings, or the defaults if it has been removed.
+fn settings(app: &Rc<App>, service_id: &str) -> MastodonConfig {
+    app.config
+        .borrow()
+        .connection
+        .site(service_id)
+        .map(|site| site.mastodon.clone())
+        .unwrap_or_default()
+}
+
+/// Edits this service's Mastodon settings in place and saves.
+///
+/// The borrow is dropped before `save_config`, and nothing inside `edit` may
+/// call into wx: this holds `config` mutably for as long as it runs.
+fn update(app: &Rc<App>, service_id: &str, edit: impl FnOnce(&mut MastodonConfig)) {
+    if let Some(site) = app.config.borrow_mut().connection.site_mut(service_id) {
+        edit(&mut site.mastodon);
+    }
+    app.save_config();
+}
+
+pub fn show(app: &Rc<App>, parent: &Dialog, service_id: &str) {
+    let service_name = app
+        .config
+        .borrow()
+        .connection
+        .site(service_id)
+        .map(|site| site.display_name())
+        .unwrap_or_default();
+    // The canonical id: `site` also matches a URL, for profiles written before
+    // ids existed, and every write below has to name the same service the read
+    // above found.
+    let Some(service_id) = app
+        .config
+        .borrow()
+        .connection
+        .site(service_id)
+        .map(|site| site.id.clone())
+    else {
+        return;
+    };
+    let dialog = Dialog::builder(
+        parent,
+        &t!("Mastodon for {service}", service = service_name),
+    )
+    .with_style(DialogStyle::DefaultDialogStyle | DialogStyle::ResizeBorder)
+    .with_size(560, 620)
+    .build();
+    let panel = Panel::builder(&dialog).build();
     let sizer = BoxSizer::builder(Orientation::Vertical).build();
 
     // --- Account --------------------------------------------------------
 
-    let (account_group, account_box) = super::group_box(panel, &t!("Account"));
+    let (account_group, account_box) = super::group_box(&panel, &t!("Account"));
 
     let server_label = StaticText::builder(&account_box)
         .with_label(&t!("Server"))
         .build();
     let server_input = TextCtrl::builder(&account_box)
-        .with_value(&display_server(&app.config.borrow().mastodon.instance))
+        .with_value(&display_server(&settings(app, &service_id).instance))
         .build();
     super::set_accessible_name(&server_input, &t!("Server"));
     super::help::tag(
         &server_input,
-        "dialog.preferences.mastodon.server",
+        "dialog.mastodon.server",
         "Mastodon server input",
     );
     account_group.add(&server_label, 0, SizerFlag::All, 4);
@@ -55,7 +117,7 @@ pub fn build_tab(app: &Rc<App>, dialog: &Dialog, panel: &Panel) {
     super::set_accessible_name(&status, &t!("Linked account"));
     super::help::tag(
         &status,
-        "dialog.preferences.mastodon.status",
+        "dialog.mastodon.status",
         "Linked Mastodon account",
     );
     account_group.add(&status_label, 0, SizerFlag::All, 4);
@@ -67,13 +129,13 @@ pub fn build_tab(app: &Rc<App>, dialog: &Dialog, panel: &Panel) {
         .build();
     super::help::tag(
         &authorize,
-        "dialog.preferences.mastodon.authorize",
+        "dialog.mastodon.authorize",
         "Authorize with Mastodon button",
     );
     let unlink = Button::builder(&account_box).with_label(&t!("Unlink")).build();
     super::help::tag(
         &unlink,
-        "dialog.preferences.mastodon.unlink",
+        "dialog.mastodon.unlink",
         "Unlink the Mastodon account button",
     );
     account_buttons.add(&authorize, 0, SizerFlag::All, 4);
@@ -82,7 +144,7 @@ pub fn build_tab(app: &Rc<App>, dialog: &Dialog, panel: &Panel) {
 
     // --- Announcements ---------------------------------------------------
 
-    let (announce_group, announce_box) = super::group_box(panel, &t!("Announcements"));
+    let (announce_group, announce_box) = super::group_box(&panel, &t!("Announcements"));
 
     let start_check = CheckBox::builder(&announce_box)
         .with_label(&t!("Post to Mastodon when I start a new stream"))
@@ -90,10 +152,10 @@ pub fn build_tab(app: &Rc<App>, dialog: &Dialog, panel: &Panel) {
     super::set_accessible_name(&start_check, &t!("Post to Mastodon when I start a new stream"));
     super::help::tag(
         &start_check,
-        "dialog.preferences.mastodon.postOnStart",
+        "dialog.mastodon.postOnStart",
         "Post to Mastodon when I start a new stream checkbox",
     );
-    start_check.set_value(app.config.borrow().mastodon.post_on_start);
+    start_check.set_value(settings(app, &service_id).post_on_start);
     announce_group.add(&start_check, 0, SizerFlag::All, 4);
 
     let periodic_check = CheckBox::builder(&announce_box)
@@ -105,10 +167,10 @@ pub fn build_tab(app: &Rc<App>, dialog: &Dialog, panel: &Panel) {
     );
     super::help::tag(
         &periodic_check,
-        "dialog.preferences.mastodon.periodic",
+        "dialog.mastodon.periodic",
         "Make periodic still-streaming Mastodon posts checkbox",
     );
-    periodic_check.set_value(app.config.borrow().mastodon.periodic);
+    periodic_check.set_value(settings(app, &service_id).periodic);
     announce_group.add(&periodic_check, 0, SizerFlag::All, 4);
 
     // Immediately after the checkbox in the sizer, which is what puts it next in
@@ -117,13 +179,13 @@ pub fn build_tab(app: &Rc<App>, dialog: &Dialog, panel: &Panel) {
     super::set_accessible_name(&interval_choice, &t!("How often to post"));
     super::help::tag(
         &interval_choice,
-        "dialog.preferences.mastodon.interval",
+        "dialog.mastodon.interval",
         "Still-streaming post interval choice",
     );
     for (_, label) in mastodon::INTERVALS {
         interval_choice.append(label);
     }
-    let stored = app.config.borrow().mastodon.interval_minutes;
+    let stored = settings(app, &service_id).interval_minutes;
     interval_choice.set_selection(
         mastodon::INTERVALS
             .iter()
@@ -135,7 +197,7 @@ pub fn build_tab(app: &Rc<App>, dialog: &Dialog, panel: &Panel) {
 
     // --- Templates -------------------------------------------------------
 
-    let (templates_group, templates_box) = super::group_box(panel, &t!("Templates"));
+    let (templates_group, templates_box) = super::group_box(&panel, &t!("Templates"));
 
     // The list takes its accessible name from this static text, so the label
     // must carry exactly the string `native_acc::install` is given below.
@@ -148,7 +210,7 @@ pub fn build_tab(app: &Rc<App>, dialog: &Dialog, panel: &Panel) {
     super::native_acc::install(&templates_list, &t!("Templates"));
     super::help::tag(
         &templates_list,
-        "dialog.preferences.mastodon.templateList",
+        "dialog.mastodon.templateList",
         "Mastodon announcement templates list",
     );
     templates_group.add(&templates_label, 0, SizerFlag::All, 4);
@@ -158,19 +220,19 @@ pub fn build_tab(app: &Rc<App>, dialog: &Dialog, panel: &Panel) {
     let add = Button::builder(&templates_box).with_label(&t!("Add")).build();
     super::help::tag(
         &add,
-        "dialog.preferences.mastodon.addTemplate",
+        "dialog.mastodon.addTemplate",
         "Add template button",
     );
     let edit = Button::builder(&templates_box).with_label(&t!("Edit")).build();
     super::help::tag(
         &edit,
-        "dialog.preferences.mastodon.editTemplate",
+        "dialog.mastodon.editTemplate",
         "Edit template button",
     );
     let remove = Button::builder(&templates_box).with_label(&t!("Remove")).build();
     super::help::tag(
         &remove,
-        "dialog.preferences.mastodon.removeTemplate",
+        "dialog.mastodon.removeTemplate",
         "Remove template button",
     );
     template_buttons.add(&add, 0, SizerFlag::All, 4);
@@ -178,10 +240,18 @@ pub fn build_tab(app: &Rc<App>, dialog: &Dialog, panel: &Panel) {
     template_buttons.add(&remove, 0, SizerFlag::All, 4);
     templates_group.add_sizer(&template_buttons, 0, SizerFlag::Expand, 0);
 
+    // Dismiss-only: every control here saves as it is changed, so Close has
+    // nothing to commit and both Escape and Enter may land on it.
+    let close_button = super::dismiss_button(&panel, &t!("Close"));
+
     sizer.add_sizer(&account_group, 0, SizerFlag::Expand | SizerFlag::All, 4);
     sizer.add_sizer(&announce_group, 0, SizerFlag::Expand | SizerFlag::All, 4);
     sizer.add_sizer(&templates_group, 1, SizerFlag::Expand | SizerFlag::All, 4);
+    sizer.add(&close_button, 0, SizerFlag::All, 8);
     panel.set_sizer(sizer, true);
+    let dialog_sizer = BoxSizer::builder(Orientation::Vertical).build();
+    dialog_sizer.add(&panel, 1, SizerFlag::Expand, 0);
+    dialog.set_sizer(dialog_sizer, true);
 
     // --- wiring ----------------------------------------------------------
 
@@ -189,20 +259,16 @@ pub fn build_tab(app: &Rc<App>, dialog: &Dialog, panel: &Panel) {
     // an account. Called after linking and unlinking, never on a timer.
     let refresh_account: Rc<dyn Fn()> = {
         let app = app.clone();
+        let service_id = service_id.clone();
         Rc::new(move || {
-            let config = app.config.borrow();
-            let linked = config.mastodon.is_linked();
+            let mastodon = settings(&app, &service_id);
+            let linked = mastodon.is_linked();
             let text = if linked {
-                format!(
-                    "{} on {}",
-                    config.mastodon.account,
-                    display_server(&config.mastodon.instance)
-                )
+                format!("{} on {}", mastodon.account, display_server(&mastodon.instance))
             } else {
                 t!("Not linked. Enter your server and choose Authorize.")
             };
-            let server = display_server(&config.mastodon.instance);
-            drop(config);
+            let server = display_server(&mastodon.instance);
             status.set_value(&text);
             // The accessible name has to be re-set, not just the value: it is
             // what a screen reader reads, and it has changed meaning.
@@ -220,8 +286,9 @@ pub fn build_tab(app: &Rc<App>, dialog: &Dialog, panel: &Panel) {
     // added rather than wherever the old indices happened to point.
     let refresh_templates: super::list::Refresh<Template> = {
         let app = app.clone();
+        let service_id = service_id.clone();
         Rc::new(move |select: Option<&Template>| {
-            let templates = app.config.borrow().mastodon.templates.clone();
+            let templates = settings(&app, &service_id).templates;
             let labels: Vec<String> = templates.iter().map(|t| t.list_label()).collect();
             super::list::fill(&templates_list, &labels, &no_templates());
             if templates.is_empty() {
@@ -237,22 +304,24 @@ pub fn build_tab(app: &Rc<App>, dialog: &Dialog, panel: &Panel) {
 
     {
         let app = app.clone();
+        let service_id = service_id.clone();
         start_check.clone().on_toggled(move |_| {
-            app.config.borrow_mut().mastodon.post_on_start = start_check.get_value();
-            app.save_config();
+            let on = start_check.get_value();
+            update(&app, &service_id, |mastodon| mastodon.post_on_start = on);
         });
     }
     {
         let app = app.clone();
+        let service_id = service_id.clone();
         periodic_check.clone().on_toggled(move |_| {
             let on = periodic_check.get_value();
-            app.config.borrow_mut().mastodon.periodic = on;
-            app.save_config();
+            update(&app, &service_id, |mastodon| mastodon.periodic = on);
             interval_choice.enable(on);
         });
     }
     {
         let app = app.clone();
+        let service_id = service_id.clone();
         interval_choice.clone().on_selection_changed(move |_| {
             let Some(index) = interval_choice.get_selection() else {
                 return;
@@ -260,8 +329,9 @@ pub fn build_tab(app: &Rc<App>, dialog: &Dialog, panel: &Panel) {
             let Some((minutes, _)) = mastodon::INTERVALS.get(index as usize) else {
                 return;
             };
-            app.config.borrow_mut().mastodon.interval_minutes = *minutes;
-            app.save_config();
+            update(&app, &service_id, |mastodon| {
+                mastodon.interval_minutes = *minutes
+            });
         });
     }
 
@@ -271,7 +341,8 @@ pub fn build_tab(app: &Rc<App>, dialog: &Dialog, panel: &Panel) {
 
     {
         let app = app.clone();
-        let dialog = *dialog;
+        let service_id = service_id.clone();
+        let dialog = dialog;
         let refresh_account = refresh_account.clone();
         authorize.on_click(move |_| {
             let typed = server_input.get_value();
@@ -284,15 +355,14 @@ pub fn build_tab(app: &Rc<App>, dialog: &Dialog, panel: &Panel) {
                 }
             };
             if let Some(link) = super::mastodon_post::authorize(&dialog, &instance) {
-                {
-                    let mut config = app.config.borrow_mut();
-                    config.mastodon.instance = link.instance;
-                    config.mastodon.client_id = link.client_id;
-                    config.mastodon.client_secret = link.client_secret;
-                    config.mastodon.access_token = link.access_token;
-                    config.mastodon.account = link.account.clone();
-                }
-                app.save_config();
+                let account = link.account.clone();
+                update(&app, &service_id, move |mastodon| {
+                    mastodon.instance = link.instance;
+                    mastodon.client_id = link.client_id;
+                    mastodon.client_secret = link.client_secret;
+                    mastodon.access_token = link.access_token;
+                    mastodon.account = link.account;
+                });
                 // Straight to disk rather than on the next pump tick: the user
                 // just spent a browser round-trip on this, and a crash before
                 // the tick would make them do it again.
@@ -301,7 +371,7 @@ pub fn build_tab(app: &Rc<App>, dialog: &Dialog, panel: &Panel) {
                 super::show_info(
                     &dialog,
                     &t!("Authorize"),
-                    &t!("Pubsplash is linked to {account}.", account = link.account),
+                    &t!("Pubsplash is linked to {account}.", account = account),
                 );
             } else {
                 // Whatever went wrong, the address is the thing the user would
@@ -314,26 +384,18 @@ pub fn build_tab(app: &Rc<App>, dialog: &Dialog, panel: &Panel) {
 
     {
         let app = app.clone();
-        let dialog = *dialog;
+        let service_id = service_id.clone();
+        let dialog = dialog;
         let refresh_account = refresh_account.clone();
         unlink.on_click(move |_| {
-            let (instance, client_id, secret, token, account) = {
-                let config = app.config.borrow();
-                (
-                    config.mastodon.instance.clone(),
-                    config.mastodon.client_id.clone(),
-                    config.mastodon.client_secret.clone(),
-                    config.mastodon.access_token.clone(),
-                    config.mastodon.account.clone(),
-                )
-            };
-            if token.is_empty() {
+            let mastodon = settings(&app, &service_id);
+            if mastodon.access_token.is_empty() {
                 return;
             }
             let ask = MessageDialog::builder(
                 &dialog,
                 &t!("Remove the authorization for {account}? \
-                     Pubsplash will stop posting, and you will have to authorize again to resume.", account = account),
+                     Pubsplash will stop posting, and you will have to authorize again to resume.", account = mastodon.account),
                 &t!("Unlink"),
             )
             .with_style(MessageDialogStyle::YesNo | MessageDialogStyle::IconQuestion)
@@ -345,35 +407,41 @@ pub fn build_tab(app: &Rc<App>, dialog: &Dialog, panel: &Panel) {
             }
             // Local first, and unconditionally: whatever the server says, the
             // user asked to be unlinked and the token must not survive it.
-            app.config.borrow_mut().mastodon.unlink();
-            app.save_config();
+            update(&app, &service_id, |mastodon| mastodon.unlink());
             app.flush_config();
-            crate::mastodon::net::revoke_in_background(instance, client_id, secret, token);
+            crate::mastodon::net::revoke_in_background(
+                mastodon.instance,
+                mastodon.client_id,
+                mastodon.client_secret,
+                mastodon.access_token,
+            );
             refresh_account();
         });
     }
 
     {
         let app = app.clone();
-        let dialog = *dialog;
+        let service_id = service_id.clone();
+        let dialog = dialog;
         let refresh_templates = refresh_templates.clone();
         add.on_click(move |_| {
             let Some(template) = super::mastodon_templates::edit(&dialog, None) else {
                 return;
             };
-            let mut templates = app.config.borrow().mastodon.templates.clone();
+            let mut templates = settings(&app, &service_id).templates;
             templates.push(template.clone());
-            super::mastodon_templates::store(&app, templates);
+            super::mastodon_templates::store(&app, &service_id, templates);
             refresh_templates(Some(&template));
         });
     }
 
     {
         let app = app.clone();
-        let dialog = *dialog;
+        let service_id = service_id.clone();
+        let dialog = dialog;
         let refresh_templates = refresh_templates.clone();
         edit.on_click(move |_| {
-            let existing = app.config.borrow().mastodon.templates.clone();
+            let existing = settings(&app, &service_id).templates;
             // `list::selection` is the only way a row index becomes a data
             // index; it is what keeps the "No templates" placeholder from
             // indexing past the end.
@@ -386,21 +454,22 @@ pub fn build_tab(app: &Rc<App>, dialog: &Dialog, panel: &Panel) {
             };
             let mut templates = existing;
             templates[index] = template.clone();
-            super::mastodon_templates::store(&app, templates);
+            super::mastodon_templates::store(&app, &service_id, templates);
             refresh_templates(Some(&template));
         });
     }
 
     let do_remove = {
         let app = app.clone();
+        let service_id = service_id.clone();
         let refresh_templates = refresh_templates.clone();
         Rc::new(move || {
-            let mut templates = app.config.borrow().mastodon.templates.clone();
+            let mut templates = settings(&app, &service_id).templates;
             let Some(index) = super::list::selection(&templates_list, templates.len()) else {
                 return;
             };
             templates.remove(index);
-            super::mastodon_templates::store(&app, templates);
+            super::mastodon_templates::store(&app, &service_id, templates);
             refresh_templates(None);
         })
     };
@@ -414,6 +483,13 @@ pub fn build_tab(app: &Rc<App>, dialog: &Dialog, panel: &Panel) {
             Some((WXK_DELETE, _)) => do_remove(),
             _ => event.skip(true),
         });
+
+    {
+        close_button.on_click(move |_| dialog.end_modal(ID_CANCEL));
+    }
+
+    dialog.show_modal();
+    dialog.destroy();
 }
 
 /// The host, as the user typed it and as they want to read it back.

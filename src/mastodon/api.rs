@@ -76,7 +76,9 @@ impl std::fmt::Display for MastodonError {
                 write!(f, "The server's reply did not contain {what}.")
             }
             MastodonError::NotLinked => {
-                f.write_str("No Mastodon account is linked. Link one in Preferences, Mastodon.")
+                f.write_str(
+                    "No Mastodon account is linked to this streaming service. \n                     Link one from Setup streaming services, Mastodon announcements.",
+                )
             }
             MastodonError::Cancelled => f.write_str("Authorization was cancelled."),
             MastodonError::RateLimited => {

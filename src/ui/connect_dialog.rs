@@ -1,4 +1,9 @@
 //! Setup streaming services dialog: service list, credentials, connect/disconnect.
+//!
+//! The Mastodon button opens `ui/mastodon_service.rs` for the highlighted
+//! service. A Mastodon account belongs to a streaming service rather than to the
+//! app, so this dialog is the only route to one — there is no Preferences tab
+//! for it any more.
 
 use crate::t;
 use super::{App, show_error};
@@ -251,6 +256,18 @@ pub fn show(app: &Rc<App>, frame: &Frame) {
         "Choose still image button",
     );
 
+    // Every service type can announce itself, so this one is never hidden — only
+    // disabled when the list is showing its placeholder and there is no service
+    // to configure.
+    let mastodon_button = Button::builder(&panel)
+        .with_label(&t!("Mastodon announcements"))
+        .build();
+    super::help::tag(
+        &mastodon_button,
+        "dialog.connect.mastodon",
+        "Mastodon announcements button for the selected service",
+    );
+
     let connect_button = Button::builder(&panel).with_label(&t!("Connect")).build();
     super::help::tag(
         &connect_button,
@@ -302,6 +319,7 @@ pub fn show(app: &Rc<App>, frame: &Frame) {
     sizer.add(&image_label, 0, SizerFlag::All, 4);
     sizer.add(&image_input, 0, SizerFlag::Expand | SizerFlag::All, 4);
     sizer.add(&browse_image, 0, SizerFlag::All, 4);
+    sizer.add(&mastodon_button, 0, SizerFlag::All, 4);
     sizer.add(&connect_button, 0, SizerFlag::All, 8);
     sizer.add(&close_button, 0, SizerFlag::All, 8);
     panel.set_sizer(sizer, true);
@@ -432,12 +450,15 @@ pub fn show(app: &Rc<App>, frame: &Frame) {
         let app = app.clone();
         move || {
             let config = app.config.borrow();
-            let enabled = super::list::selection(&services_list, config.connection.sites.len())
-                .and_then(|index| config.connection.sites.get(index))
-                .map(|service| !service.is_main())
-                .unwrap_or(false);
-            rename_service.enable(enabled);
-            remove_service.enable(enabled);
+            let selected = super::list::selection(&services_list, config.connection.sites.len())
+                .and_then(|index| config.connection.sites.get(index));
+            // Renaming and removing are refused for the built-in Audiopub
+            // service; announcing is not, so the Mastodon button follows the
+            // selection rather than that rule.
+            let editable = selected.map(|service| !service.is_main()).unwrap_or(false);
+            rename_service.enable(editable);
+            remove_service.enable(editable);
+            mastodon_button.enable(selected.is_some());
         }
     };
 
@@ -746,6 +767,19 @@ pub fn show(app: &Rc<App>, frame: &Frame) {
             }
             // Not saved here: `save_fields` runs on Connect and on Close, and
             // writing the box is enough for both to pick it up.
+        });
+    }
+
+    {
+        let app = app.clone();
+        let save_fields = save_fields.clone();
+        let dialog_for_mastodon = dialog;
+        mastodon_button.on_click(move |_| {
+            // Saved first, so a nickname typed but not yet committed is the one
+            // the Mastodon dialog puts in its title, and so nothing the user has
+            // typed is lost to the config write that dialog makes.
+            let Some(id) = save_fields() else { return };
+            super::mastodon_service::show(&app, &dialog_for_mastodon, &id);
         });
     }
 

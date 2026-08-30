@@ -100,12 +100,21 @@ pub fn show(app: &Rc<App>, parent: &Frame) -> bool {
             && app.config.borrow().archiving.record_streams_by_default);
     record_check.set_value(default_record);
 
-    // Mastodon group. Its two boxes are seeded from Preferences the same way
-    // the archive and record boxes above are, and decide on their own from
-    // there: unchecking one here silences the announcements for this stream
-    // without touching the saved defaults.
+    // Mastodon group. Its two boxes are seeded from the connected service's own
+    // Mastodon settings the same way the archive and record boxes above are
+    // seeded from Preferences, and decide on their own from there: unchecking
+    // one here silences the announcements for this stream without touching the
+    // saved defaults.
+    //
+    // The connected service, not an app-wide account: the stream being described
+    // is going to one destination, and that destination's account is the one
+    // that will announce it. `start_streaming` refuses to open this dialog at
+    // all while nothing is connected, so `None` here means the service was
+    // deleted out from under the connection — treated as unlinked, which is what
+    // it is.
     let (mastodon_group, mastodon_box) = super::group_box(&panel, &t!("Mastodon"));
-    let linked = app.config.borrow().mastodon.is_linked();
+    let service_mastodon = app.connected_site().map(|site| site.mastodon).unwrap_or_default();
+    let linked = service_mastodon.is_linked();
 
     let announce_start = CheckBox::builder(&mastodon_box)
         .with_label(&t!("Post to Mastodon when this stream starts"))
@@ -128,14 +137,13 @@ pub fn show(app: &Rc<App>, parent: &Frame) -> bool {
             &announce_start,
             &t!("Post to Mastodon when this stream starts"),
             current.announce_start
-                || (!app.run.borrow().stream_info_set
-                    && app.config.borrow().mastodon.post_on_start),
+                || (!app.run.borrow().stream_info_set && service_mastodon.post_on_start),
         ),
         (
             &announce_periodic,
             &t!("Post periodic still-streaming announcements"),
             current.announce_periodic
-                || (!app.run.borrow().stream_info_set && app.config.borrow().mastodon.periodic),
+                || (!app.run.borrow().stream_info_set && service_mastodon.periodic),
         ),
     ] {
         check.set_value(linked && default);
@@ -147,7 +155,7 @@ pub fn show(app: &Rc<App>, parent: &Frame) -> bool {
             &if linked {
                 label.to_string()
             } else {
-                t!("{label}, unavailable until a Mastodon account is linked in Preferences", label = label)
+                t!("{label}, unavailable until this streaming service has a Mastodon account linked in Setup streaming services", label = label)
             },
         );
     }

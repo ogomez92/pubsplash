@@ -25,7 +25,7 @@ msgstr ""
 "Language: es\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-#: src/ui/mod.rs:2474
+#: src/ui/mod.rs:2505
 msgid ""
 "\n\n"
 "Details: {detail}"
@@ -33,7 +33,7 @@ msgstr ""
 "\n\n"
 "Detalles: {detail}"
 
-#: src/ui/mod.rs:2472
+#: src/ui/mod.rs:2503
 msgid ""
 "\n\n"
 "The stream itself is unaffected and is still live."
@@ -65,7 +65,7 @@ msgstr "&Omitir"
 msgid "&Calibrate to my voice"
 msgstr "Calibrar con mi &voz"
 
-#: src/ui/connect_dialog.rs:515
+#: src/ui/connect_dialog.rs:536
 msgid "&Connect"
 msgstr "&Conectar"
 
@@ -113,8 +113,8 @@ msgstr "&Reproducir la carpeta en orden aleatorio"
 msgid "&Turn the music down while other sources are playing"
 msgstr "&Bajar la música mientras suenan otras fuentes"
 
-#: src/ui/preferences.rs:728
-#: src/ui/preferences.rs:772
+#: src/ui/preferences.rs:729
+#: src/ui/preferences.rs:773
 msgid "&Validate"
 msgstr "&Validar"
 
@@ -140,7 +140,7 @@ msgstr ""
 msgid "A scene with that name already exists."
 msgstr "Ya existe una escena con ese nombre."
 
-#: src/ui/preferences.rs:1132
+#: src/ui/preferences.rs:1133
 msgid "A sound pack named {name} is already installed. Replace it?"
 msgstr ""
 "Ya hay instalado un paquete de sonidos llamado {name}. ¿Desea "
@@ -158,7 +158,7 @@ msgstr ""
 "Ya hay una emisión programada. Cancélela desde la pestaña Inicio "
 "antes de programar otra."
 
-#: src/ui/mod.rs:2704
+#: src/ui/mod.rs:2735
 msgid "A stream is scheduled to go live later. Exit and discard it?"
 msgstr "Hay una emisión programada para más tarde. ¿Salir y descartarla?"
 
@@ -166,7 +166,7 @@ msgstr "Hay una emisión programada para más tarde. ¿Salir y descartarla?"
 msgid "AM or PM"
 msgstr "AM o PM"
 
-#: src/ui/mod.rs:2576
+#: src/ui/mod.rs:2607
 msgid "API"
 msgstr "API"
 
@@ -179,20 +179,20 @@ msgstr "Uso de la API en esta sesión"
 msgid "AWS Polly voice settings"
 msgstr "Ajustes de voz de AWS Polly"
 
-#: src/ui/preferences.rs:627
+#: src/ui/preferences.rs:628
 msgid "AWS access key ID"
 msgstr "ID de clave de acceso de AWS"
 
-#: src/ui/preferences.rs:651
+#: src/ui/preferences.rs:652
 msgid "AWS region, for example us-east-1"
 msgstr "Región de AWS, por ejemplo us-east-1"
 
-#: src/ui/preferences.rs:637
+#: src/ui/preferences.rs:638
 msgid "AWS secret access key"
 msgstr "Clave de acceso secreta de AWS"
 
-#: src/ui/mod.rs:2980
-#: src/ui/mod.rs:3047
+#: src/ui/mod.rs:3011
+#: src/ui/mod.rs:3078
 msgid "About Pubsplash"
 msgstr "Acerca de Pubsplash"
 
@@ -200,7 +200,7 @@ msgstr "Acerca de Pubsplash"
 msgid "Accent domain suffix, for example co.uk"
 msgstr "Sufijo de dominio del acento, por ejemplo co.uk"
 
-#: src/ui/mastodon_prefs.rs:28
+#: src/ui/mastodon_service.rs:90
 msgid "Account"
 msgstr "Cuenta"
 
@@ -209,7 +209,7 @@ msgstr "Cuenta"
 msgid "Action"
 msgstr "Acción"
 
-#: src/ui/mastodon_prefs.rs:158
+#: src/ui/mastodon_service.rs:220
 #: src/ui/scheduler_ui.rs:93
 msgid "Add"
 msgstr "Añadir"
@@ -218,7 +218,7 @@ msgstr "Añadir"
 msgid "Add &plugin"
 msgstr "Añadir &plugin"
 
-#: src/ui/preferences.rs:1416
+#: src/ui/preferences.rs:1417
 msgid "Add at least one plugin folder first."
 msgstr "Añada primero al menos una carpeta de plugins."
 
@@ -239,11 +239,11 @@ msgstr "Añadir atajo..."
 msgid "Add bus"
 msgstr "Añadir bus"
 
-#: src/ui/preferences.rs:1361
+#: src/ui/preferences.rs:1362
 msgid "Add folder"
 msgstr "Añadir carpeta"
 
-#: src/ui/preferences.rs:1276
+#: src/ui/preferences.rs:1277
 msgid "Add folder..."
 msgstr "Añadir carpeta..."
 
@@ -263,8 +263,8 @@ msgstr "Añadir escena"
 msgid "Add scheduled item"
 msgstr "Añadir elemento programado"
 
-#: src/ui/connect_dialog.rs:81
-#: src/ui/connect_dialog.rs:874
+#: src/ui/connect_dialog.rs:86
+#: src/ui/connect_dialog.rs:908
 msgid "Add service"
 msgstr "Añadir servicio"
 
@@ -272,11 +272,11 @@ msgstr "Añadir servicio"
 msgid "Add source"
 msgstr "Añadir fuente"
 
-#: src/ui/connect_dialog.rs:818
+#: src/ui/connect_dialog.rs:852
 msgid "Add streaming service"
 msgstr "Añadir servicio de emisión"
 
-#: src/ui/mastodon_templates.rs:34
+#: src/ui/mastodon_templates.rs:42
 msgid "Add template"
 msgstr "Añadir plantilla"
 
@@ -297,12 +297,12 @@ msgstr "Todos los dispositivos de salida (excepto Pubsplash)"
 msgid "Allow this strip's volume to go above 100%, up to 500%"
 msgstr "Permitir que el volumen de este canal supere el 100%, hasta el 500%"
 
-#: src/ui/mastodon_templates.rs:49
-#: src/ui/mastodon_templates.rs:63
+#: src/ui/mastodon_templates.rs:57
+#: src/ui/mastodon_templates.rs:71
 msgid "Announcement type"
 msgstr "Tipo de anuncio"
 
-#: src/ui/mastodon_prefs.rs:85
+#: src/ui/mastodon_service.rs:147
 msgid "Announcements"
 msgstr "Anuncios"
 
@@ -311,7 +311,7 @@ msgstr "Anuncios"
 msgid "Application"
 msgstr "Aplicación"
 
-#: src/ui/mod.rs:2955
+#: src/ui/mod.rs:2986
 msgid "Application preferences"
 msgstr "Preferencias de la aplicación"
 
@@ -347,8 +347,8 @@ msgstr[1] "Aplicar con {n} plugins disponibles"
 msgid "April"
 msgstr "abril"
 
-#: src/ui/preferences.rs:256
-#: src/ui/preferences.rs:258
+#: src/ui/preferences.rs:257
+#: src/ui/preferences.rs:259
 msgid "Archive streams by default"
 msgstr "Archivar las emisiones de forma predeterminada"
 
@@ -357,11 +357,11 @@ msgstr "Archivar las emisiones de forma predeterminada"
 msgid "Archive the stream"
 msgstr "Archivar la emisión"
 
-#: src/ui/preferences.rs:44
+#: src/ui/preferences.rs:48
 msgid "Archiving"
 msgstr "Archivado"
 
-#: src/ui/preferences.rs:41
+#: src/ui/preferences.rs:45
 msgid "Audio"
 msgstr "Audio"
 
@@ -369,21 +369,21 @@ msgstr "Audio"
 msgid "Audio effects profile"
 msgstr "Perfil de efectos de audio"
 
-#: src/ui/mod.rs:1179
+#: src/ui/mod.rs:1203
 #: src/ui/scheduler_ui.rs:448
 msgid "Audio files ({patterns})|{patterns}|All files (*.*)|*.*"
 msgstr "Archivos de audio ({patterns})|{patterns}|Todos los archivos (*.*)|*.*"
 
-#: src/ui/connect_dialog.rs:334
+#: src/ui/connect_dialog.rs:352
 msgid "Audiopub Icecast port"
 msgstr "Puerto de Icecast de Audiopub"
 
-#: src/ui/connect_dialog.rs:329
+#: src/ui/connect_dialog.rs:347
 msgid "Audiopub Icecast server"
 msgstr "Servidor de Icecast de Audiopub"
 
-#: src/ui/connect_dialog.rs:116
-#: src/ui/connect_dialog.rs:119
+#: src/ui/connect_dialog.rs:121
+#: src/ui/connect_dialog.rs:124
 msgid "Audiopub URL"
 msgstr "URL de Audiopub"
 
@@ -391,34 +391,34 @@ msgstr "URL de Audiopub"
 msgid "August"
 msgstr "agosto"
 
-#: src/ui/mastodon_post.rs:373
+#: src/ui/mastodon_post.rs:410
 msgid "Authorization code"
 msgstr "Código de autorización"
 
-#: src/ui/mastodon_post.rs:268
+#: src/ui/mastodon_post.rs:305
 msgid "Authorization status"
 msgstr "Estado de la autorización"
 
-#: src/ui/mastodon_post.rs:364
+#: src/ui/mastodon_post.rs:401
 msgid "Authorization status, {text}"
 msgstr "Estado de la autorización, {text}"
 
-#: src/ui/mastodon_post.rs:356
-#: src/ui/mastodon_prefs.rs:66
-#: src/ui/mastodon_prefs.rs:281
-#: src/ui/mastodon_prefs.rs:303
+#: src/ui/mastodon_post.rs:393
+#: src/ui/mastodon_service.rs:128
+#: src/ui/mastodon_service.rs:352
+#: src/ui/mastodon_service.rs:373
 msgid "Authorize"
 msgstr "Autorizar"
 
-#: src/ui/mastodon_post.rs:255
+#: src/ui/mastodon_post.rs:292
 msgid "Authorize with Mastodon"
 msgstr "Autorizar con Mastodon"
 
-#: src/ui/preferences.rs:127
+#: src/ui/preferences.rs:128
 msgid "Automatic updates"
 msgstr "Actualizaciones automáticas"
 
-#: src/ui/preferences.rs:605
+#: src/ui/preferences.rs:606
 msgid "Azure region, for example eastus"
 msgstr "Región de Azure, por ejemplo eastus"
 
@@ -434,7 +434,7 @@ msgstr "Estilo de habla de Azure"
 msgid "Azure style intensity, zero point zero one to two"
 msgstr "Intensidad del estilo de Azure, de cero coma cero uno a dos"
 
-#: src/ui/preferences.rs:591
+#: src/ui/preferences.rs:592
 msgid "Azure subscription key"
 msgstr "Clave de suscripción de Azure"
 
@@ -456,7 +456,7 @@ msgstr "Acento grave"
 
 #: src/bin/soundpack_manager.rs:180
 #: src/bin/soundpack_manager.rs:465
-#: src/ui/preferences.rs:327
+#: src/ui/preferences.rs:328
 #: src/ui/scheduler_ui.rs:297
 msgid "Browse..."
 msgstr "Examinar..."
@@ -469,7 +469,7 @@ msgstr "Atrás del navegador"
 msgid "Browser Forward"
 msgstr "Adelante del navegador"
 
-#: src/ui/preferences.rs:967
+#: src/ui/preferences.rs:968
 msgid "Built-in default"
 msgstr "Predeterminado integrado"
 
@@ -483,7 +483,7 @@ msgstr "Nombre del bus:"
 
 #: src/ui/buses.rs:34
 #: src/ui/buses.rs:36
-#: src/ui/mod.rs:2573
+#: src/ui/mod.rs:2604
 #: src/ui/sends.rs:322
 msgid "Buses"
 msgstr "Buses"
@@ -508,11 +508,11 @@ msgstr "Calibrado. La música empezará a bajar a {db} decibelios."
 #: src/ui/app_picker.rs:72
 #: src/ui/buses.rs:742
 #: src/ui/buses.rs:945
-#: src/ui/connect_dialog.rs:848
+#: src/ui/connect_dialog.rs:882
 #: src/ui/keybinds_ui.rs:308
-#: src/ui/mastodon_post.rs:276
-#: src/ui/mastodon_templates.rs:93
-#: src/ui/mastodon_templates.rs:222
+#: src/ui/mastodon_post.rs:313
+#: src/ui/mastodon_templates.rs:101
+#: src/ui/mastodon_templates.rs:230
 #: src/ui/scenes.rs:711
 #: src/ui/scenes.rs:955
 #: src/ui/scenes.rs:2629
@@ -520,7 +520,7 @@ msgstr "Calibrado. La música empezará a bajar a {db} decibelios."
 #: src/ui/schedule_ui.rs:207
 #: src/ui/scheduler_ui.rs:131
 #: src/ui/scheduler_ui.rs:395
-#: src/ui/stream_info_dialog.rs:162
+#: src/ui/stream_info_dialog.rs:170
 msgid "Cancel"
 msgstr "Cancelar"
 
@@ -533,7 +533,7 @@ msgstr "Cancelar la descarga"
 msgid "Cancel scan"
 msgstr "Cancelar el análisis"
 
-#: src/ui/mod.rs:2028
+#: src/ui/mod.rs:2059
 msgid "Cancel scheduled stream"
 msgstr "Cancelar la emisión programada"
 
@@ -584,8 +584,8 @@ msgstr ""
 
 #: src/ui/chat.rs:197
 #: src/ui/chat.rs:214
-#: src/ui/mod.rs:2571
-#: src/ui/mod.rs:3549
+#: src/ui/mod.rs:2602
+#: src/ui/mod.rs:3580
 msgid "Chat"
 msgstr "Chat"
 
@@ -594,13 +594,13 @@ msgstr "Chat"
 msgid "Check for updates"
 msgstr "Buscar actualizaciones"
 
-#: src/ui/preferences.rs:152
-#: src/ui/preferences.rs:154
+#: src/ui/preferences.rs:153
+#: src/ui/preferences.rs:155
 msgid "Check for updates now"
 msgstr "Buscar actualizaciones ahora"
 
-#: src/ui/preferences.rs:130
-#: src/ui/preferences.rs:132
+#: src/ui/preferences.rs:131
+#: src/ui/preferences.rs:133
 msgid "Check for updates when Pubsplash starts"
 msgstr "Buscar actualizaciones al iniciar Pubsplash"
 
@@ -616,7 +616,7 @@ msgstr "Elige primero un archivo."
 msgid "Choose a file for this item to play."
 msgstr "Elige el archivo que debe reproducir este elemento."
 
-#: src/ui/mod.rs:1175
+#: src/ui/mod.rs:1199
 msgid "Choose a file to play"
 msgstr "Elija un archivo para reproducir"
 
@@ -624,11 +624,11 @@ msgstr "Elija un archivo para reproducir"
 msgid "Choose a file to schedule"
 msgstr "Elige un archivo para programar"
 
-#: src/ui/preferences.rs:1339
+#: src/ui/preferences.rs:1340
 msgid "Choose a folder containing VST plugins"
 msgstr "Elija una carpeta que contenga plugins VST"
 
-#: src/ui/preferences.rs:342
+#: src/ui/preferences.rs:343
 msgid "Choose a folder for stream recordings"
 msgstr "Elija una carpeta para las grabaciones de la emisión"
 
@@ -660,7 +660,7 @@ msgstr "Elija primero una acción."
 msgid "Choose ffmpeg.exe"
 msgstr "Elegir ffmpeg.exe"
 
-#: src/ui/connect_dialog.rs:247
+#: src/ui/connect_dialog.rs:252
 msgid "Choose image"
 msgstr "Elegir imagen"
 
@@ -668,7 +668,7 @@ msgstr "Elegir imagen"
 msgid "Choose or type the path of a sound file to test."
 msgstr "Elija o escriba la ruta de un archivo de sonido para probarlo."
 
-#: src/ui/connect_dialog.rs:735
+#: src/ui/connect_dialog.rs:756
 msgid "Choose the still image to send as video"
 msgstr "Elija la imagen fija que se enviará como vídeo"
 
@@ -694,11 +694,12 @@ msgstr ""
 "copia descargada."
 
 #: src/ui/chat.rs:254
-#: src/ui/connect_dialog.rs:267
+#: src/ui/connect_dialog.rs:284
 #: src/ui/fx_editor.rs:173
 #: src/ui/fx_params.rs:323
-#: src/ui/mastodon_templates.rs:169
-#: src/ui/preferences.rs:71
+#: src/ui/mastodon_service.rs:245
+#: src/ui/mastodon_templates.rs:177
+#: src/ui/preferences.rs:72
 #: src/ui/sends.rs:438
 #: src/ui/sound_preview.rs:63
 msgid "Close"
@@ -748,23 +749,23 @@ msgstr "Comprimir los registros"
 msgid "Compress logs..."
 msgstr "Comprimir los registros..."
 
-#: src/ui/connect_dialog.rs:254
-#: src/ui/connect_dialog.rs:784
+#: src/ui/connect_dialog.rs:271
+#: src/ui/connect_dialog.rs:818
 msgid "Connect"
 msgstr "Conectar"
 
-#: src/ui/mod.rs:2335
+#: src/ui/mod.rs:2366
 #: src/ui/schedule_ui.rs:88
 msgid "Connect to a streaming service first (File > Setup streaming services)."
 msgstr ""
 "Conéctese primero a un servicio de emisión (Archivo > Configurar "
 "servicios de emisión)."
 
-#: src/ui/mod.rs:3332
+#: src/ui/mod.rs:3363
 msgid "Connected"
 msgstr "Conectado"
 
-#: src/ui/mod.rs:3333
+#: src/ui/mod.rs:3364
 msgid "Connected to {display_name}."
 msgstr "Conectado a {display_name}."
 
@@ -784,12 +785,12 @@ msgstr "Conectando con GitHub..."
 msgid "Connecting to the stream"
 msgstr "Conectando con la emisión"
 
-#: src/ui/mod.rs:3344
-#: src/ui/mod.rs:3352
+#: src/ui/mod.rs:3375
+#: src/ui/mod.rs:3383
 msgid "Connection failed"
 msgstr "Error de conexión"
 
-#: src/ui/mastodon_post.rs:263
+#: src/ui/mastodon_post.rs:300
 msgid ""
 "Contacting the server. Your browser will open so you can sign in and "
 "approve Pubsplash."
@@ -797,17 +798,17 @@ msgstr ""
 "Contactando con el servidor. Se abrirá su navegador para que pueda "
 "iniciar sesión y autorizar a Pubsplash."
 
-#: src/ui/mod.rs:3341
+#: src/ui/mod.rs:3372
 msgid "Could not connect: {message}"
 msgstr "No se pudo conectar: {message}"
 
 #: src/ui/logging_ui.rs:112
-#: src/ui/mod.rs:3116
+#: src/ui/mod.rs:3147
 #: src/ui/update.rs:425
 msgid "Could not create {path}: {e}"
 msgstr "No se pudo crear {path}: {e}"
 
-#: src/ui/mastodon_post.rs:305
+#: src/ui/mastodon_post.rs:342
 msgid ""
 "Could not open your browser: {e}\r\n\r\n"
 "Open this address by hand:\r\n"
@@ -818,15 +819,15 @@ msgstr ""
 "{url}"
 
 #: src/ui/logging_ui.rs:120
-#: src/ui/mod.rs:3118
+#: src/ui/mod.rs:3149
 msgid "Could not open {path}: {e}"
 msgstr "No se pudo abrir {path}: {e}"
 
-#: src/ui/mod.rs:3106
+#: src/ui/mod.rs:3137
 msgid "Could not open {url}: {e}"
 msgstr "No se pudo abrir {url}: {e}"
 
-#: src/ui/mod.rs:3026
+#: src/ui/mod.rs:3057
 msgid "Could not open {url}: {message}"
 msgstr "No se pudo abrir {url}: {message}"
 
@@ -840,7 +841,7 @@ msgstr ""
 "No se pudo iniciar el actualizador ({path}): {e}. No se ha cambiado "
 "nada."
 
-#: src/ui/mod.rs:3087
+#: src/ui/mod.rs:3118
 msgid "Could not start {path}: {e}"
 msgstr "No se pudo iniciar {path}: {e}"
 
@@ -850,7 +851,7 @@ msgstr ""
 "No se pudo determinar dónde está instalado Pubsplash, así que no se "
 "ha cambiado nada."
 
-#: src/ui/mod.rs:2964
+#: src/ui/mod.rs:2995
 msgid "Create and compile Pubsplash sound packs"
 msgstr "Cree y compile paquetes de sonidos de Pubsplash"
 
@@ -923,7 +924,7 @@ msgstr "Fuente de audio del escritorio"
 msgid "Diagnostics"
 msgstr "Diagnóstico"
 
-#: src/ui/connect_dialog.rs:513
+#: src/ui/connect_dialog.rs:534
 msgid "Dis&connect"
 msgstr "&Desconectar"
 
@@ -945,15 +946,15 @@ msgstr ""
 "predeterminados: F9 para emitir, F10 para grabar y CONTROL más O para "
 "abrir un archivo en su primer reproductor multimedia?"
 
-#: src/ui/mod.rs:3379
+#: src/ui/mod.rs:3410
 msgid "Disconnected"
 msgstr "Desconectado"
 
-#: src/ui/mod.rs:3381
+#: src/ui/mod.rs:3412
 msgid "Disconnected from {name}."
 msgstr "Desconectado de {name}."
 
-#: src/ui/mod.rs:3382
+#: src/ui/mod.rs:3413
 msgid "Disconnected."
 msgstr "Desconectado."
 
@@ -1015,7 +1016,7 @@ msgstr "Duplicar"
 msgid "Duration: {elapsed}"
 msgstr "Duración: {elapsed}"
 
-#: src/ui/mastodon_prefs.rs:164
+#: src/ui/mastodon_service.rs:226
 #: src/ui/scheduler_ui.rs:95
 msgid "Edit"
 msgstr "Editar"
@@ -1037,7 +1038,7 @@ msgstr "Editar parámetros"
 msgid "Edit scheduled item"
 msgstr "Editar elemento programado"
 
-#: src/ui/mastodon_templates.rs:36
+#: src/ui/mastodon_templates.rs:44
 msgid "Edit template"
 msgstr "Editar plantilla"
 
@@ -1046,7 +1047,7 @@ msgstr "Editar plantilla"
 msgid "Effects on selected bus"
 msgstr "Efectos del bus seleccionado"
 
-#: src/ui/preferences.rs:563
+#: src/ui/preferences.rs:564
 msgid "ElevenLabs API key"
 msgstr "Clave de API de ElevenLabs"
 
@@ -1078,8 +1079,8 @@ msgstr "Exageración del estilo de ElevenLabs, de cero a uno"
 msgid "ElevenLabs voice settings"
 msgstr "Ajustes de voz de ElevenLabs"
 
-#: src/ui/connect_dialog.rs:125
-#: src/ui/connect_dialog.rs:127
+#: src/ui/connect_dialog.rs:130
+#: src/ui/connect_dialog.rs:132
 msgid "Email"
 msgstr "Correo electrónico"
 
@@ -1104,32 +1105,32 @@ msgstr "Motor"
 msgid "Enter"
 msgstr "Intro"
 
-#: src/ui/mod.rs:2137
+#: src/ui/mod.rs:2168
 msgid "Enter a full Audiopub URL starting with https://"
 msgstr "Escriba una URL completa de Audiopub que empiece por https://"
 
-#: src/ui/connect_dialog.rs:686
-#: src/ui/connect_dialog.rs:874
+#: src/ui/connect_dialog.rs:707
+#: src/ui/connect_dialog.rs:908
 msgid "Enter a nickname."
 msgstr "Escriba un apodo."
 
-#: src/ui/mod.rs:2230
+#: src/ui/mod.rs:2261
 msgid "Enter a valid Icecast port."
 msgstr "Escriba un puerto de Icecast válido."
 
-#: src/ui/mod.rs:2233
+#: src/ui/mod.rs:2264
 msgid "Enter the Icecast mount point."
 msgstr "Escriba el punto de montaje de Icecast."
 
-#: src/ui/mod.rs:2236
+#: src/ui/mod.rs:2267
 msgid "Enter the Icecast password."
 msgstr "Escriba la contraseña de Icecast."
 
-#: src/ui/mod.rs:2260
+#: src/ui/mod.rs:2291
 msgid "Enter the RTMP ingest URL."
 msgstr "Escriba la URL de ingesta RTMP."
 
-#: src/ui/mod.rs:2271
+#: src/ui/mod.rs:2302
 msgid ""
 "Enter the stream key. YouTube shows it in Studio, under Go live, beside "
 "the stream URL."
@@ -1137,7 +1138,7 @@ msgstr ""
 "Escriba la clave de emisión. YouTube la muestra en Studio, en Emitir "
 "en directo, junto a la URL de emisión."
 
-#: src/ui/mod.rs:2201
+#: src/ui/mod.rs:2232
 msgid "Enter your email and password first."
 msgstr "Escriba primero su correo electrónico y su contraseña."
 
@@ -1153,7 +1154,7 @@ msgstr "Escape"
 msgid "Every day"
 msgstr "Cada día"
 
-#: src/config.rs:2339
+#: src/config.rs:2622
 msgid "Every day at {time}"
 msgstr "Cada día a las {time}"
 
@@ -1161,17 +1162,17 @@ msgstr "Cada día a las {time}"
 msgid "Every hour"
 msgstr "Cada hora"
 
-#: src/config.rs:2332
+#: src/config.rs:2615
 msgid "Every hour, on the hour"
 msgstr "Cada hora, en punto"
 
-#: src/config.rs:2333
+#: src/config.rs:2616
 msgid "Every hour, {n} minute past"
 msgid_plural "Every hour, {n} minutes past"
 msgstr[0] "Cada hora, {n} minuto pasada la hora"
 msgstr[1] "Cada hora, {n} minutos pasada la hora"
 
-#: src/config.rs:2328
+#: src/config.rs:2611
 msgid "Every minute"
 msgstr "Cada minuto"
 
@@ -1179,7 +1180,7 @@ msgstr "Cada minuto"
 msgid "Every so many minutes"
 msgstr "Cada cierto número de minutos"
 
-#: src/config.rs:2329
+#: src/config.rs:2612
 msgid "Every {n} minute"
 msgid_plural "Every {n} minutes"
 msgstr[0] "Cada {n} minuto"
@@ -1194,13 +1195,13 @@ msgstr ""
 "fuentes monitorizadas, la síntesis de voz y los sonidos de aviso. No "
 "es lo que oyen los oyentes."
 
-#: src/ui/mod.rs:2958
+#: src/ui/mod.rs:2989
 msgid "Exit\tAlt+F4"
 msgstr "Salir\tAlt+F4"
 
-#: src/ui/mod.rs:2685
-#: src/ui/mod.rs:2705
-#: src/ui/mod.rs:2958
+#: src/ui/mod.rs:2716
+#: src/ui/mod.rs:2736
+#: src/ui/mod.rs:2989
 msgid "Exit Pubsplash"
 msgstr "Salir de Pubsplash"
 
@@ -1262,7 +1263,7 @@ msgstr "Estado de FFmpeg"
 msgid "February"
 msgstr "febrero"
 
-#: src/ui/mod.rs:2993
+#: src/ui/mod.rs:3024
 #: src/ui/scheduler_ui.rs:287
 #: src/ui/scheduler_ui.rs:291
 msgid "File"
@@ -1280,7 +1281,7 @@ msgstr "Filtrar parámetros"
 msgid "Folder"
 msgstr "Carpeta"
 
-#: src/ui/preferences.rs:200
+#: src/ui/preferences.rs:201
 msgid "Follow Windows"
 msgstr "Seguir a Windows"
 
@@ -1296,7 +1297,7 @@ msgstr "Se han encontrado {total} plugins para analizar."
 msgid "Friday"
 msgstr "viernes"
 
-#: src/ui/preferences.rs:38
+#: src/ui/preferences.rs:42
 msgid "General"
 msgstr "General"
 
@@ -1305,26 +1306,26 @@ msgstr "General"
 msgid "Global"
 msgstr "Global"
 
-#: src/ui/mod.rs:2950
+#: src/ui/mod.rs:2981
 msgid "Go live automatically at a set time"
 msgstr "Emitir en directo automáticamente a una hora fijada"
 
-#: src/ui/mod.rs:2995
+#: src/ui/mod.rs:3026
 msgid "Go to"
 msgstr "Ir a"
 
-#: src/ui/mod.rs:2975
-#: src/ui/mod.rs:3041
+#: src/ui/mod.rs:3006
+#: src/ui/mod.rs:3072
 msgid "Go to Pubsplash data directory"
 msgstr "Ir a la carpeta de datos de Pubsplash"
 
-#: src/ui/mod.rs:2970
-#: src/ui/mod.rs:3025
-#: src/ui/mod.rs:3035
+#: src/ui/mod.rs:3001
+#: src/ui/mod.rs:3056
+#: src/ui/mod.rs:3066
 msgid "Go to stream page"
 msgstr "Ir a la página de la emisión"
 
-#: src/ui/preferences.rs:672
+#: src/ui/preferences.rs:673
 msgid "Google Cloud API key"
 msgstr "Clave de API de Google Cloud"
 
@@ -1352,14 +1353,14 @@ msgstr "Modo de velocidad de Google Translate"
 msgid "Google Translate voice settings"
 msgstr "Ajustes de voz de Google Translate"
 
-#: src/ui/mastodon_templates.rs:83
-#: src/ui/mastodon_templates.rs:213
-#: src/ui/mod.rs:2996
+#: src/ui/mastodon_templates.rs:91
+#: src/ui/mastodon_templates.rs:221
+#: src/ui/mod.rs:3027
 msgid "Help"
 msgstr "Ayuda"
 
 #: src/keybind.rs:128
-#: src/ui/mod.rs:2570
+#: src/ui/mod.rs:2601
 msgid "Home"
 msgstr "Inicio"
 
@@ -1368,42 +1369,46 @@ msgstr "Inicio"
 msgid "How much detail to record"
 msgstr "Cuánto detalle registrar"
 
-#: src/ui/mastodon_prefs.rs:117
+#: src/ui/mastodon_service.rs:179
 msgid "How often to post"
 msgstr "Con qué frecuencia publicar"
 
-#: src/ui/mastodon_templates.rs:27
+#: src/ui/mastodon_templates.rs:33
 msgid "I've resumed my #Audiopub stream! Tune in at {url}"
 msgstr "¡He reanudado mi emisión en #Audiopub! Escúchame en {url}"
 
-#: src/ui/connect_dialog.rs:165
-#: src/ui/connect_dialog.rs:168
+#: src/ui/mastodon_templates.rs:34
+msgid "I've resumed my stream! Tune in at {url}"
+msgstr "¡He reanudado mi emisión! Escúchame en {url}"
+
+#: src/ui/connect_dialog.rs:170
+#: src/ui/connect_dialog.rs:173
 msgid "Icecast mount point"
 msgstr "Punto de montaje de Icecast"
 
-#: src/ui/connect_dialog.rs:195
 #: src/ui/connect_dialog.rs:200
+#: src/ui/connect_dialog.rs:205
 msgid "Icecast password"
 msgstr "Contraseña de Icecast"
 
-#: src/ui/connect_dialog.rs:155
-#: src/ui/connect_dialog.rs:158
-#: src/ui/connect_dialog.rs:336
+#: src/ui/connect_dialog.rs:160
+#: src/ui/connect_dialog.rs:163
+#: src/ui/connect_dialog.rs:354
 msgid "Icecast port"
 msgstr "Puerto de Icecast"
 
-#: src/ui/connect_dialog.rs:145
-#: src/ui/connect_dialog.rs:148
-#: src/ui/connect_dialog.rs:331
+#: src/ui/connect_dialog.rs:150
+#: src/ui/connect_dialog.rs:153
+#: src/ui/connect_dialog.rs:349
 msgid "Icecast server"
 msgstr "Servidor de Icecast"
 
-#: src/ui/connect_dialog.rs:185
-#: src/ui/connect_dialog.rs:188
+#: src/ui/connect_dialog.rs:190
+#: src/ui/connect_dialog.rs:193
 msgid "Icecast username"
 msgstr "Usuario de Icecast"
 
-#: src/ui/connect_dialog.rs:736
+#: src/ui/connect_dialog.rs:757
 msgid ""
 "Images "
 "(*.png;*.jpg;*.jpeg;*.bmp;*.gif)|*.png;*.jpg;*.jpeg;*.bmp;*.gif|All "
@@ -1417,7 +1422,7 @@ msgstr ""
 msgid "Import FX chain"
 msgstr "Importar una cadena de efectos"
 
-#: src/ui/preferences.rs:1116
+#: src/ui/preferences.rs:1117
 msgid "Import a sound pack"
 msgstr "Importar un paquete de sonidos"
 
@@ -1430,13 +1435,13 @@ msgstr "Importar cadena"
 msgid "Import chain..."
 msgstr "Importar cadena..."
 
-#: src/ui/preferences.rs:1136
-#: src/ui/preferences.rs:1147
-#: src/ui/preferences.rs:1158
+#: src/ui/preferences.rs:1137
+#: src/ui/preferences.rs:1148
+#: src/ui/preferences.rs:1159
 msgid "Import pack"
 msgstr "Importar paquete"
 
-#: src/ui/preferences.rs:915
+#: src/ui/preferences.rs:916
 msgid "Import pack..."
 msgstr "Importar paquete..."
 
@@ -1444,8 +1449,8 @@ msgstr "Importar paquete..."
 msgid "Incoming chat message"
 msgstr "Mensaje de chat entrante"
 
-#: src/ui/connect_dialog.rs:207
-#: src/ui/connect_dialog.rs:209
+#: src/ui/connect_dialog.rs:212
+#: src/ui/connect_dialog.rs:214
 msgid "Ingest URL"
 msgstr "URL de ingesta"
 
@@ -1453,12 +1458,12 @@ msgstr "URL de ingesta"
 msgid "Insert"
 msgstr "Insert"
 
-#: src/ui/preferences.rs:188
+#: src/ui/preferences.rs:189
 msgid "Interface language"
 msgstr "Idioma de la interfaz"
 
 #: src/bin/soundpack_manager.rs:108
-#: src/ui/preferences.rs:1211
+#: src/ui/preferences.rs:1212
 msgid "Interface sounds"
 msgstr "Sonidos de la interfaz"
 
@@ -1485,7 +1490,7 @@ msgstr "Tecla {vk}"
 
 #: src/ui/keybinds_ui.rs:32
 #: src/ui/keybinds_ui.rs:34
-#: src/ui/preferences.rs:60
+#: src/ui/preferences.rs:61
 msgid "Keybinds"
 msgstr "Atajos de teclado"
 
@@ -1493,7 +1498,7 @@ msgstr "Atajos de teclado"
 msgid "Keybinds reset to defaults"
 msgstr "Atajos de teclado restaurados a los predeterminados"
 
-#: src/ui/preferences.rs:387
+#: src/ui/preferences.rs:388
 msgid ""
 "Keys entered here are encrypted for your Windows account. SAPI, "
 "Microsoft Edge, and Google Translate need no key."
@@ -1501,8 +1506,8 @@ msgstr ""
 "Las claves que escriba aquí se cifran para su cuenta de Windows. SAPI, "
 "Microsoft Edge y Google Translate no necesitan ninguna clave."
 
-#: src/ui/preferences.rs:186
-#: src/ui/preferences.rs:241
+#: src/ui/preferences.rs:187
+#: src/ui/preferences.rs:242
 msgid "Language"
 msgstr "Idioma"
 
@@ -1523,21 +1528,21 @@ msgstr "Flecha izquierda"
 msgid "Left Bracket"
 msgstr "Corchete izquierdo"
 
-#: src/ui/preferences.rs:452
+#: src/ui/preferences.rs:453
 msgid "Limits"
 msgstr "Límites"
 
-#: src/ui/mastodon_prefs.rs:46
-#: src/ui/mastodon_prefs.rs:55
+#: src/ui/mastodon_service.rs:108
+#: src/ui/mastodon_service.rs:117
 msgid "Linked account"
 msgstr "Cuenta vinculada"
 
-#: src/ui/mastodon_prefs.rs:209
+#: src/ui/mastodon_service.rs:275
 msgid "Linked account, {text}"
 msgstr "Cuenta vinculada, {text}"
 
-#: src/ui/connect_dialog.rs:175
-#: src/ui/connect_dialog.rs:178
+#: src/ui/connect_dialog.rs:180
+#: src/ui/connect_dialog.rs:183
 msgid "Listener count URL (optional)"
 msgstr "URL del número de oyentes (opcional)"
 
@@ -1578,7 +1583,7 @@ msgstr "Cargar cadena..."
 msgid "Log level"
 msgstr "Nivel de registro"
 
-#: src/ui/preferences.rs:67
+#: src/ui/preferences.rs:68
 msgid "Logging && debugging"
 msgstr "Registro y depuración"
 
@@ -1586,8 +1591,8 @@ msgstr "Registro y depuración"
 msgid "Logs are kept in {path}"
 msgstr "Los registros se guardan en {path}"
 
-#: src/ui/preferences.rs:455
-#: src/ui/preferences.rs:461
+#: src/ui/preferences.rs:456
+#: src/ui/preferences.rs:462
 msgid "Longest message to speak, in characters"
 msgstr "Mensaje más largo que se leerá, en caracteres"
 
@@ -1595,12 +1600,12 @@ msgstr "Mensaje más largo que se leerá, en caracteres"
 msgid "Looking for plugins in the configured folders..."
 msgstr "Buscando plugins en las carpetas configuradas..."
 
-#: src/ui/mastodon_prefs.rs:100
-#: src/ui/mastodon_prefs.rs:104
+#: src/ui/mastodon_service.rs:162
+#: src/ui/mastodon_service.rs:166
 msgid "Make periodic still-streaming Mastodon posts"
 msgstr "Publicar en Mastodon avisos periódicos de que sigo emitiendo"
 
-#: src/ui/mod.rs:2940
+#: src/ui/mod.rs:2971
 msgid "Manage Audiopub and Icecast streaming services"
 msgstr "Gestionar los servicios de emisión de Audiopub e Icecast"
 
@@ -1618,10 +1623,17 @@ msgstr "Principal"
 msgid "Master output"
 msgstr "Salida principal"
 
-#: src/ui/preferences.rs:47
-#: src/ui/stream_info_dialog.rs:107
+#: src/ui/stream_info_dialog.rs:115
 msgid "Mastodon"
 msgstr "Mastodon"
+
+#: src/ui/connect_dialog.rs:263
+msgid "Mastodon announcements"
+msgstr "Anuncios de Mastodon"
+
+#: src/ui/mastodon_service.rs:80
+msgid "Mastodon for {service}"
+msgstr "Mastodon para {service}"
 
 #: src/ui/picker_acc.rs:155
 msgid "May"
@@ -1705,7 +1717,7 @@ msgstr "Reproductor multimedia"
 msgid "Message from {user}"
 msgstr "Mensaje de {user}"
 
-#: src/ui/mod.rs:3549
+#: src/ui/mod.rs:3580
 msgid "Message not sent: {message}"
 msgstr "Mensaje no enviado: {message}"
 
@@ -1859,7 +1871,7 @@ msgstr "Nuevo nombre del bus:"
 msgid "New name for the scene:"
 msgstr "Nuevo nombre de la escena:"
 
-#: src/ui/connect_dialog.rs:676
+#: src/ui/connect_dialog.rs:697
 msgid "New service nickname:"
 msgstr "Apodo del nuevo servicio:"
 
@@ -1875,8 +1887,8 @@ msgstr "Nuevo..."
 msgid "Next Track"
 msgstr "Pista siguiente"
 
-#: src/ui/connect_dialog.rs:824
-#: src/ui/connect_dialog.rs:826
+#: src/ui/connect_dialog.rs:858
+#: src/ui/connect_dialog.rs:860
 msgid "Nickname"
 msgstr "Apodo"
 
@@ -1930,7 +1942,7 @@ msgstr "No hay ayuda disponible para este control."
 msgid "No microphones were found."
 msgstr "No se ha encontrado ningún micrófono."
 
-#: src/ui/preferences.rs:17
+#: src/ui/preferences.rs:20
 msgid "No plugin folders"
 msgstr "Sin carpetas de plugins"
 
@@ -1951,7 +1963,7 @@ msgstr "Sin escenas"
 msgid "No scheduled items"
 msgstr "No hay elementos programados"
 
-#: src/ui/connect_dialog.rs:13
+#: src/ui/connect_dialog.rs:18
 msgid "No services"
 msgstr "Sin servicios"
 
@@ -1972,7 +1984,7 @@ msgstr "Sin fuentes"
 msgid "No stream information"
 msgstr "Sin información de la emisión"
 
-#: src/ui/mastodon_prefs.rs:20
+#: src/ui/mastodon_service.rs:34
 msgid "No templates"
 msgstr "Sin plantillas"
 
@@ -1986,11 +1998,11 @@ msgstr ""
 "No hay ningún plugin de la cadena disponible, así que no se puede "
 "aplicar."
 
-#: src/ui/mod.rs:2334
+#: src/ui/mod.rs:2365
 msgid "Not connected"
 msgstr "Sin conexión"
 
-#: src/ui/mastodon_prefs.rs:202
+#: src/ui/mastodon_service.rs:269
 msgid "Not linked. Enter your server and choose Authorize."
 msgstr "Sin vincular. Escriba su servidor y elija Autorizar."
 
@@ -2042,10 +2054,10 @@ msgstr "{digit} del teclado numérico"
 
 #: src/bin/soundpack_manager.rs:479
 #: src/ui/buses.rs:968
-#: src/ui/connect_dialog.rs:845
+#: src/ui/connect_dialog.rs:879
 #: src/ui/keybinds_ui.rs:304
-#: src/ui/mastodon_templates.rs:89
-#: src/ui/mastodon_templates.rs:219
+#: src/ui/mastodon_templates.rs:97
+#: src/ui/mastodon_templates.rs:227
 #: src/ui/scenes.rs:707
 #: src/ui/scenes.rs:951
 #: src/ui/scenes.rs:2625
@@ -2053,7 +2065,7 @@ msgstr "{digit} del teclado numérico"
 #: src/ui/schedule_ui.rs:203
 #: src/ui/scheduler_ui.rs:127
 #: src/ui/scheduler_ui.rs:392
-#: src/ui/stream_info_dialog.rs:158
+#: src/ui/stream_info_dialog.rs:166
 msgid "OK"
 msgstr "Aceptar"
 
@@ -2070,8 +2082,8 @@ msgstr "Mostrar solo las aplicaciones que han reproducido sonido"
 msgid "Open &interface"
 msgstr "Abrir la &interfaz"
 
-#: src/ui/mod.rs:2983
-#: src/ui/mod.rs:3056
+#: src/ui/mod.rs:3014
+#: src/ui/mod.rs:3087
 msgid "Open Readme"
 msgstr "Abrir el archivo Léame"
 
@@ -2111,21 +2123,21 @@ msgstr "Abrir la carpeta de registros"
 msgid "Open or create a sound pack project first."
 msgstr "Abra o cree primero un proyecto de paquete de sonidos."
 
-#: src/ui/mod.rs:2971
+#: src/ui/mod.rs:3002
 msgid "Open the current stream's page in your browser"
 msgstr "Abrir en el navegador la página de la emisión actual"
 
-#: src/ui/mod.rs:2984
+#: src/ui/mod.rs:3015
 msgid "Open the documentation in your browser"
 msgstr "Abrir la documentación en su navegador"
 
-#: src/ui/mod.rs:2976
+#: src/ui/mod.rs:3007
 msgid "Open the folder holding settings, logs, and crash dumps"
 msgstr ""
 "Abrir la carpeta que contiene los ajustes, los registros y los volcados "
 "de fallos"
 
-#: src/ui/mod.rs:2989
+#: src/ui/mod.rs:3020
 msgid "Open the list of changes in your browser"
 msgstr "Abrir en el navegador la lista de cambios"
 
@@ -2133,7 +2145,7 @@ msgstr "Abrir en el navegador la lista de cambios"
 msgid "Open..."
 msgstr "Abrir..."
 
-#: src/ui/preferences.rs:543
+#: src/ui/preferences.rs:544
 msgid "OpenAI API key"
 msgstr "Clave de API de OpenAI"
 
@@ -2198,12 +2210,12 @@ msgstr "Parámetros..."
 msgid "Parent folder"
 msgstr "Carpeta principal"
 
-#: src/ui/connect_dialog.rs:133
-#: src/ui/connect_dialog.rs:137
+#: src/ui/connect_dialog.rs:138
+#: src/ui/connect_dialog.rs:142
 msgid "Password"
 msgstr "Contraseña"
 
-#: src/ui/mastodon_post.rs:372
+#: src/ui/mastodon_post.rs:409
 msgid "Paste the authorization code your browser is showing."
 msgstr "Pegue el código de autorización que muestra su navegador."
 
@@ -2238,13 +2250,13 @@ msgstr "Reproducir o pausar un reproductor multimedia"
 msgid "Play or pause {source}"
 msgstr "Reproducir o pausar {source}"
 
-#: src/ui/preferences.rs:1233
-#: src/ui/preferences.rs:1235
+#: src/ui/preferences.rs:1234
+#: src/ui/preferences.rs:1236
 msgid "Play the shut-down sound"
 msgstr "Reproducir el sonido de cierre"
 
-#: src/ui/preferences.rs:1214
-#: src/ui/preferences.rs:1216
+#: src/ui/preferences.rs:1215
+#: src/ui/preferences.rs:1217
 msgid "Play the startup sound"
 msgstr "Reproducir el sonido de inicio"
 
@@ -2265,8 +2277,8 @@ msgstr "Reproducir/Pausar"
 msgid "Playback device"
 msgstr "Dispositivo de reproducción"
 
-#: src/ui/preferences.rs:1265
-#: src/ui/preferences.rs:1268
+#: src/ui/preferences.rs:1266
+#: src/ui/preferences.rs:1269
 msgid "Plugin folders"
 msgstr "Carpetas de plugins"
 
@@ -2279,7 +2291,7 @@ msgstr "Interfaz del plugin"
 msgid "Plugin parameters"
 msgstr "Parámetros del plugin"
 
-#: src/ui/mod.rs:2665
+#: src/ui/mod.rs:2696
 msgid "Plugins skipped"
 msgstr "Plugins omitidos"
 
@@ -2287,32 +2299,32 @@ msgstr "Plugins omitidos"
 msgid "Polly language code; blank uses the voice default"
 msgstr "Código de idioma de Polly; en blanco usa el de la voz"
 
-#: src/ui/mastodon_templates.rs:197
-#: src/ui/mastodon_templates.rs:202
+#: src/ui/mastodon_templates.rs:205
+#: src/ui/mastodon_templates.rs:210
 msgid "Post"
 msgstr "Publicación"
 
-#: src/ui/mastodon_templates.rs:190
-#: src/ui/mastodon_templates.rs:250
+#: src/ui/mastodon_templates.rs:198
+#: src/ui/mastodon_templates.rs:258
 msgid "Post about the resumed stream"
 msgstr "Publicar sobre la emisión reanudada"
 
-#: src/ui/stream_info_dialog.rs:119
-#: src/ui/stream_info_dialog.rs:136
+#: src/ui/stream_info_dialog.rs:128
+#: src/ui/stream_info_dialog.rs:144
 msgid "Post periodic still-streaming announcements"
 msgstr "Publicar avisos periódicos de que sigo emitiendo"
 
-#: src/ui/mastodon_post.rs:161
+#: src/ui/mastodon_post.rs:178
 msgid "Post to Mastodon"
 msgstr "Publicar en Mastodon"
 
-#: src/ui/mastodon_prefs.rs:88
-#: src/ui/mastodon_prefs.rs:90
+#: src/ui/mastodon_service.rs:150
+#: src/ui/mastodon_service.rs:152
 msgid "Post to Mastodon when I start a new stream"
 msgstr "Publicar en Mastodon cuando inicie una emisión nueva"
 
-#: src/ui/stream_info_dialog.rs:111
-#: src/ui/stream_info_dialog.rs:129
+#: src/ui/stream_info_dialog.rs:120
+#: src/ui/stream_info_dialog.rs:138
 msgid "Post to Mastodon when this stream starts"
 msgstr "Publicar en Mastodon cuando empiece esta emisión"
 
@@ -2325,11 +2337,11 @@ msgstr "Escena previa a la emisión"
 msgid "Pre-stream time"
 msgstr "Hora previa a la emisión"
 
-#: src/ui/preferences.rs:21
+#: src/ui/preferences.rs:24
 msgid "Preferences"
 msgstr "Preferencias"
 
-#: src/ui/mod.rs:2954
+#: src/ui/mod.rs:2985
 msgid "Preferences...\tCtrl+,"
 msgstr "Preferencias...\tCtrl+,"
 
@@ -2349,7 +2361,7 @@ msgstr "Escuchar el sonido"
 msgid "Preview sounds"
 msgstr "Escuchar los sonidos"
 
-#: src/ui/preferences.rs:918
+#: src/ui/preferences.rs:919
 msgid "Preview sounds..."
 msgstr "Escuchar los sonidos..."
 
@@ -2382,7 +2394,7 @@ msgstr "Proyecto: {name} en {path} (revisión {revision})"
 msgid "Provider default"
 msgstr "Valor predeterminado del proveedor"
 
-#: src/ui/mod.rs:2560
+#: src/ui/mod.rs:2591
 msgid "Pubsplash"
 msgstr "Pubsplash"
 
@@ -2400,7 +2412,17 @@ msgstr ""
 msgid "Pubsplash Sound Pack Manager"
 msgstr "Gestor de paquetes de sonidos de Pubsplash"
 
-#: src/ui/mod.rs:3076
+#: src/ui/mod.rs:1013
+msgid ""
+"Pubsplash cannot work out the address listeners use for this stream. "
+"Check the Icecast server and mount point of the service you are "
+"streaming to."
+msgstr ""
+"Pubsplash no puede deducir la dirección que usan los oyentes para esta "
+"emisión. Revise el servidor y el punto de montaje de Icecast del "
+"servicio al que está emitiendo."
+
+#: src/ui/mod.rs:3107
 #: src/ui/update.rs:415
 msgid "Pubsplash could not find its own program file: {e}"
 msgstr "Pubsplash no pudo encontrar su propio archivo de programa: {e}"
@@ -2409,7 +2431,7 @@ msgstr "Pubsplash no pudo encontrar su propio archivo de programa: {e}"
 msgid "Pubsplash could not play that file: {message}"
 msgstr "Pubsplash no ha podido reproducir ese archivo: {message}"
 
-#: src/ui/mod.rs:995
+#: src/ui/mod.rs:1019
 msgid ""
 "Pubsplash does not have a page address for this stream. Check the site "
 "address of the service you are streaming to."
@@ -2417,7 +2439,7 @@ msgstr ""
 "Pubsplash no tiene una dirección de página para esta emisión. "
 "Compruebe la dirección del sitio del servicio al que está emitiendo."
 
-#: src/ui/preferences.rs:213
+#: src/ui/preferences.rs:214
 msgid ""
 "Pubsplash follows the language Windows is set to unless you choose one "
 "here. A change takes effect the next time Pubsplash starts."
@@ -2426,7 +2448,7 @@ msgstr ""
 "que elija uno aquí. El cambio surte efecto la próxima vez que se "
 "inicie Pubsplash."
 
-#: src/ui/mastodon_prefs.rs:304
+#: src/ui/mastodon_service.rs:374
 msgid "Pubsplash is linked to {account}."
 msgstr "Pubsplash está vinculado a {account}."
 
@@ -2434,7 +2456,7 @@ msgstr "Pubsplash está vinculado a {account}."
 msgid "Pubsplash is no longer connected to a streaming service"
 msgstr "Pubsplash ya no está conectado a un servicio de emisión"
 
-#: src/ui/mod.rs:2460
+#: src/ui/mod.rs:2491
 msgid ""
 "Pubsplash is not allowed to write to {folder}.\n\n"
 "Choose a different folder under Recording folder in Preferences."
@@ -2442,8 +2464,19 @@ msgstr ""
 "Pubsplash no tiene permiso para escribir en {folder}.\n\n"
 "Elija otra carpeta en Carpeta de grabación, en Preferencias."
 
+#: src/ui/mod.rs:1016
+msgid ""
+"Pubsplash only knows a YouTube stream's address when the service names "
+"the video itself. Put the watch address or the video id in the YouTube "
+"channel for chat box, instead of a channel handle."
+msgstr ""
+"Pubsplash solo conoce la dirección de una emisión de YouTube cuando "
+"el servicio nombra el propio vídeo. Ponga la dirección de "
+"visualización o el identificador del vídeo en la casilla Canal de "
+"YouTube para el chat, en lugar de un identificador de canal."
+
 #: src/bin/soundpack_manager.rs:372
-#: src/ui/preferences.rs:1117
+#: src/ui/preferences.rs:1118
 msgid "Pubsplash sound packs (*.pspack)|*.pspack"
 msgstr "Paquetes de sonidos de Pubsplash (*.pspack)|*.pspack"
 
@@ -2451,7 +2484,7 @@ msgstr "Paquetes de sonidos de Pubsplash (*.pspack)|*.pspack"
 msgid "Pubsplash text to speech is working."
 msgstr "La síntesis de voz de Pubsplash funciona."
 
-#: src/ui/preferences.rs:242
+#: src/ui/preferences.rs:243
 msgid "Pubsplash will be in the language you chose the next time it starts."
 msgstr ""
 "Pubsplash estará en el idioma que ha elegido la próxima vez que se "
@@ -2483,7 +2516,7 @@ msgstr ""
 "Pubsplash lo descargará, después se cerrará, reemplazará sus "
 "propios archivos y volverá a iniciarse."
 
-#: src/ui/mod.rs:3048
+#: src/ui/mod.rs:3079
 msgid ""
 "Pubsplash {version}\n\n"
 "An accessibility-first streaming app for Audio Pub."
@@ -2530,8 +2563,8 @@ msgstr "Comilla"
 msgid "Reconnect chat"
 msgstr "Reconectar el chat"
 
-#: src/ui/preferences.rs:279
-#: src/ui/preferences.rs:281
+#: src/ui/preferences.rs:280
+#: src/ui/preferences.rs:282
 msgid "Record streams by default"
 msgstr "Grabar las emisiones de forma predeterminada"
 
@@ -2541,21 +2574,21 @@ msgid "Record this stream"
 msgstr "Grabar esta emisión"
 
 #: src/ui/home.rs:371
-#: src/ui/mod.rs:3732
-#: src/ui/preferences.rs:276
+#: src/ui/mod.rs:3763
+#: src/ui/preferences.rs:277
 msgid "Recording"
 msgstr "Grabando"
 
-#: src/ui/preferences.rs:299
-#: src/ui/preferences.rs:309
+#: src/ui/preferences.rs:300
+#: src/ui/preferences.rs:310
 msgid "Recording folder"
 msgstr "Carpeta de grabación"
 
-#: src/ui/mod.rs:2096
+#: src/ui/mod.rs:2127
 msgid "Recording started"
 msgstr "Grabación iniciada"
 
-#: src/ui/mod.rs:2098
+#: src/ui/mod.rs:2129
 msgid "Recording stopped"
 msgstr "Grabación detenida"
 
@@ -2568,7 +2601,7 @@ msgstr "Actualizar"
 msgid "Refresh balances"
 msgstr "Actualizar los saldos"
 
-#: src/ui/mastodon_prefs.rs:170
+#: src/ui/mastodon_service.rs:232
 #: src/ui/scheduler_ui.rs:106
 msgid "Remove"
 msgstr "Quitar"
@@ -2581,13 +2614,13 @@ msgstr "Quitar el atajo"
 msgid "Remove bus"
 msgstr "Quitar el bus"
 
-#: src/ui/preferences.rs:1277
+#: src/ui/preferences.rs:1278
 msgid "Remove folder"
 msgstr "Quitar la carpeta"
 
-#: src/ui/preferences.rs:921
-#: src/ui/preferences.rs:1191
-#: src/ui/preferences.rs:1203
+#: src/ui/preferences.rs:922
+#: src/ui/preferences.rs:1192
+#: src/ui/preferences.rs:1204
 msgid "Remove pack"
 msgstr "Quitar el paquete"
 
@@ -2595,8 +2628,8 @@ msgstr "Quitar el paquete"
 msgid "Remove plugin"
 msgstr "Quitar el plugin"
 
-#: src/ui/connect_dialog.rs:86
-#: src/ui/connect_dialog.rs:718
+#: src/ui/connect_dialog.rs:91
+#: src/ui/connect_dialog.rs:739
 msgid "Remove service"
 msgstr "Quitar el servicio"
 
@@ -2604,11 +2637,11 @@ msgstr "Quitar el servicio"
 msgid "Remove source"
 msgstr "Quitar la fuente"
 
-#: src/ui/mod.rs:2166
+#: src/ui/mod.rs:2197
 msgid "Remove the '#' and everything after it from the URL."
 msgstr "Quite el '#' y todo lo que va detrás de la URL."
 
-#: src/ui/mastodon_prefs.rs:335
+#: src/ui/mastodon_service.rs:397
 msgid ""
 "Remove the authorization for {account}? Pubsplash will stop posting, "
 "and you will have to authorize again to resume."
@@ -2616,11 +2649,11 @@ msgstr ""
 "¿Quitar la autorización de {account}? Pubsplash dejará de publicar, "
 "y tendrá que volver a autorizarlo para reanudarlo."
 
-#: src/ui/preferences.rs:1187
+#: src/ui/preferences.rs:1188
 msgid "Remove the sound pack {name}?"
 msgstr "¿Quitar el paquete de sonidos {name}?"
 
-#: src/ui/mod.rs:2161
+#: src/ui/mod.rs:2192
 msgid ""
 "Remove the user name and password from the URL; enter them in the "
 "fields below."
@@ -2638,14 +2671,14 @@ msgstr "Renombrar el bus"
 msgid "Rename scene"
 msgstr "Renombrar la escena"
 
-#: src/ui/connect_dialog.rs:83
-#: src/ui/connect_dialog.rs:667
-#: src/ui/connect_dialog.rs:677
-#: src/ui/connect_dialog.rs:686
+#: src/ui/connect_dialog.rs:88
+#: src/ui/connect_dialog.rs:688
+#: src/ui/connect_dialog.rs:698
+#: src/ui/connect_dialog.rs:707
 msgid "Rename service"
 msgstr "Renombrar el servicio"
 
-#: src/ui/preferences.rs:1296
+#: src/ui/preferences.rs:1297
 msgid "Rescan all plugins"
 msgstr "Volver a analizar todos los plugins"
 
@@ -2708,26 +2741,26 @@ msgid_plural "Saved {n} sounds to the project."
 msgstr[0] "Se ha guardado {n} sonido en el proyecto."
 msgstr[1] "Se han guardado {n} sonidos en el proyecto."
 
-#: src/ui/mod.rs:3826
+#: src/ui/mod.rs:3857
 msgid "Scan cancelled"
 msgstr "Análisis cancelado"
 
-#: src/ui/mod.rs:3816
+#: src/ui/mod.rs:3847
 msgid "Scan complete"
 msgstr "Análisis completado"
 
-#: src/ui/mod.rs:3802
+#: src/ui/mod.rs:3833
 msgid "Scan complete. {found} new plugins found ({total_known} known in total)."
 msgstr ""
 "Análisis completado. Se han encontrado {found} plugins nuevos "
 "({total_known} conocidos en total)."
 
-#: src/ui/preferences.rs:1293
+#: src/ui/preferences.rs:1294
 msgid "Scan for new plugins"
 msgstr "Buscar plugins nuevos"
 
-#: src/ui/preferences.rs:1415
-#: src/ui/preferences.rs:1447
+#: src/ui/preferences.rs:1416
+#: src/ui/preferences.rs:1448
 msgid "Scan plugins"
 msgstr "Analizar los plugins"
 
@@ -2765,7 +2798,7 @@ msgstr "Escena {name}"
 msgid "Scenes"
 msgstr "Escenas"
 
-#: src/ui/mod.rs:2572
+#: src/ui/mod.rs:2603
 msgid "Scenes and Sources"
 msgstr "Escenas y fuentes"
 
@@ -2773,7 +2806,7 @@ msgstr "Escenas y fuentes"
 msgid "Schedule stream"
 msgstr "Programar una emisión"
 
-#: src/ui/mod.rs:2949
+#: src/ui/mod.rs:2980
 msgid "Schedule stream..."
 msgstr "Programar una emisión..."
 
@@ -2868,15 +2901,15 @@ msgstr "Envíos de {source_name}"
 msgid "September"
 msgstr "septiembre"
 
-#: src/ui/mastodon_prefs.rs:31
-#: src/ui/mastodon_prefs.rs:36
+#: src/ui/mastodon_service.rs:93
+#: src/ui/mastodon_service.rs:98
 msgid "Server"
 msgstr "Servidor"
 
-#: src/ui/connect_dialog.rs:104
-#: src/ui/connect_dialog.rs:108
-#: src/ui/connect_dialog.rs:833
-#: src/ui/connect_dialog.rs:838
+#: src/ui/connect_dialog.rs:109
+#: src/ui/connect_dialog.rs:113
+#: src/ui/connect_dialog.rs:867
+#: src/ui/connect_dialog.rs:872
 msgid "Service type"
 msgstr "Tipo de servicio"
 
@@ -2884,45 +2917,45 @@ msgstr "Tipo de servicio"
 msgid "Set stream info"
 msgstr "Definir la información de la emisión"
 
-#: src/ui/mod.rs:2944
+#: src/ui/mod.rs:2975
 msgid "Set stream info..."
 msgstr "Definir la información de la emisión..."
 
-#: src/ui/preferences.rs:731
+#: src/ui/preferences.rs:732
 msgid "Settings not yet validated."
 msgstr "Los ajustes todavía no se han validado."
 
-#: src/ui/preferences.rs:784
+#: src/ui/preferences.rs:785
 msgid "Settings validated and saved."
 msgstr "Ajustes validados y guardados."
 
-#: src/ui/preferences.rs:794
+#: src/ui/preferences.rs:795
 msgid "Settings validation failed: {error}"
 msgstr "Falló la validación de los ajustes: {error}"
 
-#: src/ui/preferences.rs:733
+#: src/ui/preferences.rs:734
 msgid "Settings validation status: not yet validated"
 msgstr "Estado de la validación de los ajustes: todavía sin validar"
 
-#: src/ui/preferences.rs:749
+#: src/ui/preferences.rs:750
 msgid "Settings validation status: validating"
 msgstr "Estado de la validación de los ajustes: validando"
 
-#: src/ui/preferences.rs:787
+#: src/ui/preferences.rs:788
 msgid "Settings validation succeeded; settings saved"
 msgstr ""
 "La validación de los ajustes se completó correctamente; ajustes "
 "guardados"
 
-#: src/ui/connect_dialog.rs:60
+#: src/ui/connect_dialog.rs:65
 msgid "Setup streaming services"
 msgstr "Configurar los servicios de emisión"
 
-#: src/ui/mod.rs:2939
+#: src/ui/mod.rs:2970
 msgid "Setup streaming services..."
 msgstr "Configurar los servicios de emisión..."
 
-#: src/ui/mod.rs:3160
+#: src/ui/mod.rs:3191
 msgid "ShellExecute failed with code {code}"
 msgstr "ShellExecute falló con el código {code}"
 
@@ -2946,8 +2979,8 @@ msgstr "Atajo, {chord}"
 msgid "Shortcut, {label}"
 msgstr "Atajo, {label}"
 
-#: src/ui/preferences.rs:478
-#: src/ui/preferences.rs:484
+#: src/ui/preferences.rs:479
+#: src/ui/preferences.rs:485
 msgid "Shortest gap between requests, in milliseconds"
 msgstr "Intervalo mínimo entre peticiones, en milisegundos"
 
@@ -2992,7 +3025,7 @@ msgstr "Omitiendo este plugin..."
 msgid "Slash"
 msgstr "Barra"
 
-#: src/ui/mod.rs:2647
+#: src/ui/mod.rs:2678
 msgid ""
 "Some plugins used by your buses are not installed on this machine and "
 "will be skipped until you install them and rescan:\n"
@@ -3012,11 +3045,11 @@ msgstr "Fuente de eventos de sonido"
 
 #: src/bin/soundpack_manager.rs:688
 #: src/bin/soundpack_manager.rs:695
-#: src/ui/mod.rs:3016
+#: src/ui/mod.rs:3047
 msgid "Sound Pack Manager"
 msgstr "Gestor de paquetes de sonidos"
 
-#: src/ui/mod.rs:2963
+#: src/ui/mod.rs:2994
 msgid "Sound Pack Manager..."
 msgstr "Gestor de paquetes de sonidos..."
 
@@ -3033,13 +3066,13 @@ msgstr ""
 "Archivos de sonido (*.wav;*.opus)|*.wav;*.opus|Archivos WAV "
 "(*.wav)|*.wav|Archivos Opus (*.opus)|*.opus"
 
-#: src/ui/preferences.rs:902
-#: src/ui/preferences.rs:905
-#: src/ui/preferences.rs:1057
+#: src/ui/preferences.rs:903
+#: src/ui/preferences.rs:906
+#: src/ui/preferences.rs:1058
 msgid "Sound pack"
 msgstr "Paquete de sonidos"
 
-#: src/ui/preferences.rs:54
+#: src/ui/preferences.rs:55
 msgid "Sound packs"
 msgstr "Paquetes de sonidos"
 
@@ -3072,12 +3105,12 @@ msgstr "Refuerzo de voz: activado"
 msgid "Speaker boost: provider default"
 msgstr "Refuerzo de voz: valor predeterminado del proveedor"
 
-#: src/ui/preferences.rs:51
+#: src/ui/preferences.rs:52
 msgid "Speech"
 msgstr "Voz"
 
-#: src/ui/preferences.rs:394
-#: src/ui/preferences.rs:401
+#: src/ui/preferences.rs:395
+#: src/ui/preferences.rs:402
 msgid "Speech engine"
 msgstr "Motor de voz"
 
@@ -3102,7 +3135,7 @@ msgstr "Velocidad: valor predeterminado del proveedor"
 msgid "Speed: slow"
 msgstr "Velocidad: lenta"
 
-#: src/ui/preferences.rs:692
+#: src/ui/preferences.rs:693
 msgid "Star server URL"
 msgstr "URL del servidor de Star"
 
@@ -3129,12 +3162,12 @@ msgid "Start or stop this media player"
 msgstr "Iniciar o detener este reproductor multimedia"
 
 #: src/ui/home.rs:84
-#: src/ui/mod.rs:2045
+#: src/ui/mod.rs:2076
 msgid "Start recording"
 msgstr "Iniciar la grabación"
 
 #: src/ui/home.rs:75
-#: src/ui/mod.rs:2029
+#: src/ui/mod.rs:2060
 msgid "Start streaming"
 msgstr "Iniciar la emisión"
 
@@ -3178,8 +3211,8 @@ msgstr "Estado"
 msgid "Status: {status}"
 msgstr "Estado: {status}"
 
-#: src/ui/connect_dialog.rs:238
-#: src/ui/connect_dialog.rs:241
+#: src/ui/connect_dialog.rs:243
+#: src/ui/connect_dialog.rs:246
 msgid "Still image (optional)"
 msgstr "Imagen fija (opcional)"
 
@@ -3191,11 +3224,11 @@ msgstr "Detener"
 msgid "Stop Media"
 msgstr "Detener la reproducción"
 
-#: src/ui/mod.rs:2043
+#: src/ui/mod.rs:2074
 msgid "Stop recording"
 msgstr "Detener la grabación"
 
-#: src/ui/mod.rs:2030
+#: src/ui/mod.rs:2061
 msgid "Stop streaming"
 msgstr "Detener la emisión"
 
@@ -3214,11 +3247,11 @@ msgid "Stopping the stream"
 msgstr "Deteniendo la emisión"
 
 #: src/ui/mod.rs:246
-#: src/ui/stream_info_dialog.rs:199
+#: src/ui/stream_info_dialog.rs:207
 msgid "Stream"
 msgstr "Emisión"
 
-#: src/ui/preferences.rs:254
+#: src/ui/preferences.rs:255
 msgid "Stream Archiving"
 msgstr "Archivado de la emisión"
 
@@ -3231,8 +3264,8 @@ msgstr "Emitir el audio según se va generando"
 msgid "Stream events"
 msgstr "Eventos de la emisión"
 
-#: src/ui/connect_dialog.rs:215
-#: src/ui/connect_dialog.rs:221
+#: src/ui/connect_dialog.rs:220
+#: src/ui/connect_dialog.rs:226
 msgid "Stream key"
 msgstr "Clave de emisión"
 
@@ -3254,12 +3287,12 @@ msgstr "Emisión programada, conectando en {remaining}"
 msgid "Streaming"
 msgstr "Emitiendo"
 
-#: src/ui/mod.rs:3442
+#: src/ui/mod.rs:3473
 msgid "Streaming problem"
 msgstr "Problema con la emisión"
 
-#: src/ui/connect_dialog.rs:71
-#: src/ui/connect_dialog.rs:74
+#: src/ui/connect_dialog.rs:76
+#: src/ui/connect_dialog.rs:79
 msgid "Streaming services"
 msgstr "Servicios de emisión"
 
@@ -3319,19 +3352,19 @@ msgstr "Tab"
 msgid "Talk normally for five seconds, starting now."
 msgstr "Hable con normalidad durante cinco segundos, empezando ahora."
 
-#: src/ui/mastodon_templates.rs:70
-#: src/ui/mastodon_templates.rs:75
+#: src/ui/mastodon_templates.rs:78
+#: src/ui/mastodon_templates.rs:83
 msgid "Template"
 msgstr "Plantilla"
 
-#: src/ui/mastodon_templates.rs:146
-#: src/ui/mastodon_templates.rs:162
+#: src/ui/mastodon_templates.rs:154
+#: src/ui/mastodon_templates.rs:170
 msgid "Template tokens"
 msgstr "Marcadores de la plantilla"
 
-#: src/ui/mastodon_prefs.rs:138
-#: src/ui/mastodon_prefs.rs:143
-#: src/ui/mastodon_prefs.rs:148
+#: src/ui/mastodon_service.rs:200
+#: src/ui/mastodon_service.rs:205
+#: src/ui/mastodon_service.rs:210
 msgid "Templates"
 msgstr "Plantillas"
 
@@ -3364,7 +3397,7 @@ msgstr "Síntesis de voz: {engine}, voz predeterminada"
 msgid "Text-to-Speech: {engine}, {voice}"
 msgstr "Síntesis de voz: {engine}, {voice}"
 
-#: src/ui/mod.rs:2156
+#: src/ui/mod.rs:2187
 msgid ""
 "That URL has no site name in it. It should look like "
 "https://audiopub.site"
@@ -3384,11 +3417,11 @@ msgstr ""
 "Esa fecha y hora no existen. Compruebe la fecha, y tenga en cuenta que "
 "al adelantar los relojes se salta una hora."
 
-#: src/ui/preferences.rs:1361
+#: src/ui/preferences.rs:1362
 msgid "That folder is already in the list."
 msgstr "Esa carpeta ya está en la lista."
 
-#: src/ui/preferences.rs:1058
+#: src/ui/preferences.rs:1059
 msgid "That sound pack could not be loaded: {e}"
 msgstr "No se pudo cargar ese paquete de sonidos: {e}"
 
@@ -3397,7 +3430,7 @@ msgstr "No se pudo cargar ese paquete de sonidos: {e}"
 msgid "That strip is not in the mixer right now"
 msgstr "Ese canal no está ahora mismo en el mezclador"
 
-#: src/ui/mod.rs:2465
+#: src/ui/mod.rs:2496
 msgid ""
 "The MP3 encoder for the recording could not be created, so nothing "
 "could be written."
@@ -3405,7 +3438,7 @@ msgstr ""
 "No se pudo crear el codificador MP3 de la grabación, así que no se "
 "pudo escribir nada."
 
-#: src/ui/mod.rs:3079
+#: src/ui/mod.rs:3110
 msgid ""
 "The Sound Pack Manager ({path}) is missing. Reinstall Pubsplash to "
 "restore it."
@@ -3437,7 +3470,7 @@ msgstr ""
 msgid "The engine returned no audio."
 msgstr "El motor no devolvió audio."
 
-#: src/ui/mod.rs:2457
+#: src/ui/mod.rs:2488
 msgid ""
 "The folder {folder} does not exist.\n\n"
 "Choose a folder that does exist under Recording folder in Preferences, "
@@ -3455,11 +3488,11 @@ msgstr ""
 "El nivel está fijado para esta ejecución por una variable de entorno "
 "PUBSPLASH_LOG_*, que tiene prioridad sobre este ajuste."
 
-#: src/ui/connect_dialog.rs:719
+#: src/ui/connect_dialog.rs:740
 msgid "The main Audiopub service cannot be removed."
 msgstr "El servicio principal de Audiopub no se puede quitar."
 
-#: src/ui/connect_dialog.rs:668
+#: src/ui/connect_dialog.rs:689
 msgid "The main Audiopub service cannot be renamed."
 msgstr "El servicio principal de Audiopub no se puede renombrar."
 
@@ -3467,7 +3500,7 @@ msgstr "El servicio principal de Audiopub no se puede renombrar."
 msgid "The parent folder does not exist."
 msgstr "La carpeta principal no existe."
 
-#: src/ui/mod.rs:2470
+#: src/ui/mod.rs:2501
 msgid ""
 "The recording did not start.\n\n"
 "{cause}"
@@ -3475,7 +3508,7 @@ msgstr ""
 "La grabación no se inició.\n\n"
 "{cause}"
 
-#: src/ui/mod.rs:2462
+#: src/ui/mod.rs:2493
 msgid ""
 "The recording file could not be created in {folder}.\n\n"
 "Check that the folder exists and can be written to, or choose another "
@@ -3485,7 +3518,7 @@ msgstr ""
 "Compruebe que la carpeta existe y se puede escribir en ella, o elija "
 "otra en Carpeta de grabación, en Preferencias."
 
-#: src/ui/mod.rs:3827
+#: src/ui/mod.rs:3858
 msgid "The scan was cancelled. Nothing was saved."
 msgstr "El análisis se canceló. No se guardó nada."
 
@@ -3493,7 +3526,7 @@ msgstr "El análisis se canceló. No se guardó nada."
 msgid "The sound pack could not be loaded."
 msgstr "No se pudo cargar el paquete de sonidos."
 
-#: src/ui/mod.rs:2289
+#: src/ui/mod.rs:2320
 msgid ""
 "The still image {path} could not be found. Choose another, or clear the "
 "box to send a plain frame instead."
@@ -3501,11 +3534,11 @@ msgstr ""
 "No se encontró la imagen fija {path}. Elija otra, o vacíe el cuadro "
 "para enviar un fotograma liso en su lugar."
 
-#: src/ui/mod.rs:989
+#: src/ui/mod.rs:1010
 msgid "The stream is shutting down."
 msgstr "La emisión se está cerrando."
 
-#: src/ui/mod.rs:987
+#: src/ui/mod.rs:1008
 msgid "The stream is still connecting, so its page is not available yet."
 msgstr ""
 "La emisión todavía se está conectando, así que su página aún no "
@@ -3527,14 +3560,14 @@ msgstr "Todavía no hay ninguna cadena guardada."
 msgid "There is no bus called {name}"
 msgstr "No hay ningún bus llamado {name}"
 
-#: src/ui/mod.rs:1125
-#: src/ui/mod.rs:1163
+#: src/ui/mod.rs:1149
+#: src/ui/mod.rs:1187
 msgid "There is no media player called {source_name} in this scene"
 msgstr ""
 "No hay ningún reproductor multimedia llamado {source_name} en esta "
 "escena"
 
-#: src/ui/mod.rs:2658
+#: src/ui/mod.rs:2689
 msgid ""
 "These plugins are installed but could not be loaded, so they will be "
 "skipped:\n"
@@ -3554,15 +3587,9 @@ msgstr "Esta cadena está vacía; no hay nada que guardar."
 msgid "This engine has no additional voice settings."
 msgstr "Este motor no tiene más ajustes de voz."
 
-#: src/ui/preferences.rs:713
+#: src/ui/preferences.rs:714
 msgid "This engine needs no settings."
 msgstr "Este motor no necesita ningún ajuste."
-
-#: src/ui/mod.rs:993
-msgid "This is a direct Icecast stream, which has no Audio Pub page."
-msgstr ""
-"Esta es una emisión directa de Icecast, que no tiene página de Audio "
-"Pub."
 
 #: src/ui/mod.rs:247
 msgid "This is just a stream"
@@ -3606,7 +3633,7 @@ msgstr ""
 msgid "This plugin is not loaded, so it has no parameters to edit."
 msgstr "Este plugin no está cargado, así que no tiene parámetros que editar."
 
-#: src/ui/mastodon_post.rs:159
+#: src/ui/mastodon_post.rs:176
 msgid ""
 "This stream has the same title as the one that just ended. Would you "
 "like to post about resuming it?"
@@ -3631,11 +3658,11 @@ msgstr "Hora"
 msgid "Title"
 msgstr "Título"
 
-#: src/ui/mod.rs:2945
+#: src/ui/mod.rs:2976
 msgid "Title, description, and archiving for the stream"
 msgstr "Título, descripción y archivado de la emisión"
 
-#: src/ui/mod.rs:2994
+#: src/ui/mod.rs:3025
 msgid "Tools"
 msgstr "Herramientas"
 
@@ -3660,8 +3687,8 @@ msgstr "Nivel al que se baja"
 msgid "Type a name..."
 msgstr "Escribir un nombre..."
 
-#: src/ui/mastodon_prefs.rs:73
-#: src/ui/mastodon_prefs.rs:337
+#: src/ui/mastodon_service.rs:135
+#: src/ui/mastodon_service.rs:399
 msgid "Unlink"
 msgstr "Desvincular"
 
@@ -3685,28 +3712,28 @@ msgstr "Actualización disponible"
 msgid "Using {path} — {version}, H.264 via {h264}, AAC via {aac}."
 msgstr "Usando {path} — {version}, H.264 mediante {h264}, AAC mediante {aac}."
 
-#: src/ui/preferences.rs:57
+#: src/ui/preferences.rs:58
 msgid "VST plugins"
 msgstr "Plugins VST"
 
-#: src/ui/preferences.rs:729
-#: src/ui/preferences.rs:773
+#: src/ui/preferences.rs:730
+#: src/ui/preferences.rs:774
 msgid "Validate settings"
 msgstr "Validar los ajustes"
 
-#: src/ui/preferences.rs:747
+#: src/ui/preferences.rs:748
 msgid "Validating settings"
 msgstr "Validando los ajustes"
 
-#: src/ui/preferences.rs:748
+#: src/ui/preferences.rs:749
 msgid "Validating settings…"
 msgstr "Validando los ajustes…"
 
-#: src/ui/preferences.rs:746
+#: src/ui/preferences.rs:747
 msgid "Validating…"
 msgstr "Validando…"
 
-#: src/ui/preferences.rs:791
+#: src/ui/preferences.rs:792
 msgid "Validation failed: {error}"
 msgstr "Falló la validación: {error}"
 
@@ -3719,12 +3746,12 @@ msgstr "Valor"
 msgid "Value entry"
 msgstr "Cuadro de valor"
 
-#: src/ui/mod.rs:2980
+#: src/ui/mod.rs:3011
 msgid "Version information"
 msgstr "Información de la versión"
 
-#: src/ui/mod.rs:2988
-#: src/ui/mod.rs:3061
+#: src/ui/mod.rs:3019
+#: src/ui/mod.rs:3092
 msgid "View Changelog"
 msgstr "Ver el registro de cambios"
 
@@ -3779,7 +3806,7 @@ msgstr "Silenciar volumen"
 msgid "Volume Up"
 msgstr "Subir volumen"
 
-#: src/ui/mastodon_post.rs:311
+#: src/ui/mastodon_post.rs:348
 msgid ""
 "Waiting for you to approve Pubsplash in your browser. This window "
 "closes on its own once you have."
@@ -3811,11 +3838,11 @@ msgstr "¿Qué aplicación debe capturar esta fuente?"
 msgid "Which microphone should this source use?"
 msgstr "¿Qué micrófono debe usar esta fuente?"
 
-#: src/ui/mod.rs:2684
+#: src/ui/mod.rs:2715
 msgid "You are currently streaming. Stop the stream and exit?"
 msgstr "Está emitiendo ahora mismo. ¿Detener la emisión y salir?"
 
-#: src/ui/mod.rs:984
+#: src/ui/mod.rs:1005
 msgid "You are not streaming. Start a stream, and this will open its page."
 msgstr "No está emitiendo. Inicie una emisión y esto abrirá su página."
 
@@ -3827,12 +3854,12 @@ msgstr "Solo puede reconectar el chat mientras está emitiendo."
 msgid "You can only send chat messages while streaming."
 msgstr "Solo puede enviar mensajes de chat mientras está emitiendo."
 
-#: src/ui/connect_dialog.rs:228
-#: src/ui/connect_dialog.rs:231
+#: src/ui/connect_dialog.rs:233
+#: src/ui/connect_dialog.rs:236
 msgid "YouTube channel for chat (optional)"
 msgstr "Canal de YouTube para el chat (opcional)"
 
-#: src/ui/mastodon_post.rs:320
+#: src/ui/mastodon_post.rs:357
 msgid ""
 "Your browser is showing an authorization code. Copy it and paste it "
 "into the box that just opened."
@@ -3988,31 +4015,33 @@ msgstr "{kbps} kbps"
 msgid "{label} (reconnecting)"
 msgstr "{label} (reconectando)"
 
-#: src/ui/mod.rs:1141
+#: src/ui/mod.rs:1165
 msgid "{label}, next track"
 msgstr "{label}, pista siguiente"
 
-#: src/ui/mod.rs:1134
+#: src/ui/mod.rs:1158
 msgid "{label}, paused"
 msgstr "{label}, en pausa"
 
-#: src/ui/mod.rs:1132
+#: src/ui/mod.rs:1156
 msgid "{label}, playing"
 msgstr "{label}, reproduciendo"
 
-#: src/ui/mod.rs:1140
+#: src/ui/mod.rs:1164
 msgid "{label}, playing {next}"
 msgstr "{label}, reproduciendo {next}"
 
-#: src/ui/mod.rs:1131
+#: src/ui/mod.rs:1155
 msgid "{label}, playing {track}"
 msgstr "{label}, reproduciendo {track}"
 
-#: src/ui/stream_info_dialog.rs:150
-msgid "{label}, unavailable until a Mastodon account is linked in Preferences"
+#: src/ui/stream_info_dialog.rs:158
+msgid ""
+"{label}, unavailable until this streaming service has a Mastodon "
+"account linked in Setup streaming services"
 msgstr ""
-"{label}, no disponible hasta que se vincule una cuenta de Mastodon en "
-"Preferencias"
+"{label}, no disponible hasta que este servicio de emisión tenga una "
+"cuenta de Mastodon vinculada en Configurar los servicios de emisión"
 
 #: src/ui/home.rs:259
 msgid "{name} (active)"
@@ -4091,7 +4120,7 @@ msgstr ""
 "permanecerá en silencio hasta que se inicie, y se detectará "
 "automáticamente en cuanto lo haga."
 
-#: src/ui/mod.rs:2149
+#: src/ui/mod.rs:2180
 msgid "{scheme} is not a web address scheme. The URL should start with https://"
 msgstr ""
 "{scheme} no es un esquema de dirección web. La URL debería empezar "
@@ -4120,13 +4149,13 @@ msgstr ""
 msgid "{source} ({scene})"
 msgstr "{source} ({scene})"
 
-#: src/ui/mod.rs:2140
+#: src/ui/mod.rs:2171
 msgid "{url} is not a valid URL. It should look like https://audiopub.site"
 msgstr ""
 "{url} no es una URL válida. Debería tener este aspecto: "
 "https://audiopub.site"
 
-#: src/ui/mod.rs:2263
+#: src/ui/mod.rs:2294
 msgid ""
 "{url} is not an RTMP address. It should begin with rtmp:// or rtmps://; "
 "YouTube's is {youtube}."
@@ -4135,7 +4164,7 @@ msgstr ""
 "rtmps://; la de YouTube es {youtube}."
 
 #: src/ui/chat.rs:248
-#: src/ui/mod.rs:1405
+#: src/ui/mod.rs:1429
 msgid "{user}: {content}"
 msgstr "{user}: {content}"
 
@@ -4318,6 +4347,22 @@ msgid "Type the Icecast source username. If left blank, Pubsplash uses source."
 msgstr ""
 "Escriba el nombre de usuario de fuente de Icecast. Si lo deja en "
 "blanco, Pubsplash usa source."
+
+#. Context help for the Mastodon announcements button for the selected service.
+#: help.toml
+msgctxt "dialog.connect.mastodon"
+msgid ""
+"Opens the Mastodon settings for the service highlighted in the list: "
+"which account announces its streams, whether to post when a stream "
+"starts and while it runs, and the wording to use. Every streaming "
+"service has its own account and its own templates, so a stream is "
+"always announced by the account belonging to the place it is going to."
+msgstr ""
+"Abre los ajustes de Mastodon del servicio resaltado en la lista: qué "
+"cuenta anuncia sus emisiones, si se publica al empezar una emisión y "
+"mientras dura, y con qué texto. Cada servicio de emisión tiene su "
+"propia cuenta y sus propias plantillas, así que una emisión siempre "
+"se anuncia con la cuenta del sitio al que va dirigida."
 
 #. Context help for the Streaming service nickname.
 #: help.toml
@@ -4680,6 +4725,150 @@ msgid "Load the selected FX chain and apply it to the bus you're working with."
 msgstr ""
 "Carga la cadena de efectos seleccionada y la aplica al bus con el que "
 "está trabajando."
+
+#. Context help for the Add template button.
+#: help.toml
+msgctxt "dialog.mastodon.addTemplate"
+msgid ""
+"Write a new announcement template. You choose whether it is for the "
+"start of a stream or for the still-streaming posts, then type the "
+"wording."
+msgstr ""
+"Escriba una plantilla de anuncio nueva. Usted elige si es para el "
+"inicio de una emisión o para las publicaciones de que sigue emitiendo, "
+"y después escribe el texto."
+
+#. Context help for the Authorize with Mastodon button.
+#: help.toml
+msgctxt "dialog.mastodon.authorize"
+msgid ""
+"Link a Mastodon account to this streaming service. Pubsplash opens your "
+"browser at the server named above so you can sign in and approve it, "
+"then stores the authorization. Each service has its own account, so "
+"linking one here leaves the others alone. Nothing is posted until you "
+"also turn an announcement on."
+msgstr ""
+"Vincula una cuenta de Mastodon a este servicio de emisión. Pubsplash "
+"abre su navegador en el servidor indicado arriba para que pueda iniciar "
+"sesión y autorizarlo, y después guarda la autorización. Cada "
+"servicio tiene su propia cuenta, así que vincular una aquí no afecta "
+"a las demás. No se publica nada hasta que además active un anuncio."
+
+#. Context help for the Edit template button.
+#: help.toml
+msgctxt "dialog.mastodon.editTemplate"
+msgid "Change the template highlighted in the list."
+msgstr "Cambia la plantilla resaltada en la lista."
+
+#. Context help for the Still-streaming post interval choice.
+#: help.toml
+msgctxt "dialog.mastodon.interval"
+msgid ""
+"How long to wait between still-streaming posts. The clock starts when "
+"the stream goes live, so on the hourly setting the first one goes out "
+"an hour after you start. Available only while still-streaming posts are "
+"turned on."
+msgstr ""
+"Cuánto esperar entre publicaciones de que sigue emitiendo. El reloj "
+"empieza cuando la emisión sale en directo, así que con el ajuste "
+"horario la primera se publica una hora después de empezar. Solo está "
+"disponible mientras las publicaciones de que sigue emitiendo estén "
+"activadas."
+
+#. Context help for the Make periodic still-streaming Mastodon posts checkbox.
+#: help.toml
+msgctxt "dialog.mastodon.periodic"
+msgid ""
+"When checked, Pubsplash keeps posting a reminder that you are still on "
+"the air while a stream runs, using the interval in the list after this "
+"box. It applies to this streaming service only. This only sets the "
+"starting state of the matching box in the Set stream info dialog; you "
+"can still turn it off for one stream there."
+msgstr ""
+"Cuando está marcada, Pubsplash sigue publicando un recordatorio de que "
+"continúa en antena mientras dura una emisión, con el intervalo de la "
+"lista que hay después de esta casilla. Solo se aplica a este servicio "
+"de emisión. Esto solo fija el estado inicial de la casilla equivalente "
+"del cuadro de diálogo Definir la información de la emisión; allí "
+"todavía puede desactivarla para una emisión concreta."
+
+#. Context help for the Post to Mastodon when I start a new stream checkbox.
+#: help.toml
+msgctxt "dialog.mastodon.postOnStart"
+msgid ""
+"When checked, Pubsplash posts to Mastodon once a new stream is live on "
+"this streaming service. This only sets the starting state of the "
+"matching box in the Set stream info dialog; you can still turn it off "
+"for one stream there."
+msgstr ""
+"Cuando está marcada, Pubsplash publica en Mastodon en cuanto una "
+"emisión nueva está en directo en este servicio de emisión. Esto solo "
+"fija el estado inicial de la casilla equivalente del cuadro de diálogo "
+"Definir la información de la emisión; allí todavía puede "
+"desactivarla para una emisión concreta."
+
+#. Context help for the Remove template button.
+#: help.toml
+msgctxt "dialog.mastodon.removeTemplate"
+msgid ""
+"Delete the template highlighted in the list. You can also press DELETE "
+"in the list. Deleting all of them is safe: Pubsplash falls back on its "
+"own wording."
+msgstr ""
+"Elimina la plantilla resaltada en la lista. También puede pulsar "
+"SUPRIMIR en la lista. Eliminarlas todas no supone ningún problema: "
+"Pubsplash recurre a su propio texto."
+
+#. Context help for the Mastodon server input.
+#: help.toml
+msgctxt "dialog.mastodon.server"
+msgid ""
+"The Mastodon server your account is on, such as mastodon dot social. "
+"Type just the host name; Pubsplash works out the rest. Fill this in "
+"before choosing Authorize."
+msgstr ""
+"El servidor de Mastodon en el que está su cuenta, como mastodon punto "
+"social. Escriba solo el nombre de host; Pubsplash deduce el resto. "
+"Rellene esto antes de elegir Autorizar."
+
+#. Context help for the Linked Mastodon account.
+#: help.toml
+msgctxt "dialog.mastodon.status"
+msgid "Which account this streaming service posts as, if any. Read-only."
+msgstr ""
+"Con qué cuenta publica este servicio de emisión, si hay alguna. Es de "
+"solo lectura."
+
+#. Context help for the Mastodon announcement templates list.
+#: help.toml
+msgctxt "dialog.mastodon.templateList"
+msgid ""
+"The announcement templates you have written for this streaming service. "
+"Each row gives the type, a colon, and the wording. Start of stream "
+"templates come first, then the stream continuation ones. Arrow up and "
+"down to choose one, then use Edit or Remove. If you have more than one "
+"of a type, Pubsplash picks one of them at random each time it posts."
+msgstr ""
+"Las plantillas de anuncio que ha escrito para este servicio de "
+"emisión. Cada fila da el tipo, dos puntos y el texto. Primero van las "
+"plantillas de inicio de emisión y después las de continuación. Elija "
+"una con las flechas arriba y abajo, y después use Editar o Quitar. Si "
+"tiene más de una de un tipo, Pubsplash elige una de ellas al azar cada "
+"vez que publica."
+
+#. Context help for the Unlink the Mastodon account button.
+#: help.toml
+msgctxt "dialog.mastodon.unlink"
+msgid ""
+"Forget the Mastodon account linked to this streaming service. Pubsplash "
+"stops posting for it and asks the server to cancel the authorization. "
+"Other services keep their own accounts. Available only while an account "
+"is linked."
+msgstr ""
+"Olvida la cuenta de Mastodon vinculada a este servicio de emisión. "
+"Pubsplash deja de publicar para él y pide al servidor que cancele la "
+"autorización. Los demás servicios conservan sus propias cuentas. Solo "
+"está disponible mientras hay una cuenta vinculada."
 
 #. Context help for the Mastodon authorization status.
 #: help.toml
@@ -5247,140 +5436,6 @@ msgstr ""
 "enviárselo a alguien, el botón Comprimir los registros es la forma "
 "más cómoda, ya que reúne todos ellos y los informes de fallos de una "
 "sola vez."
-
-#. Context help for the Add template button.
-#: help.toml
-msgctxt "dialog.preferences.mastodon.addTemplate"
-msgid ""
-"Write a new announcement template. You choose whether it is for the "
-"start of a stream or for the still-streaming posts, then type the "
-"wording."
-msgstr ""
-"Escriba una plantilla de anuncio nueva. Usted elige si es para el "
-"inicio de una emisión o para las publicaciones de que sigue emitiendo, "
-"y después escribe el texto."
-
-#. Context help for the Authorize with Mastodon button.
-#: help.toml
-msgctxt "dialog.preferences.mastodon.authorize"
-msgid ""
-"Link your Mastodon account. Pubsplash opens your browser at the server "
-"named above so you can sign in and approve it, then stores the "
-"authorization. Nothing is posted until you also turn an announcement on."
-msgstr ""
-"Vincula su cuenta de Mastodon. Pubsplash abre su navegador en el "
-"servidor indicado arriba para que pueda iniciar sesión y autorizarlo, "
-"y después guarda la autorización. No se publica nada hasta que "
-"además active un anuncio."
-
-#. Context help for the Edit template button.
-#: help.toml
-msgctxt "dialog.preferences.mastodon.editTemplate"
-msgid "Change the template highlighted in the list."
-msgstr "Cambia la plantilla resaltada en la lista."
-
-#. Context help for the Still-streaming post interval choice.
-#: help.toml
-msgctxt "dialog.preferences.mastodon.interval"
-msgid ""
-"How long to wait between still-streaming posts. The clock starts when "
-"the stream goes live, so on the hourly setting the first one goes out "
-"an hour after you start. Available only while still-streaming posts are "
-"turned on."
-msgstr ""
-"Cuánto esperar entre publicaciones de que sigue emitiendo. El reloj "
-"empieza cuando la emisión sale en directo, así que con el ajuste "
-"horario la primera se publica una hora después de empezar. Solo está "
-"disponible mientras las publicaciones de que sigue emitiendo están "
-"activadas."
-
-#. Context help for the Make periodic still-streaming Mastodon posts checkbox.
-#: help.toml
-msgctxt "dialog.preferences.mastodon.periodic"
-msgid ""
-"When checked, Pubsplash keeps posting a reminder that you are still on "
-"the air while a stream runs, using the interval in the list after this "
-"box. This only sets the starting state of the matching box in the Set "
-"stream info dialog; you can still turn it off for one stream there."
-msgstr ""
-"Cuando está marcada, Pubsplash sigue publicando un recordatorio de que "
-"continúa en antena mientras dura una emisión, con el intervalo de la "
-"lista que hay después de esta casilla. Esto solo fija el estado "
-"inicial de la casilla equivalente del cuadro de diálogo Definir la "
-"información de la emisión; allí todavía puede desactivarla para una "
-"emisión concreta."
-
-#. Context help for the Post to Mastodon when I start a new stream checkbox.
-#: help.toml
-msgctxt "dialog.preferences.mastodon.postOnStart"
-msgid ""
-"When checked, Pubsplash posts to Mastodon once a new stream is live. "
-"This only sets the starting state of the matching box in the Set stream "
-"info dialog; you can still turn it off for one stream there."
-msgstr ""
-"Cuando está marcada, Pubsplash publica en Mastodon en cuanto una "
-"emisión nueva está en directo. Esto solo fija el estado inicial de la "
-"casilla equivalente del cuadro de diálogo Definir la información de "
-"la emisión; allí todavía puede desactivarla para una emisión "
-"concreta."
-
-#. Context help for the Remove template button.
-#: help.toml
-msgctxt "dialog.preferences.mastodon.removeTemplate"
-msgid ""
-"Delete the template highlighted in the list. You can also press DELETE "
-"in the list. Deleting all of them is safe: Pubsplash falls back on its "
-"own wording."
-msgstr ""
-"Elimina la plantilla resaltada en la lista. También puede pulsar "
-"SUPRIMIR en la lista. Eliminarlas todas no supone ningún problema: "
-"Pubsplash recurre a su propio texto."
-
-#. Context help for the Mastodon server input.
-#: help.toml
-msgctxt "dialog.preferences.mastodon.server"
-msgid ""
-"The Mastodon server your account is on, such as mastodon dot social. "
-"Type just the host name; Pubsplash works out the rest. Fill this in "
-"before choosing Authorize."
-msgstr ""
-"El servidor de Mastodon en el que está su cuenta, como mastodon punto "
-"social. Escriba solo el nombre de host; Pubsplash deduce el resto. "
-"Rellene esto antes de elegir Autorizar."
-
-#. Context help for the Linked Mastodon account.
-#: help.toml
-msgctxt "dialog.preferences.mastodon.status"
-msgid "Which account is linked, if any. Read-only."
-msgstr "Qué cuenta está vinculada, si hay alguna. Es de solo lectura."
-
-#. Context help for the Mastodon announcement templates list.
-#: help.toml
-msgctxt "dialog.preferences.mastodon.templateList"
-msgid ""
-"The announcement templates you have written. Each row gives the type, a "
-"colon, and the wording. Start of stream templates come first, then the "
-"stream continuation ones. Arrow up and down to choose one, then use "
-"Edit or Remove. If you have more than one of a type, Pubsplash picks "
-"one of them at random each time it posts."
-msgstr ""
-"Las plantillas de anuncio que ha escrito. Cada fila da el tipo, dos "
-"puntos y el texto. Primero van las plantillas de inicio de emisión y "
-"después las de continuación. Elija una con las flechas arriba y "
-"abajo, y después use Editar o Quitar. Si tiene más de una de un tipo, "
-"Pubsplash elige una de ellas al azar cada vez que publica."
-
-#. Context help for the Unlink the Mastodon account button.
-#: help.toml
-msgctxt "dialog.preferences.mastodon.unlink"
-msgid ""
-"Forget the linked Mastodon account. Pubsplash stops posting and asks "
-"the server to cancel the authorization. Available only while an account "
-"is linked."
-msgstr ""
-"Olvida la cuenta de Mastodon vinculada. Pubsplash deja de publicar y "
-"pide al servidor que cancele la autorización. Solo está disponible "
-"mientras hay una cuenta vinculada."
 
 #. Context help for the Import sound pack button.
 #: help.toml
@@ -6166,26 +6221,30 @@ msgstr ""
 msgctxt "dialog.streamInfo.mastodonPeriodic"
 msgid ""
 "When checked, Pubsplash posts a still-streaming reminder to Mastodon at "
-"the interval set in Preferences, Mastodon, for as long as this stream "
-"runs. Available only when a Mastodon account is linked."
+"the interval set for this streaming service, for as long as this stream "
+"runs. Available only when the service you are connected to has a "
+"Mastodon account linked."
 msgstr ""
 "Cuando está marcada, Pubsplash publica en Mastodon un recordatorio de "
-"que sigue emitiendo, con el intervalo fijado en Preferencias, Mastodon, "
-"mientras dure esta emisión. Solo está disponible cuando hay una "
-"cuenta de Mastodon vinculada."
+"que sigue emitiendo, con el intervalo fijado para este servicio de "
+"emisión, mientras dure esta emisión. Solo está disponible cuando el "
+"servicio al que está conectado tiene una cuenta de Mastodon vinculada."
 
 #. Context help for the Post to Mastodon when this stream starts checkbox.
 #: help.toml
 msgctxt "dialog.streamInfo.mastodonStart"
 msgid ""
-"When checked, Pubsplash posts to Mastodon once this stream is live. It "
-"waits until the stream is really up, so the link in the post always "
-"works. Available only when a Mastodon account is linked."
+"When checked, Pubsplash posts to Mastodon once this stream is live, "
+"using the account linked to the streaming service you are connected to. "
+"It waits until the stream is really up, so the link in the post always "
+"works. Available only when that service has a Mastodon account linked."
 msgstr ""
 "Cuando está marcada, Pubsplash publica en Mastodon en cuanto esta "
-"emisión está en directo. Espera a que la emisión esté realmente en "
-"marcha, para que el enlace de la publicación siempre funcione. Solo "
-"está disponible cuando hay una cuenta de Mastodon vinculada."
+"emisión está en directo, con la cuenta vinculada al servicio de "
+"emisión al que está conectado. Espera a que la emisión esté "
+"realmente en marcha, para que el enlace de la publicación siempre "
+"funcione. Solo está disponible cuando ese servicio tiene una cuenta de "
+"Mastodon vinculada."
 
 #. Context help for the Stream audio quality (bitrate) choice.
 #: help.toml

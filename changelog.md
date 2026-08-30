@@ -4,6 +4,16 @@
 
 ### Additions
 
+- **Mastodon is now part of each streaming service.** Every service — the built-in Audiopub site, an Icecast station, a YouTube target — has its own Mastodon account, its own announcement settings and its own templates, and a stream is announced by the account belonging to the service it is going to.
+
+- A **Mastodon announcements** button in Setup streaming services opens those settings for the service highlighted in the list.
+
+- The built-in wording a service falls back on when you have written no templates of your own now suits the service: only an Audiopub one says "#Audiopub".
+
+- **{url} now resolves for an Icecast service**, to the address listeners actually use: the server and mount point you publish to, or the listener count URL when you have set one, so a relay's mount is announced rather than the raw one. It resolves for a YouTube service too, when the service names the video rather than a channel handle.
+
+- **Go to > stream page** opens that same address, instead of saying an Icecast stream has no page.
+
 - **A Media Scheduler source.** It plays chosen files at chosen wall-clock times: at a time of day, at a minute past every hour, or on an interval measured from midnight (every 15 minutes lands on :00, :15, :30 and :45 whatever time Pubsplash started). Add it from the Scenes tab like any other source.
 
 - The Media Scheduler is an ordinary mixer source: it has a strip, a fader, a mute, sends and its own monitor toggle, and it makes a Media Player set to duck get out of its way automatically.
@@ -20,7 +30,13 @@
 
 ### Fixes
 
+- The 30-second gap Pubsplash keeps between two Mastodon posts is now counted per account, so starting a stream on one service shortly after ending one on another no longer swallows the first announcement.
+
 ### Changes
+
+- Preferences no longer has a Mastodon tab; the settings moved into Setup streaming services, beside the service they belong to.
+
+- Settings files written by earlier versions are migrated on the first load: the linked account moves onto the service you were last connected to, and the templates and announcement defaults are copied to every service so nothing is lost.
 
 - The Media Player and the Media Scheduler now share one streaming file decoder (`media::decode`).
 
