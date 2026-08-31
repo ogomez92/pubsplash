@@ -33,7 +33,7 @@ mod mac_ui;
 mod global_keys;
 mod logging_ui;
 mod mastodon_post;
-mod mastodon_prefs;
+mod mastodon_service;
 mod mastodon_templates;
 mod media;
 mod scheduler;
@@ -1008,14 +1008,35 @@ fn snapshot_key(names: &[String]) -> Vec<String> {
 ///
 /// Split out of [`App::stream_url`] so it can be tested without an `App`, which
 /// owns the audio engine and the network thread.
-fn live_stream_url(site_url: &str, stream_id: &str) -> Option<String> {
-    let site = site_url.trim().trim_end_matches('/');
-    // A direct Icecast service has no public page: `net_loop` synthesizes its
-    // "stream id" as `icecast:<mount>` because there is no server-side stream.
-    if site.is_empty() || stream_id.is_empty() || stream_id.starts_with("icecast:") {
+/// Where listeners go for the stream that is live, given the service it is on.
+///
+/// Three services, three different answers, and the synthesized stream id is the
+/// discriminator — `net_loop` writes `icecast:<mount>` and `youtube:<video id>`
+/// for the two targets that have no server-issued id of their own.
+///
+/// Only an Audio Pub stream has a page per broadcast. A direct Icecast mount has
+/// a permanent address instead, which [`SiteConfig::icecast_listen_url`] builds
+/// out of the fields the user already filled in to publish to it — it plays the
+/// stream rather than describing it, but it is genuinely the address you would
+/// give somebody, which is what this is for. A YouTube broadcast's page is on
+/// youtube.com and has nothing to do with the service's own (empty) site URL.
+fn live_stream_url(site: &SiteConfig, stream_id: &str) -> Option<String> {
+    // The mount is in the id as well as in the config; the config is what is
+    // read, because only it carries the listener-URL override.
+    if stream_id.starts_with("icecast:") {
+        return site.icecast_listen_url();
+    }
+    if let Some(video_id) = stream_id.strip_prefix("youtube:") {
+        // Only when the service names a video outright. A channel handle
+        // resolves to a video id inside the chat reader, long after the stream
+        // is announced, so `youtube` on its own is all there is to go on here.
+        return (!video_id.is_empty()).then(|| crate::net::youtube::watch_url(video_id));
+    }
+    let base = site.url.trim().trim_end_matches('/');
+    if base.is_empty() || stream_id.is_empty() {
         return None;
     }
-    Some(format!("{site}/live/{stream_id}"))
+    Some(format!("{base}/live/{stream_id}"))
 }
 
 /// Why the "Go to stream page" item has nowhere to go, phrased for the user.
@@ -1032,11 +1053,14 @@ fn no_stream_page_reason(stream: &StreamState) -> String {
             t!("The stream is still connecting, so its page is not available yet.")
         }
         StreamState::Stopping => t!("The stream is shutting down."),
-        // Live, but `stream_url` still declined: either a direct Icecast target,
-        // which has no page at all, or a service whose site URL is not set.
-        StreamState::Live { stream_id } if stream_id.starts_with("icecast:") => {
-            t!("This is a direct Icecast stream, which has no Audio Pub page.")
-        }
+        // Live, but `stream_url` still declined. Each kind of service fails for
+        // its own reason, and the sentence has to name the field to go and fix.
+        StreamState::Live { stream_id } if stream_id.starts_with("icecast:") => t!(
+            "Pubsplash cannot work out the address listeners use for this stream. Check the Icecast server and mount point of the service you are streaming to."
+        ),
+        StreamState::Live { stream_id } if stream_id.starts_with("youtube") => t!(
+            "Pubsplash only knows a YouTube stream's address when the service names the video itself. Put the watch address or the video id in the YouTube channel for chat box, instead of a channel handle."
+        ),
         StreamState::Live { .. } => t!(
             "Pubsplash does not have a page address for this stream. Check the site address of the service you are streaming to."
         ),
@@ -1912,14 +1936,7 @@ impl App {
             StreamState::Live { stream_id } => stream_id.clone(),
             _ => return None,
         };
-        let service_id = self.run.borrow().connected_service.clone()?;
-        let site = self
-            .config
-            .borrow()
-            .connection
-            .site(&service_id)?
-            .url
-            .clone();
+        let site = self.connected_site()?;
         live_stream_url(&site, &stream_id)
     }
 
@@ -1970,6 +1987,20 @@ impl App {
         let run = self.run.borrow();
         let id = run.connected_service.as_deref()?;
         Some(self.config.borrow().connection.site(id)?.service_type)
+    }
+
+    /// A copy of the streaming service currently connected, if any.
+    ///
+    /// A clone rather than a borrow because every caller goes on to open a
+    /// dialog or take `config` mutably, and nothing in the UI may hold a
+    /// `config` borrow across a call into wx. `Runtime::connected_service` holds
+    /// an id, which `ConnectionConfig::site` also matches against a URL for the
+    /// benefit of profiles written before ids existed — so the returned
+    /// `SiteConfig::id` is the canonical one to write back with.
+    pub fn connected_site(&self) -> Option<SiteConfig> {
+        let id = self.run.borrow().connected_service.clone()?;
+        let config = self.config.borrow();
+        Some(config.connection.site(&id)?.clone())
     }
 
     /// Starts a standalone local recording (no streaming). The file name is
@@ -4430,6 +4461,33 @@ mod token_tests {
     // Token expansion itself now lives in `crate::mastodon`, which owns the
     // token table and is tested there.
 
+    use crate::config::{SiteConfig, StreamingServiceType};
+
+    fn audiopub(url: &str) -> SiteConfig {
+        SiteConfig {
+            url: url.to_string(),
+            ..SiteConfig::default()
+        }
+    }
+
+    fn icecast(server: &str, port: u16, mount: &str, listeners: &str) -> SiteConfig {
+        SiteConfig {
+            service_type: StreamingServiceType::Icecast,
+            icecast_server: server.to_string(),
+            icecast_port: port,
+            icecast_mount: mount.to_string(),
+            icecast_listener_url: listeners.to_string(),
+            ..SiteConfig::default()
+        }
+    }
+
+    fn youtube() -> SiteConfig {
+        SiteConfig {
+            service_type: StreamingServiceType::Youtube,
+            ..SiteConfig::default()
+        }
+    }
+
     /// `App::stream_url` used to format `Runtime::connected_service` — a service
     /// **id** — straight into the link. For the built-in site the id happens to
     /// equal its URL, so it worked there and nowhere else. The id is resolved
@@ -4437,24 +4495,95 @@ mod token_tests {
     #[test]
     fn a_live_stream_url_is_the_site_plus_the_stream_id() {
         assert_eq!(
-            super::live_stream_url("https://audiopub.site/", "abc123").as_deref(),
+            super::live_stream_url(&audiopub("https://audiopub.site/"), "abc123").as_deref(),
             Some("https://audiopub.site/live/abc123")
         );
         // A self-hosted service, which is the case the old code got wrong.
         assert_eq!(
-            super::live_stream_url("https://pub.example.test", "xyz").as_deref(),
+            super::live_stream_url(&audiopub("https://pub.example.test"), "xyz").as_deref(),
             Some("https://pub.example.test/live/xyz")
+        );
+        assert_eq!(super::live_stream_url(&audiopub(""), "abc"), None);
+        assert_eq!(super::live_stream_url(&audiopub("https://x.test"), ""), None);
+    }
+
+    /// A direct Icecast mount has no page, but it does have an address, and it
+    /// is built from the fields the user filled in to publish to it.
+    #[test]
+    fn a_direct_icecast_stream_resolves_to_its_listen_address() {
+        assert_eq!(
+            super::live_stream_url(
+                &icecast("radio.example.com", 8000, "/live.mp3", ""),
+                "icecast:/live.mp3"
+            )
+            .as_deref(),
+            Some("http://radio.example.com:8000/live.mp3")
+        );
+        // A mount written without its slash, which is how the dialog accepts it.
+        assert_eq!(
+            super::live_stream_url(
+                &icecast("radio.example.com", 8000, "live.mp3", ""),
+                "icecast:/live.mp3"
+            )
+            .as_deref(),
+            Some("http://radio.example.com:8000/live.mp3")
+        );
+        // The listener count URL wins where it is set, because that is the whole
+        // point of the field: the audience is on the relay's mount, not on the
+        // one we publish to.
+        assert_eq!(
+            super::live_stream_url(
+                &icecast("radio.example.com", 8000, "/live.mp3", "stream.mp3"),
+                "icecast:/live.mp3"
+            )
+            .as_deref(),
+            Some("http://radio.example.com:8000/stream.mp3")
+        );
+        // Including when the relay is somewhere else entirely, over TLS, on the
+        // scheme's own port — which is left off, as anyone writing it down would.
+        assert_eq!(
+            super::live_stream_url(
+                &icecast(
+                    "radio.example.com",
+                    8000,
+                    "/live.mp3",
+                    "https://listen.example.com/stream.mp3"
+                ),
+                "icecast:/live.mp3"
+            )
+            .as_deref(),
+            Some("https://listen.example.com/stream.mp3")
+        );
+        // A field naming only a server says nothing about which mount the
+        // audience is on, so the mount we publish to stands in.
+        assert_eq!(
+            super::live_stream_url(
+                &icecast("radio.example.com", 8000, "/live.mp3", "http://relay.example.com/"),
+                "icecast:/live.mp3"
+            )
+            .as_deref(),
+            Some("http://relay.example.com/live.mp3")
+        );
+        // Nothing to build an address out of is still nothing.
+        assert_eq!(
+            super::live_stream_url(&icecast("", 8000, "/live.mp3", ""), "icecast:/live.mp3"),
+            None
         );
     }
 
+    /// A YouTube broadcast's address is on youtube.com and has nothing to do
+    /// with the service's own (empty) site URL — but only a service naming the
+    /// video outright has one at the moment the stream is announced.
     #[test]
-    fn a_direct_icecast_service_has_no_public_page() {
+    fn a_youtube_stream_resolves_only_when_the_video_is_named() {
         assert_eq!(
-            super::live_stream_url("https://x.test", "icecast:/live"),
-            None
+            super::live_stream_url(&youtube(), "youtube:dQw4w9WgXcQ").as_deref(),
+            Some("https://www.youtube.com/watch?v=dQw4w9WgXcQ")
         );
-        assert_eq!(super::live_stream_url("", "abc"), None);
-        assert_eq!(super::live_stream_url("https://x.test", ""), None);
+        // A channel handle: the video id is not known until the chat reader
+        // finds it, long after this is asked.
+        assert_eq!(super::live_stream_url(&youtube(), "youtube"), None);
+        assert_eq!(super::live_stream_url(&youtube(), "youtube:"), None);
     }
 
     /// Every state the Go to > stream page item can find itself in says

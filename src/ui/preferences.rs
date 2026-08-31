@@ -1,7 +1,10 @@
 //! Preferences dialog. Tabbed: "General", "Audio" (whose body lives in
-//! `ui/audio_prefs.rs`), "Archiving", "Mastodon" (`ui/mastodon_prefs.rs`),
-//! "Speech", "Sound packs", "VST plugins", "Keybinds"
-//! (`ui/keybinds_ui.rs`), and "Logging & debugging" (`ui/logging_ui.rs`).
+//! `ui/audio_prefs.rs`), "Archiving", "Speech", "Sound packs", "VST plugins",
+//! "Keybinds" (`ui/keybinds_ui.rs`), and "Logging & debugging"
+//! (`ui/logging_ui.rs`).
+//!
+//! There is no Mastodon tab: an account belongs to a streaming service, so it is
+//! set up in the Setup streaming services dialog (`ui/mastodon_service.rs`).
 //! The VST tab manages the plugin folder list and starts scans; scan progress
 //! arrives on the pump (see `pump_scan_events` in `ui/mod.rs`). Every tab saves
 //! as the user changes a control, so the dialog only needs a Close button.
@@ -22,8 +25,9 @@ pub fn show(app: &Rc<App>, frame: &Frame) {
         .with_style(DialogStyle::DefaultDialogStyle | DialogStyle::ResizeBorder)
         // Wide enough for every tab label to fit on one row. At 560 the eighth
         // tab pushed the row over and wx grew a pair of scroll arrows, which
-        // hides whichever tabs are off the end until you press them. "Audio"
-        // was the ninth; check this again if a tenth is added.
+        // hides whichever tabs are off the end until you press them. Left at
+        // 780 with the Mastodon tab gone, which buys a tab's worth of headroom;
+        // check this again if a ninth is added.
         .with_size(780, 480)
         .build();
 
@@ -43,9 +47,6 @@ pub fn show(app: &Rc<App>, frame: &Frame) {
     let archiving_panel = Panel::builder(&notebook).build();
     notebook.add_page(&archiving_panel, &t!("Archiving"), false, None);
     build_archiving_tab(app, &dialog, &archiving_panel);
-    let mastodon_panel = Panel::builder(&notebook).build();
-    notebook.add_page(&mastodon_panel, &t!("Mastodon"), false, None);
-    super::mastodon_prefs::build_tab(app, &dialog, &mastodon_panel);
     let speech_alive = Rc::new(std::cell::Cell::new(true));
     let speech_panel = Panel::builder(&notebook).build();
     notebook.add_page(&speech_panel, &t!("Speech"), false, None);

@@ -120,12 +120,93 @@ pub fn stats_target(
     source_mount: &str,
     listener_url: &str,
 ) -> Result<StatsTarget, String> {
+    let resolved = resolve(server, port, source_mount, listener_url)?;
+    Ok(StatsTarget {
+        status_url: format!(
+            "{}://{}:{}{}",
+            resolved.scheme,
+            resolved.host,
+            resolved.port,
+            resolved.status_path.as_deref().unwrap_or(STATUS_PATH)
+        ),
+        mount: resolved.mount,
+    })
+}
+
+/// The address a listener tunes in at, for a direct Icecast service.
+///
+/// The same field, read for the other thing it says. `listener_url` names where
+/// the audience is; a status document is what [`stats_target`] wants from that
+/// and a listen URL is what the Home tab's "Go to stream page" and a Mastodon
+/// `{url}` want, so both are rendered from one [`resolve`] rather than from two
+/// parsers that would drift.
+///
+/// The mount matters more here than it does for counting. A field naming only a
+/// server — "count everyone on my relay" — leaves the audience's mount genuinely
+/// unknown, so this falls back on the mount we publish to, on the server we
+/// publish to: not where the relay's listeners are, but a real address that
+/// really plays this stream, which beats having nothing to post. A default port
+/// for the scheme is left off, because `http://radio.example.com:80/live.mp3` is
+/// a URL nobody would write down.
+pub fn listen_url(
+    server: &str,
+    port: u16,
+    source_mount: &str,
+    listener_url: &str,
+) -> Result<String, String> {
+    let resolved = resolve(server, port, source_mount, listener_url)?;
+    let mount = match resolved.mount {
+        Some(mount) => mount,
+        None => {
+            let source_mount = source_mount.trim();
+            if source_mount.is_empty() {
+                return Err(
+                    "Pubsplash does not know which mount listeners are on.".to_string()
+                );
+            }
+            with_leading_slash(source_mount)
+        }
+    };
+    let default_port = if resolved.scheme == "https" { 443 } else { 80 };
+    let authority = if resolved.port == default_port {
+        resolved.host
+    } else {
+        format!("{}:{}", resolved.host, resolved.port)
+    };
+    Ok(format!("{}://{authority}{mount}", resolved.scheme))
+}
+
+/// The listener count URL field, resolved to an endpoint and a mount.
+///
+/// One parse, two renderings — see [`listen_url`].
+struct Resolved {
+    /// `http` or `https`.
+    scheme: String,
+    host: String,
+    port: u16,
+    /// The mount, with its leading slash, or `None` when the field named a whole
+    /// server rather than one mount.
+    mount: Option<String>,
+    /// Set only when the field pointed straight at a status document: the path
+    /// and query to fetch verbatim, so a URL that already filters goes on
+    /// filtering. Meaningless to a listen URL, which uses `mount`.
+    status_path: Option<String>,
+}
+
+fn resolve(
+    server: &str,
+    port: u16,
+    source_mount: &str,
+    listener_url: &str,
+) -> Result<Resolved, String> {
     let field = listener_url.trim();
     if field.is_empty() {
         let (host, port) = configured_endpoint(server, port)?;
         let source_mount = source_mount.trim();
-        return Ok(StatsTarget {
-            status_url: format!("http://{host}:{port}{STATUS_PATH}"),
+        return Ok(Resolved {
+            scheme: "http".to_string(),
+            host,
+            port,
             // The root mount is a real mount, spelled `/` by
             // `super::normalize_mount` and reported as `/` by Icecast, so it
             // has to survive the leading-slash trim rather than reading as no
@@ -133,6 +214,7 @@ pub fn stats_target(
             // by `direct_icecast_target`; counting the whole server is the
             // honest answer for the case that cannot arrive.
             mount: (!source_mount.is_empty()).then(|| with_leading_slash(source_mount)),
+            status_path: None,
         });
     }
 
@@ -202,16 +284,22 @@ pub fn stats_target(
             Some(query) => format!("{path}?{query}"),
             None => path.to_string(),
         };
-        return Ok(StatsTarget {
-            status_url: format!("{scheme}://{host}:{port}{suffix}"),
+        return Ok(Resolved {
+            scheme,
+            host,
+            port,
             mount: query
                 .and_then(mount_in_query)
                 .map(|m| with_leading_slash(&m)),
+            status_path: Some(suffix),
         });
     }
-    Ok(StatsTarget {
-        status_url: format!("{scheme}://{host}:{port}{STATUS_PATH}"),
+    Ok(Resolved {
+        scheme,
+        host,
+        port,
         mount: (!trimmed.is_empty()).then(|| with_leading_slash(trimmed)),
+        status_path: None,
     })
 }
 
@@ -317,6 +405,71 @@ mod tests {
             ]
         }
     }"#;
+
+    /// The same field, read for the address rather than for the count. Every
+    /// form `stats_target` documents is walked here, because the two renderings
+    /// share one parser and this is what keeps the sharing honest.
+    #[test]
+    fn the_listen_address_is_built_from_the_same_forms() {
+        let listen = |field: &str| listen_url("radio.example.com", 8000, "/live.mp3", field);
+
+        // Empty: the endpoint we publish to, plus the mount we publish to.
+        assert_eq!(listen("").unwrap(), "http://radio.example.com:8000/live.mp3");
+        // A bare mount name, and the same thing written as a path: the relay's
+        // mount on our own server.
+        assert_eq!(
+            listen("stream.mp3").unwrap(),
+            "http://radio.example.com:8000/stream.mp3"
+        );
+        assert_eq!(
+            listen("/stream.mp3").unwrap(),
+            "http://radio.example.com:8000/stream.mp3"
+        );
+        // A relay elsewhere, with and without a port of its own.
+        assert_eq!(
+            listen("relay.example.com:8010/stream.mp3").unwrap(),
+            "http://relay.example.com:8010/stream.mp3"
+        );
+        assert_eq!(
+            listen("http://relay.example.com/stream.mp3").unwrap(),
+            "http://relay.example.com/stream.mp3"
+        );
+        // The scheme's own port is left off; any other port is kept.
+        assert_eq!(
+            listen("https://listen.example.com:443/stream.mp3").unwrap(),
+            "https://listen.example.com/stream.mp3"
+        );
+        assert_eq!(
+            listen("https://listen.example.com:8443/stream.mp3").unwrap(),
+            "https://listen.example.com:8443/stream.mp3"
+        );
+        // Our own server written out again keeps the port from the dialog, the
+        // same rule the status URL follows.
+        assert_eq!(
+            listen("radio.example.com/stream.mp3").unwrap(),
+            "http://radio.example.com:8000/stream.mp3"
+        );
+        // A server and no mount names no one stream, so the mount we publish to
+        // stands in — a real address on the server they named.
+        assert_eq!(
+            listen("http://relay.example.com:8000/").unwrap(),
+            "http://relay.example.com:8000/live.mp3"
+        );
+        // A status document that filters names its mount, and that is the one.
+        assert_eq!(
+            listen("http://relay.example.com:8000/status-json.xsl?mount=/stream.mp3").unwrap(),
+            "http://relay.example.com:8000/stream.mp3"
+        );
+        // Credentials never survive into an address we hand out.
+        assert_eq!(
+            listen("http://user:pw@relay.example.com:8000/stream.mp3").unwrap(),
+            "http://relay.example.com:8000/stream.mp3"
+        );
+        // No server at all, and no mount at all, are the two ways to have no
+        // address rather than a wrong one.
+        assert!(listen_url("", 8000, "/live.mp3", "").is_err());
+        assert!(listen_url("radio.example.com", 8000, "", "").is_err());
+    }
 
     #[test]
     fn an_empty_field_counts_the_mount_we_publish_to() {

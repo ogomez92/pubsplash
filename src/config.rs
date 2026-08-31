@@ -28,7 +28,16 @@ pub struct Config {
     pub sounds: SoundsConfig,
     pub speech: SpeechConfig,
     pub keybinds: crate::keybind::KeybindsConfig,
-    pub mastodon: MastodonConfig,
+    /// The app-wide Mastodon block written by Pubsplash 2.0 and earlier, when
+    /// there was one account for every streaming service.
+    ///
+    /// Read once and moved into a service by [`Config::migrate_mastodon`], which
+    /// clears it; `skip_serializing_if` then keeps it out of every file written
+    /// afterwards. It is an `Option` rather than a `MastodonConfig` so that
+    /// "absent" and "present but all defaults" stay distinguishable — the
+    /// migration must not overwrite a service's settings with an empty block.
+    #[serde(rename = "mastodon", skip_serializing_if = "Option::is_none")]
+    pub legacy_mastodon: Option<MastodonConfig>,
     pub updates: UpdatesConfig,
 }
 
@@ -61,6 +70,76 @@ impl Config {
             bus.volume = clamp_volume(bus.volume, bus.boost);
         }
         self.audio.master_volume = clamp_volume(self.audio.master_volume, self.audio.master_boost);
+    }
+
+    /// Moves the pre-2.1 app-wide Mastodon block into the streaming services,
+    /// which is where it lives now.
+    ///
+    /// **The account goes to exactly one service.** A token copied into every
+    /// service would look like a fan-out and behave like a trap: unlinking one
+    /// of them revokes the token server-side, and the other copies would then be
+    /// live-looking settings that can never post. So the credentials land on the
+    /// service the user was last connected to — the one they were announcing
+    /// from — falling back to the main Audiopub site.
+    ///
+    /// **The templates and the announcement defaults go to every service**, and
+    /// are safe to: they are wording and preferences, not credentials, and a
+    /// user who has written five templates should not find four of their
+    /// services empty. A service that somehow already carries its own settings
+    /// (a hand-edited file, or a downgrade and upgrade again) is left alone.
+    ///
+    /// Runs after [`ConnectionConfig::ensure_main_site`], so there is always at
+    /// least one service to move into.
+    pub fn migrate_mastodon(&mut self) {
+        let Some(legacy) = self.legacy_mastodon.take() else {
+            return;
+        };
+        if legacy == MastodonConfig::default() || self.connection.sites.is_empty() {
+            return;
+        }
+        let target = self
+            .connection
+            .last_used_site
+            .as_deref()
+            .and_then(|id| {
+                self.connection
+                    .sites
+                    .iter()
+                    .position(|site| site.id == id || site.url == id)
+            })
+            .or_else(|| self.connection.sites.iter().position(SiteConfig::is_main))
+            .unwrap_or(0);
+        let shared = legacy.clone();
+        let linked = legacy.is_linked();
+        let account = legacy.account.clone();
+        self.connection.sites[target].mastodon = legacy;
+        for (index, site) in self.connection.sites.iter_mut().enumerate() {
+            if index == target || site.mastodon != MastodonConfig::default() {
+                continue;
+            }
+            site.mastodon.templates = shared.templates.clone();
+            site.mastodon.post_on_start = shared.post_on_start;
+            site.mastodon.periodic = shared.periodic;
+            site.mastodon.interval_minutes = shared.interval_minutes;
+        }
+        let name = self.connection.sites[target].display_name();
+        if linked {
+            log::info!(
+                "Moved the Mastodon account {account} onto the {name:?} streaming service; \
+                 announcement settings and templates were copied to every service"
+            );
+        } else {
+            log::info!(
+                "Moved the Mastodon announcement settings onto the {name:?} streaming service"
+            );
+        }
+    }
+
+    /// Repairs every service's Mastodon settings. See [`MastodonConfig::fix_up`].
+    pub fn fix_up_mastodon(&mut self) {
+        for site in &mut self.connection.sites {
+            site.mastodon.fix_up();
+        }
     }
 
     /// Gives every text-to-speech source a saved section for the engine it is
@@ -346,6 +425,16 @@ pub struct SiteConfig {
     /// rejects a very thin video track is easier to fix by raising a number than
     /// by rebuilding.
     pub rtmp_video_bitrate_kbps: u32,
+    /// The Mastodon account this service announces on, and the settings around
+    /// it.
+    ///
+    /// Per service rather than per app, because an announcement is about *this*
+    /// broadcast: the account, the wording and the "post when I start" default
+    /// all belong to the destination the stream is going to, and a user with a
+    /// personal Icecast station and a work Audiopub account has no single answer
+    /// for any of them. [`crate::ui::mastodon_post`] reads it from whichever
+    /// service is connected, so nothing has to choose.
+    pub mastodon: MastodonConfig,
 }
 
 /// YouTube's primary RTMP ingest, over TLS on 443 rather than plain 1935: it is
@@ -377,6 +466,7 @@ impl Default for SiteConfig {
             youtube_channel: String::new(),
             youtube_image: String::new(),
             rtmp_video_bitrate_kbps: DEFAULT_RTMP_VIDEO_KBPS,
+            mastodon: MastodonConfig::default(),
         }
     }
 }
@@ -521,6 +611,30 @@ impl SiteConfig {
         };
         (server, port)
     }
+
+    /// The address a listener tunes in at, for a direct Icecast service.
+    ///
+    /// An Icecast mount has no per-stream page the way Audio Pub does, but it
+    /// does have a permanent address, and it is sitting in these fields: the
+    /// endpoint plus the mount, or — when the user has told us their audience is
+    /// somewhere else — whatever `icecast_listener_url` names.
+    /// [`crate::net::stats::listen_url`] is the one thing that reads that field,
+    /// so the address announced on Mastodon and the mount whose listeners are
+    /// counted cannot disagree.
+    ///
+    /// `None` only when the fields cannot make an address at all — no server, or
+    /// no mount anywhere to be found — which is a service that could not have
+    /// streamed in the first place.
+    pub fn icecast_listen_url(&self) -> Option<String> {
+        let (server, port) = self.icecast_endpoint();
+        crate::net::stats::listen_url(
+            &server,
+            port,
+            &self.icecast_mount,
+            &self.icecast_listener_url,
+        )
+        .ok()
+    }
 }
 
 /// Audiopub's published convention: the `live.` subdomain of the site, which is
@@ -615,11 +729,15 @@ impl ArchivingConfig {
 
 /// The linked Mastodon account and the announcement settings around it.
 ///
-/// One account, not a list: announcing a stream is a single act, and a
-/// per-account fan-out is a feature nobody has asked for. The credentials are
-/// [`Secret`]s in both directions — the app's client secret and the access token
-/// are as good as a password, and `Secret`'s hand-written `Debug` is what keeps
-/// them out of the rotating log file that users are asked to share.
+/// One of these hangs off each [`SiteConfig`], not off [`Config`]: see the field
+/// there for why. Still one account per service, not a list — announcing a
+/// stream is a single act, and a per-account fan-out within one destination is a
+/// feature nobody has asked for.
+///
+/// The credentials are [`Secret`]s in both directions — the app's client secret
+/// and the access token are as good as a password, and `Secret`'s hand-written
+/// `Debug` is what keeps them out of the rotating log file that users are asked
+/// to share.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(default)]
 pub struct MastodonConfig {
@@ -1260,7 +1378,10 @@ pub fn load_from(path: &Path) -> Config {
             config.fix_up_tts_profiles();
             config.speech.fix_up();
             config.keybinds.fix_up();
-            config.mastodon.fix_up();
+            // Before the repair below, so a block that has just arrived from an
+            // older file is repaired on the same load it moves in.
+            config.migrate_mastodon();
+            config.fix_up_mastodon();
             config
         }
         // Missing, or corrupt and now renamed aside: either way the path is
@@ -1418,19 +1539,32 @@ mod tests {
         assert_eq!(config.audio.bitrate_kbps, 192);
     }
 
+    /// The Mastodon settings of the built-in Audiopub service, which the
+    /// migration tests below read back out.
+    fn main_mastodon(config: &Config) -> &MastodonConfig {
+        &config
+            .connection
+            .site(MAIN_SITE_URL)
+            .expect("the main site is always present")
+            .mastodon
+    }
+
     #[test]
     fn old_config_without_mastodon_loads_unlinked() {
         let path = temp_path("old_mastodon.json");
         std::fs::write(&path, r#"{ "audio": { "bitrate_kbps": 128 } }"#).unwrap();
         let config = load_from(&path);
-        assert_eq!(config.mastodon, MastodonConfig::default());
-        assert!(!config.mastodon.is_linked());
-        assert!(!config.mastodon.post_on_start);
-        assert_eq!(
-            config.mastodon.interval_minutes,
-            crate::mastodon::DEFAULT_INTERVAL_MINUTES,
-            "an absent interval must still select a row in the dropdown"
-        );
+        assert_eq!(config.legacy_mastodon, None);
+        for site in &config.connection.sites {
+            assert_eq!(site.mastodon, MastodonConfig::default());
+            assert!(!site.mastodon.is_linked());
+            assert!(!site.mastodon.post_on_start);
+            assert_eq!(
+                site.mastodon.interval_minutes,
+                crate::mastodon::DEFAULT_INTERVAL_MINUTES,
+                "an absent interval must still select a row in the dropdown"
+            );
+        }
     }
 
     /// A hand-edited or downgraded file must not be able to leave the app with a
@@ -1439,25 +1573,29 @@ mod tests {
     fn mastodon_settings_are_repaired_on_load() {
         let path = temp_path("mastodon_repair.json");
         let json = r#"{
-            "mastodon": {
-                "interval_minutes": 77,
-                "templates": [
-                    { "kind": "continuation", "text": "still going {url}" },
-                    { "kind": "start", "text": "broken {nonsense}" },
-                    { "kind": "start", "text": "live at {url}" }
+            "connection": {
+                "sites": [
+                    {
+                        "id": "https://audiopub.site/",
+                        "url": "https://audiopub.site/",
+                        "mastodon": {
+                            "interval_minutes": 77,
+                            "templates": [
+                                { "kind": "continuation", "text": "still going {url}" },
+                                { "kind": "start", "text": "broken {nonsense}" },
+                                { "kind": "start", "text": "live at {url}" }
+                            ]
+                        }
+                    }
                 ]
             }
         }"#;
         std::fs::write(&path, json).unwrap();
         let config = load_from(&path);
-        assert_eq!(config.mastodon.interval_minutes, 90, "77 snaps to 90");
+        let mastodon = main_mastodon(&config);
+        assert_eq!(mastodon.interval_minutes, 90, "77 snaps to 90");
         // The unusable one is gone, and what is left is in list order.
-        let rows: Vec<String> = config
-            .mastodon
-            .templates
-            .iter()
-            .map(|t| t.list_label())
-            .collect();
+        let rows: Vec<String> = mastodon.templates.iter().map(|t| t.list_label()).collect();
         assert_eq!(
             rows,
             [
@@ -1473,16 +1611,27 @@ mod tests {
     fn a_plaintext_mastodon_token_is_re_encrypted_on_save() {
         let path = temp_path("mastodon_token.json");
         let json = r#"{
-            "mastodon": {
-                "instance": "https://mastodon.social",
-                "access_token": "plaintext-token",
-                "client_secret": "plaintext-secret"
+            "connection": {
+                "sites": [
+                    {
+                        "id": "https://audiopub.site/",
+                        "url": "https://audiopub.site/",
+                        "mastodon": {
+                            "instance": "https://mastodon.social",
+                            "access_token": "plaintext-token",
+                            "client_secret": "plaintext-secret"
+                        }
+                    }
+                ]
             }
         }"#;
         std::fs::write(&path, json).unwrap();
         let config = load_from(&path);
-        assert!(config.mastodon.is_linked());
-        assert_eq!(config.mastodon.access_token.as_str(), "plaintext-token");
+        assert!(main_mastodon(&config).is_linked());
+        assert_eq!(
+            main_mastodon(&config).access_token.as_str(),
+            "plaintext-token"
+        );
         save_to(&config, &path);
         let on_disk = std::fs::read_to_string(&path).unwrap();
         assert!(
@@ -1490,13 +1639,147 @@ mod tests {
             "credentials must not survive a save in the clear"
         );
         assert_eq!(
-            load_from(&path).mastodon.access_token.as_str(),
+            main_mastodon(&load_from(&path)).access_token.as_str(),
             "plaintext-token"
         );
         // And `Debug` must never print either of them: the log file is rotated
         // and users are asked to share it.
-        let dumped = format!("{:?}", config.mastodon);
+        let dumped = format!("{:?}", main_mastodon(&config));
         assert!(!dumped.contains("plaintext"), "{dumped}");
+    }
+
+    /// The 2.0 app-wide block has to land on a service, and on the right one:
+    /// the account belongs to the destination the user was announcing from.
+    #[test]
+    fn a_pre_2_1_mastodon_block_moves_onto_the_last_used_service() {
+        let path = temp_path("mastodon_migrate.json");
+        let json = r#"{
+            "connection": {
+                "sites": [
+                    { "id": "service-2", "nickname": "My station", "service_type": "icecast" }
+                ],
+                "last_used_site": "service-2"
+            },
+            "mastodon": {
+                "instance": "https://mastodon.social",
+                "access_token": "plaintext-token",
+                "account": "@me@mastodon.social",
+                "post_on_start": true,
+                "periodic": true,
+                "interval_minutes": 120,
+                "templates": [ { "kind": "start", "text": "live at {url}" } ]
+            }
+        }"#;
+        std::fs::write(&path, json).unwrap();
+        let config = load_from(&path);
+
+        // The account went to the service that was last connected...
+        let station = config.connection.site("service-2").unwrap();
+        assert!(station.mastodon.is_linked());
+        assert_eq!(station.mastodon.account, "@me@mastodon.social");
+        assert_eq!(station.mastodon.interval_minutes, 120);
+        assert!(station.mastodon.post_on_start && station.mastodon.periodic);
+
+        // ...and to no other, because unlinking one revokes the token for all.
+        assert!(!main_mastodon(&config).is_linked());
+        assert!(main_mastodon(&config).access_token.is_empty());
+
+        // The wording and the announcement defaults are not credentials, and are
+        // copied everywhere so no service starts out empty.
+        assert_eq!(
+            main_mastodon(&config)
+                .templates
+                .iter()
+                .map(|t| t.text.as_str())
+                .collect::<Vec<_>>(),
+            ["live at {url}"]
+        );
+        assert!(main_mastodon(&config).post_on_start);
+        assert_eq!(main_mastodon(&config).interval_minutes, 120);
+
+        // And the old key is gone for good rather than being migrated again on
+        // every load.
+        assert_eq!(config.legacy_mastodon, None);
+        save_to(&config, &path);
+        let on_disk: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        assert!(on_disk.get("mastodon").is_none(), "{on_disk}");
+    }
+
+    /// With nothing to say which service was in use, the built-in Audiopub one
+    /// is the only defensible answer — and the one a single-service user has.
+    #[test]
+    fn a_migration_with_no_last_used_service_falls_back_on_the_main_site() {
+        let path = temp_path("mastodon_migrate_main.json");
+        let json = r#"{
+            "connection": {
+                "sites": [ { "id": "service-2", "nickname": "Elsewhere" } ]
+            },
+            "mastodon": {
+                "instance": "https://mastodon.social",
+                "access_token": "plaintext-token",
+                "account": "@me@mastodon.social"
+            }
+        }"#;
+        std::fs::write(&path, json).unwrap();
+        let config = load_from(&path);
+        assert!(main_mastodon(&config).is_linked());
+        assert!(
+            !config
+                .connection
+                .site("service-2")
+                .unwrap()
+                .mastodon
+                .is_linked()
+        );
+    }
+
+    /// A file already carrying per-service settings must not have them
+    /// overwritten by a stale app-wide block that a downgrade left behind.
+    #[test]
+    fn a_service_that_already_has_settings_keeps_them() {
+        let path = temp_path("mastodon_migrate_keep.json");
+        let json = r#"{
+            "connection": {
+                "sites": [
+                    {
+                        "id": "service-2",
+                        "nickname": "Mine",
+                        "mastodon": {
+                            "templates": [ { "kind": "start", "text": "mine {url}" } ]
+                        }
+                    }
+                ],
+                "last_used_site": "https://audiopub.site/"
+            },
+            "mastodon": {
+                "instance": "https://mastodon.social",
+                "access_token": "plaintext-token",
+                "templates": [ { "kind": "start", "text": "old {url}" } ]
+            }
+        }"#;
+        std::fs::write(&path, json).unwrap();
+        let config = load_from(&path);
+        assert_eq!(
+            config
+                .connection
+                .site("service-2")
+                .unwrap()
+                .mastodon
+                .templates
+                .iter()
+                .map(|t| t.text.as_str())
+                .collect::<Vec<_>>(),
+            ["mine {url}"]
+        );
+        assert_eq!(
+            main_mastodon(&config)
+                .templates
+                .iter()
+                .map(|t| t.text.as_str())
+                .collect::<Vec<_>>(),
+            ["old {url}"]
+        );
     }
 
     #[test]

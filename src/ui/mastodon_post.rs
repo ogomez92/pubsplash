@@ -7,18 +7,27 @@
 //!   state is `Live`, so a start-of-stream announcement can only ever be sent
 //!   from the `StreamStarted` pump arm — after the stream is created *and*
 //!   Icecast *and* the SSE feed are up.
-//! - **A post needs the per-stream checkbox**, not just the Preferences one.
-//!   The Preferences settings seed the Set stream info dialog; the boxes in that
+//! - **A post needs the per-stream checkbox**, not just the service's saved one.
+//!   The service's settings seed the Set stream info dialog; the boxes in that
 //!   dialog decide.
 //! - **Results never open a modal, and never reach the chat list.** They go to
 //!   the log, the way speech failures do. A modal here would land in the middle
 //!   of a live broadcast, and the chat list carries what viewers said.
+//!
+//! **Every account, template and interval read here comes from the connected
+//! streaming service**, through [`App::connected_site`](super::App::connected_site)
+//! and nowhere else. There is no app-wide Mastodon account any more: a broadcast
+//! is announced by the account belonging to the place it is going to. Since a
+//! post can only be made while a stream is live, and a stream can only be live
+//! on a connected service, that lookup always has an answer on the paths that
+//! reach the network.
 //!
 //! The flood gate is not here. It lives in `mastodon::net::post`, below every
 //! caller, so that a mistake in the scheduling above cannot reach a timeline.
 
 use crate::t;
 use super::{App, LastStream, StreamState};
+use crate::config::StreamingServiceType;
 use crate::mastodon::api::Link;
 use crate::mastodon::net::{AuthEvent, Occasion};
 use crate::mastodon::{self, TemplateKind, TokenContext};
@@ -83,16 +92,12 @@ fn dispatch(app: &Rc<App>, template: &str, occasion: Occasion) {
         );
         return;
     };
-    let (instance, token) = {
-        let config = app.config.borrow();
-        if !config.mastodon.is_linked() {
-            return;
-        }
-        (
-            config.mastodon.instance.clone(),
-            config.mastodon.access_token.clone(),
-        )
+    let Some(site) = app.connected_site() else {
+        return;
     };
+    if !site.mastodon.is_linked() {
+        return;
+    }
     let status = mastodon::compose(template, &ctx);
     // Distinct per stream and per minute, so a retry of the same announcement
     // collapses server-side while a genuinely later one does not.
@@ -103,8 +108,10 @@ fn dispatch(app: &Rc<App>, template: &str, occasion: Occasion) {
         mastodon::now_unix() / 60
     );
     mastodon::net::post(
-        instance,
-        token,
+        site.id,
+        site.mastodon.instance,
+        site.mastodon.account,
+        site.mastodon.access_token,
         status,
         key,
         occasion,
@@ -114,18 +121,25 @@ fn dispatch(app: &Rc<App>, template: &str, occasion: Occasion) {
 
 /// Called from the `NetEvent::StreamStarted` pump arm.
 pub fn on_stream_started(app: &Rc<App>) {
+    // Read once, before anything can open a dialog: this is the service the
+    // stream that has just gone live belongs to, and every decision below is
+    // made against its settings.
+    let site = app.connected_site();
     // Arm the still-streaming clock first, so it is anchored to the stream
     // going live rather than to whatever the start-of-stream post did.
     {
         let mut run = app.run.borrow_mut();
-        run.next_announcement = if run.stream_info.announce_periodic {
-            let minutes = app.config.borrow().mastodon.interval_minutes;
-            Some(Instant::now() + Duration::from_secs(u64::from(minutes) * 60))
-        } else {
-            None
+        run.next_announcement = match (&site, run.stream_info.announce_periodic) {
+            (Some(site), true) => Some(
+                Instant::now() + Duration::from_secs(u64::from(site.mastodon.interval_minutes) * 60),
+            ),
+            _ => None,
         };
     }
-    if !app.config.borrow().mastodon.is_linked() {
+    let Some(site) = site else {
+        return;
+    };
+    if !site.mastodon.is_linked() {
         return;
     }
     if !app.run.borrow().stream_info.announce_start {
@@ -142,15 +156,18 @@ pub fn on_stream_started(app: &Rc<App>) {
             );
         }
         StartAction::PostStart => {
-            let template =
-                mastodon::pick(&app.config.borrow().mastodon.templates, TemplateKind::Start);
+            let template = mastodon::pick(
+                &site.mastodon.templates,
+                TemplateKind::Start,
+                site.service_type,
+            );
             dispatch(app, &template.text, Occasion::Start);
         }
-        StartAction::AskAboutResuming => ask_about_resuming(app),
+        StartAction::AskAboutResuming => ask_about_resuming(app, site.service_type),
     }
 }
 
-fn ask_about_resuming(app: &Rc<App>) {
+fn ask_about_resuming(app: &Rc<App>, service: StreamingServiceType) {
     let Some(frame) = app.widgets(|w| w.frame) else {
         return;
     };
@@ -167,7 +184,7 @@ fn ask_about_resuming(app: &Rc<App>) {
     if answer != ID_YES {
         return;
     }
-    let Some(text) = super::mastodon_templates::prompt_one_shot(&frame) else {
+    let Some(text) = super::mastodon_templates::prompt_one_shot(&frame, service) else {
         return;
     };
     dispatch(app, &text, Occasion::Resume);
@@ -188,16 +205,26 @@ pub fn maybe_periodic(app: &Rc<App>) {
         return;
     }
     // Re-armed before the post is attempted, so a failure costs one interval
-    // rather than stopping the announcements for the rest of the stream.
-    let minutes = app.config.borrow().mastodon.interval_minutes;
+    // rather than stopping the announcements for the rest of the stream. A
+    // service that has gone away takes the default interval, which only decides
+    // when this runs again and is discarded by the `else` below anyway.
+    let site = app.connected_site();
+    let minutes = site
+        .as_ref()
+        .map(|site| site.mastodon.interval_minutes)
+        .unwrap_or(mastodon::DEFAULT_INTERVAL_MINUTES);
     app.run.borrow_mut().next_announcement =
         Some(Instant::now() + Duration::from_secs(u64::from(minutes) * 60));
-    if !app.config.borrow().mastodon.is_linked() {
+    let Some(site) = site else {
+        return;
+    };
+    if !site.mastodon.is_linked() {
         return;
     }
     let template = mastodon::pick(
-        &app.config.borrow().mastodon.templates,
+        &site.mastodon.templates,
         TemplateKind::Continuation,
+        site.service_type,
     );
     dispatch(app, &template.text, Occasion::Continuation);
 }
@@ -224,7 +251,17 @@ pub fn drain_results(app: &Rc<App>) {
                     "Posted the {} announcement to Mastodon.",
                     result.occasion.describe()
                 );
-                app.config.borrow_mut().mastodon.last_post_unix = mastodon::now_unix();
+                // Stamped on the service the post was made from, which the
+                // result carries: by now the user may have switched to another
+                // one, and the stamp belongs to the account that posted.
+                if let Some(site) = app
+                    .config
+                    .borrow_mut()
+                    .connection
+                    .site_mut(&result.service_id)
+                {
+                    site.mastodon.last_post_unix = mastodon::now_unix();
+                }
                 app.save_config();
             }
             // The gate refusing a post is a Pubsplash problem, not the user's;

@@ -11,6 +11,7 @@
 
 use crate::t;
 use super::App;
+use crate::config::StreamingServiceType;
 use crate::mastodon::{self, Template, TemplateKind};
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -19,12 +20,19 @@ use wxdragon::prelude::*;
 /// Pre-filled into the one-shot dialog when a stream resumes.
 /// The post a resumed stream announces itself with, until the user edits it.
 ///
+/// Takes the service for the same reason [`mastodon::fallback`] does: the
+/// suggestion is offered to a user who is streaming somewhere, and only an
+/// Audio Pub broadcast should say so.
+///
 /// `{url}` is the app's own placeholder, filled in when the post is made, and a
 /// translation has to keep it — `i18n::interpolate` leaves an unknown name
 /// standing rather than dropping it, so a dropped `{url}` shows up as a post
 /// with no link rather than silently losing one.
-pub fn resume_default() -> String {
-    t!("I've resumed my #Audiopub stream! Tune in at {url}")
+pub fn resume_default(service: StreamingServiceType) -> String {
+    match service {
+        StreamingServiceType::Audiopub => t!("I've resumed my #Audiopub stream! Tune in at {url}"),
+        _ => t!("I've resumed my stream! Tune in at {url}"),
+    }
 }
 
 /// Shows the add/edit dialog. `existing` is `None` for Add.
@@ -186,7 +194,7 @@ pub fn show_help(parent: &dyn WxWidget) {
 ///
 /// Pre-filled and pre-selected so the suggested wording can be replaced by just
 /// typing, the way the Set stream info fields work.
-pub fn prompt_one_shot(parent: &dyn WxWidget) -> Option<String> {
+pub fn prompt_one_shot(parent: &dyn WxWidget, service: StreamingServiceType) -> Option<String> {
     let dialog = Dialog::builder(parent, &t!("Post about the resumed stream"))
         .with_style(DialogStyle::DefaultDialogStyle | DialogStyle::ResizeBorder)
         .with_size(520, 300)
@@ -197,7 +205,7 @@ pub fn prompt_one_shot(parent: &dyn WxWidget) -> Option<String> {
     let label = StaticText::builder(&panel).with_label(&t!("Post")).build();
     let input = TextCtrl::builder(&panel)
         .with_style(TextCtrlStyle::MultiLine)
-        .with_value(&resume_default())
+        .with_value(&resume_default(service))
         .build();
     super::set_accessible_name(&input, &t!("Post"));
     super::help::tag(&input, "dialog.mastodonResume.text", "Resumed stream post");
@@ -267,18 +275,25 @@ pub fn prompt_one_shot(parent: &dyn WxWidget) -> Option<String> {
     result.borrow().clone()
 }
 
-/// Saves an edited template list: sorts it the way the list shows it, writes it
-/// and flushes. Sorting happens here — on an edit — and never on a timer, so a
-/// list a screen reader is sitting in is only ever rebuilt deliberately.
-pub fn store(app: &Rc<App>, templates: Vec<Template>) {
+/// Saves a service's edited template list: sorts it the way the list shows it,
+/// writes it and flushes. Sorting happens here — on an edit — and never on a
+/// timer, so a list a screen reader is sitting in is only ever rebuilt
+/// deliberately.
+///
+/// A service that has been removed while its Mastodon dialog was open is a
+/// no-op rather than a panic; there is nothing left to save into.
+pub fn store(app: &Rc<App>, service_id: &str, templates: Vec<Template>) {
     let mut templates = templates;
     mastodon::sort(&mut templates);
-    app.config.borrow_mut().mastodon.templates = templates;
+    if let Some(site) = app.config.borrow_mut().connection.site_mut(service_id) {
+        site.mastodon.templates = templates;
+    }
     app.save_config();
 }
 
 #[cfg(test)]
 mod tests {
+    use crate::config::StreamingServiceType;
     use crate::mastodon;
 
     #[test]
@@ -286,8 +301,22 @@ mod tests {
         // Asserted on the translated value, so a Spanish default that dropped
         // `{url}` would fail here rather than post a stream announcement with
         // no link in it.
-        let suggestion = super::resume_default();
-        assert_eq!(mastodon::validate(&suggestion), Ok(()));
-        assert!(suggestion.contains("{url}"), "got {suggestion:?}");
+        for service in [
+            StreamingServiceType::Audiopub,
+            StreamingServiceType::Icecast,
+            StreamingServiceType::Youtube,
+        ] {
+            let suggestion = super::resume_default(service);
+            assert_eq!(mastodon::validate(&suggestion), Ok(()), "{service:?}");
+            assert!(suggestion.contains("{url}"), "{service:?}: {suggestion:?}");
+        }
+        // Only an Audio Pub stream says so, the same rule `mastodon::fallback`
+        // follows.
+        assert!(
+            super::resume_default(StreamingServiceType::Audiopub).contains("#Audiopub")
+        );
+        assert!(
+            !super::resume_default(StreamingServiceType::Youtube).contains("Audiopub")
+        );
     }
 }

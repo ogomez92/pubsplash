@@ -13,11 +13,18 @@
 //! [`MIN_POST_INTERVAL`](super::MIN_POST_INTERVAL). That is a deliberate choice
 //! of where to put the check: a gate the callers opt into is a gate that a new
 //! caller forgets.
+//!
+//! The gate is kept **per account**, because an account is what a timeline
+//! belongs to. Every streaming service carries its own Mastodon account now, so
+//! a single global stamp would have let a stop-and-restart onto another service
+//! refuse a first announcement that no timeline had yet seen — a flood gate
+//! silently eating the one post the user was waiting for.
 
 use super::api::{self, Link, MastodonError};
 use super::{MIN_POST_INTERVAL, TemplateKind};
 use crate::secret::Secret;
 use crossbeam_channel::{Receiver, Sender};
+use std::collections::BTreeMap;
 use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
@@ -26,9 +33,13 @@ const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 
 static RUNTIME: OnceLock<tokio::runtime::Runtime> = OnceLock::new();
 static CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
-/// When the last post *succeeded*. A refused post does not move it, so a run of
-/// failures cannot lock the user out.
-static LAST_POST: Mutex<Option<Instant>> = Mutex::new(None);
+/// When the last post to each account *succeeded*, keyed by [`PostJob::gate_key`].
+/// A refused post does not move its stamp, so a run of failures cannot lock the
+/// user out.
+///
+/// It only ever grows, by one entry per account the user has actually posted
+/// from in this session — a handful at the very most.
+static LAST_POST: Mutex<BTreeMap<String, Instant>> = Mutex::new(BTreeMap::new());
 static POSTS: OnceLock<Sender<PostJob>> = OnceLock::new();
 
 /// Runs `future` to completion, blocking the calling thread.
@@ -82,12 +93,20 @@ impl From<TemplateKind> for Occasion {
 /// What the pump reads off `App::mastodon_rx`.
 #[derive(Debug)]
 pub struct PostResult {
+    /// The streaming service whose account this was posted from, so the pump can
+    /// stamp the right one. Carried through rather than read back off the
+    /// connection: a post outstanding while the user switches services would
+    /// otherwise land its stamp on the wrong account's settings.
+    pub service_id: String,
     pub occasion: Occasion,
     pub result: Result<(), MastodonError>,
 }
 
 struct PostJob {
+    service_id: String,
     instance: String,
+    /// `@user@host`, only ever used to key the flood gate.
+    account: String,
     token: Secret,
     status: String,
     key: String,
@@ -95,12 +114,27 @@ struct PostJob {
     reply: Sender<PostResult>,
 }
 
+impl PostJob {
+    /// What [`LAST_POST`] is keyed by: the account, which is the timeline being
+    /// protected. An account Pubsplash has never been told the name of falls
+    /// back to the instance, which is a coarser gate rather than none at all.
+    fn gate_key(&self) -> String {
+        if self.account.trim().is_empty() {
+            self.instance.clone()
+        } else {
+            self.account.trim().to_string()
+        }
+    }
+}
+
 /// Queues a post. Returns immediately; the outcome arrives on `reply`.
 ///
 /// Posts are serialized through one worker so they go out in the order they
 /// were asked for, and so the flood gate below sees them one at a time.
 pub fn post(
+    service_id: String,
     instance: String,
+    account: String,
     token: Secret,
     status: String,
     key: String,
@@ -117,7 +151,9 @@ pub fn post(
     });
     if sender
         .send(PostJob {
+            service_id,
             instance,
+            account,
             token,
             status,
             key,
@@ -150,6 +186,7 @@ fn post_loop(jobs: Receiver<PostJob>) {
             ),
         }
         let _ = job.reply.send(PostResult {
+            service_id: job.service_id.clone(),
             occasion: job.occasion,
             result,
         });
@@ -161,9 +198,12 @@ fn send_one(job: &PostJob) -> Result<(), MastodonError> {
     if job.instance.is_empty() || job.token.is_empty() {
         return Err(MastodonError::NotLinked);
     }
-    // The gate. Held across the request so two jobs can never both pass it.
+    // The gate. The whole map is held across the request so two jobs can never
+    // both pass it — the worker is single-threaded, so nothing else is waiting
+    // on it anyway.
+    let key = job.gate_key();
     let mut last = LAST_POST.lock().unwrap_or_else(|e| e.into_inner());
-    if let Some(previous) = *last
+    if let Some(previous) = last.get(&key)
         && previous.elapsed() < MIN_POST_INTERVAL
     {
         return Err(MastodonError::RateLimited);
@@ -175,7 +215,7 @@ fn send_one(job: &PostJob) -> Result<(), MastodonError> {
         &job.key,
     ));
     if result.is_ok() {
-        *last = Some(Instant::now());
+        last.insert(key, Instant::now());
     }
     result
 }
@@ -184,7 +224,7 @@ fn send_one(job: &PostJob) -> Result<(), MastodonError> {
 /// without this one test's post would refuse the next test's.
 #[cfg(test)]
 pub fn reset_gate() {
-    *LAST_POST.lock().unwrap_or_else(|e| e.into_inner()) = None;
+    LAST_POST.lock().unwrap_or_else(|e| e.into_inner()).clear();
 }
 
 /// What an authorization attempt reports back, in order.
@@ -246,15 +286,38 @@ pub fn revoke_in_background(instance: String, client_id: String, secret: Secret,
 mod tests {
     use super::*;
 
+    const ACCOUNT: &str = "@me@example.test";
+
     fn job(instance: &str, token: &str) -> PostJob {
+        job_for(instance, token, ACCOUNT)
+    }
+
+    fn job_for(instance: &str, token: &str, account: &str) -> PostJob {
         PostJob {
+            service_id: "service-1".into(),
             instance: instance.into(),
+            account: account.into(),
             token: Secret::new(token),
             status: "hi".into(),
             key: "k".into(),
             occasion: Occasion::Continuation,
             reply: crossbeam_channel::unbounded().0,
         }
+    }
+
+    fn stamp(key: &str, when: Instant) {
+        LAST_POST
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(key.to_string(), when);
+    }
+
+    fn stamped(key: &str) -> Option<Instant> {
+        LAST_POST
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(key)
+            .copied()
     }
 
     /// The gate is what stops a bug upstream becoming a flood on someone's
@@ -274,20 +337,33 @@ mod tests {
             send_one(&job("https://example.test", "")),
             Err(MastodonError::NotLinked)
         );
-        assert!(LAST_POST.lock().unwrap().is_none());
+        assert!(stamped(ACCOUNT).is_none());
 
         // Inside the interval: refused. The host would fail loudly (and slowly)
         // if the gate ever let one through, which is the point.
-        *LAST_POST.lock().unwrap() = Some(Instant::now());
+        stamp(ACCOUNT, Instant::now());
         let linked = job("https://invalid.invalid", "token");
         assert_eq!(send_one(&linked), Err(MastodonError::RateLimited));
         // A refusal must not extend the window, or a busy app would starve.
-        let before = LAST_POST.lock().unwrap().unwrap();
+        let before = stamped(ACCOUNT).unwrap();
         assert_eq!(send_one(&linked), Err(MastodonError::RateLimited));
-        assert_eq!(LAST_POST.lock().unwrap().unwrap(), before);
+        assert_eq!(stamped(ACCOUNT).unwrap(), before);
+
+        // Another account's timeline has seen nothing, so it is not made to
+        // wait. This is the case that broke when every streaming service shared
+        // one stamp: stopping a stream and starting another somewhere else ate
+        // the first announcement.
+        let elsewhere = job_for("https://invalid.invalid", "token", "@me@other.test");
+        assert_ne!(send_one(&elsewhere), Err(MastodonError::RateLimited));
+
+        // An account with no name falls back to the instance rather than to no
+        // gate at all.
+        let unnamed = job_for("https://invalid.invalid", "token", "   ");
+        stamp("https://invalid.invalid", Instant::now());
+        assert_eq!(send_one(&unnamed), Err(MastodonError::RateLimited));
 
         // Outside the interval the gate opens again.
-        *LAST_POST.lock().unwrap() = Some(Instant::now() - MIN_POST_INTERVAL);
+        stamp(ACCOUNT, Instant::now() - MIN_POST_INTERVAL);
         assert_ne!(send_one(&linked), Err(MastodonError::RateLimited));
 
         reset_gate();

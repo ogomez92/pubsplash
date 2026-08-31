@@ -21,6 +21,7 @@ pub mod api;
 pub mod net;
 pub mod oauth;
 
+use crate::config::StreamingServiceType;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
 
@@ -30,8 +31,8 @@ pub const HASHTAG: &str = "#PubsplashStreamInfo";
 /// The floor between two successful posts. Not user-alterable.
 pub const MIN_POST_INTERVAL: Duration = Duration::from_secs(30);
 
-/// The scopes we ask for: posting, and reading the account so the Preferences
-/// tab can show which account is linked.
+/// The scopes we ask for: posting, and reading the account so the service's
+/// Mastodon dialog can show which account is linked.
 pub const SCOPES: &str = "read:accounts write:statuses";
 
 /// Which moment a template is for.
@@ -74,7 +75,7 @@ impl Template {
         }
     }
 
-    /// The row shown in the Preferences list: kind, a colon, then the text.
+    /// The row shown in the templates list: kind, a colon, then the text.
     pub fn list_label(&self) -> String {
         format!("{}: {}", self.kind.label(), self.text)
     }
@@ -84,16 +85,28 @@ pub const DEFAULT_START: &str = "I'm live on #Audiopub right now! Catch the stre
 pub const DEFAULT_CONTINUATION: &str =
     "I'm still streaming on #Audiopub, catch the stream at {url}";
 
-/// The built-in template for `kind`.
+/// The same two, for a service that is not Audio Pub. Templates belong to a
+/// streaming service now, so the built-in wording has to know where the stream
+/// is going: "I'm live on #Audiopub" posted from an Icecast or YouTube service
+/// names the wrong place, and it is the one line a user who has written no
+/// templates of their own will ever send.
+pub const DEFAULT_START_ELSEWHERE: &str = "I'm live right now! Catch the stream at {url}";
+pub const DEFAULT_CONTINUATION_ELSEWHERE: &str =
+    "I'm still streaming, catch the stream at {url}";
+
+/// The built-in template for `kind` on `service`.
 ///
 /// The user can delete every template they have written; this is what stands in
 /// when they do, so the announcement paths have no failure mode to handle.
-pub fn fallback(kind: TemplateKind) -> Template {
+pub fn fallback(kind: TemplateKind, service: StreamingServiceType) -> Template {
+    let audiopub = service == StreamingServiceType::Audiopub;
     Template::new(
         kind,
-        match kind {
-            TemplateKind::Start => DEFAULT_START,
-            TemplateKind::Continuation => DEFAULT_CONTINUATION,
+        match (kind, audiopub) {
+            (TemplateKind::Start, true) => DEFAULT_START,
+            (TemplateKind::Start, false) => DEFAULT_START_ELSEWHERE,
+            (TemplateKind::Continuation, true) => DEFAULT_CONTINUATION,
+            (TemplateKind::Continuation, false) => DEFAULT_CONTINUATION_ELSEWHERE,
         },
     )
 }
@@ -101,15 +114,19 @@ pub fn fallback(kind: TemplateKind) -> Template {
 /// Chooses a template of `kind`, at random when the user has written several.
 ///
 /// **The only way any caller obtains a template.** An empty selection is not an
-/// error — it yields [`fallback`] — which is what makes "the user deleted all
-/// their templates" a non-event rather than a panic.
-pub fn pick(templates: &[Template], kind: TemplateKind) -> Template {
+/// error — it yields [`fallback`] for `service` — which is what makes "the user
+/// deleted all their templates" a non-event rather than a panic.
+pub fn pick(
+    templates: &[Template],
+    kind: TemplateKind,
+    service: StreamingServiceType,
+) -> Template {
     let matching: Vec<&Template> = templates
         .iter()
         .filter(|t| t.kind == kind && !t.text.trim().is_empty())
         .collect();
     match matching.len() {
-        0 => fallback(kind),
+        0 => fallback(kind, service),
         1 => matching[0].clone(),
         n => {
             use rand::Rng;
@@ -118,7 +135,7 @@ pub fn pick(templates: &[Template], kind: TemplateKind) -> Template {
     }
 }
 
-/// Sorts a template list the way the Preferences list shows it: by kind, then
+/// Sorts a template list the way the templates list shows it: by kind, then
 /// alphabetically within a kind. Called on add, edit and remove — never on a
 /// timer, because rebuilding a list a screen reader is sitting in makes it talk.
 pub fn sort(templates: &mut [Template]) {
@@ -356,6 +373,13 @@ pub fn help_text() -> String {
 mod tests {
     use super::*;
 
+    const AUDIOPUB: StreamingServiceType = StreamingServiceType::Audiopub;
+    const SERVICES: [StreamingServiceType; 3] = [
+        StreamingServiceType::Audiopub,
+        StreamingServiceType::Icecast,
+        StreamingServiceType::Youtube,
+    ];
+
     fn ctx() -> TokenContext {
         TokenContext {
             title: "Tuesday hangout".into(),
@@ -430,9 +454,11 @@ mod tests {
         );
         // Even an all-whitespace template still carries the tag.
         assert_eq!(compose("   ", &ctx()), HASHTAG);
-        // And the defaults do.
+        // And the defaults do, on every service type.
         for kind in TemplateKind::ALL {
-            assert!(compose(&fallback(kind).text, &ctx()).ends_with(HASHTAG));
+            for service in SERVICES {
+                assert!(compose(&fallback(kind, service).text, &ctx()).ends_with(HASHTAG));
+            }
         }
     }
 
@@ -445,28 +471,55 @@ mod tests {
 
     #[test]
     fn the_defaults_are_valid_templates() {
-        assert_eq!(validate(DEFAULT_START), Ok(()));
-        assert_eq!(validate(DEFAULT_CONTINUATION), Ok(()));
+        for kind in TemplateKind::ALL {
+            for service in SERVICES {
+                assert_eq!(validate(&fallback(kind, service).text), Ok(()), "{kind:?}");
+            }
+        }
+    }
+
+    /// The default a non-Audiopub service falls back on must not name Audio Pub:
+    /// it is the whole reason [`fallback`] takes a service at all.
+    #[test]
+    fn only_an_audiopub_service_falls_back_on_audiopub_wording() {
+        for kind in TemplateKind::ALL {
+            assert!(
+                fallback(kind, StreamingServiceType::Audiopub)
+                    .text
+                    .contains("#Audiopub"),
+                "{kind:?}"
+            );
+            for service in [
+                StreamingServiceType::Icecast,
+                StreamingServiceType::Youtube,
+            ] {
+                let text = fallback(kind, service).text;
+                assert!(!text.contains("Audiopub"), "{kind:?} on {service:?}: {text}");
+                assert!(text.contains("{url}"), "{kind:?} on {service:?}: {text}");
+            }
+        }
     }
 
     #[test]
     fn picking_from_an_empty_list_falls_back() {
         // The whole point: the user can delete every template and nothing breaks.
         for kind in TemplateKind::ALL {
-            assert_eq!(pick(&[], kind), fallback(kind));
+            for service in SERVICES {
+                assert_eq!(pick(&[], kind, service), fallback(kind, service));
+            }
         }
         // A list holding only the other kind is just as empty for our purposes.
         let only_start = [Template::new(TemplateKind::Start, "mine")];
         assert_eq!(
-            pick(&only_start, TemplateKind::Continuation),
-            fallback(TemplateKind::Continuation)
+            pick(&only_start, TemplateKind::Continuation, AUDIOPUB),
+            fallback(TemplateKind::Continuation, AUDIOPUB)
         );
-        assert_eq!(pick(&only_start, TemplateKind::Start).text, "mine");
+        assert_eq!(pick(&only_start, TemplateKind::Start, AUDIOPUB).text, "mine");
         // A blank template does not count as one.
         let blank = [Template::new(TemplateKind::Start, "   ")];
         assert_eq!(
-            pick(&blank, TemplateKind::Start),
-            fallback(TemplateKind::Start)
+            pick(&blank, TemplateKind::Start, AUDIOPUB),
+            fallback(TemplateKind::Start, AUDIOPUB)
         );
     }
 
@@ -478,8 +531,14 @@ mod tests {
             Template::new(TemplateKind::Continuation, "c"),
         ];
         for _ in 0..50 {
-            assert_eq!(pick(&templates, TemplateKind::Continuation).text, "c");
-            assert!(["a", "b"].contains(&pick(&templates, TemplateKind::Start).text.as_str()));
+            assert_eq!(
+                pick(&templates, TemplateKind::Continuation, AUDIOPUB).text,
+                "c"
+            );
+            assert!(
+                ["a", "b"]
+                    .contains(&pick(&templates, TemplateKind::Start, AUDIOPUB).text.as_str())
+            );
         }
     }
 
