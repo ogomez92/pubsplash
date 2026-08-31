@@ -276,6 +276,14 @@ fn run(
 /// default, which moves when a headset is plugged in. An unknown effective
 /// output device answers `true`: the caller must read that as "cannot rule out
 /// a collision", never as "no collision".
+///
+/// Unused on Windows, where the only caller is the `imp` below and reaches its
+/// own copy directly. The Desktop Audio dialog deliberately asks a *narrower*
+/// question inline (`scenes.rs`): it refuses only a device it can prove is the
+/// output one, because an unknown effective output must not make the picker
+/// reject every device with a message naming one. The fail-safe `None` case
+/// belongs to the open path, which can fall back to all-endpoints silently.
+#[cfg_attr(windows, allow(dead_code))]
 pub fn would_capture_pubsplash(device_id: &str) -> bool {
     imp::would_capture_pubsplash(device_id)
 }
@@ -993,6 +1001,11 @@ fn push_f32(bytes: &mut std::collections::VecDeque<u8>, producer: &mut Producer<
 ///
 /// Portable and tested here, because a discard rule exercised only by a real
 /// sound card is a rule nobody checks.
+///
+/// Not `#[cfg(target_os = "macos")]`, despite only the macOS `imp` calling it:
+/// on Windows its callers are the tests above, and gating it would take them
+/// with it — which is the coverage the doc comment is claiming.
+#[cfg_attr(windows, allow(dead_code))]
 pub fn push_samples(samples: &[f32], producer: &mut Producer<f32>) -> usize {
     if samples.is_empty() {
         return 0;

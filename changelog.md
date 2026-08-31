@@ -54,6 +54,8 @@
 
 ### Fixes
 
+- **F1 context help was read out in English on a Spanish install.** All 228 help messages were translated, shipped inside the program and never used: the help text was looked up without the control's help-id, and that is the one key the catalogue files them under. Nothing about it looked wrong — the rest of the interface was translated, and the messages were sitting in `es.po` fully done.
+
 - **Microphones and application audio captured nothing at all on macOS.** Any input device not already running at exactly 48 kHz in stereo — which is every built-in Mac microphone, every headset, and every Bluetooth earbud — opened, started, reported itself running and then delivered silence, with nothing in the log to say why. Sources are now captured at whatever rate and channel count the device actually has and converted to what the mixer needs, so a mono microphone reaches both ears and a 24 kHz Bluetooth headset streams and records normally. macOS also never asked for microphone permission, because the app never got as far as really opening the device; it asks now.
 
 - **A Desktop Audio source on macOS said "reconnecting" for ever.** It cannot run there at all, so there was nothing to reconnect to — but it was reported as a device that had failed, retried every few seconds for the life of the session, and read as a microphone that had come unplugged. A source that cannot run now says **"unavailable"** once and stops, with the reason in the log.

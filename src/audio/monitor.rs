@@ -339,6 +339,11 @@ fn fill(bytes: &mut VecDeque<u8>, consumer: &mut Consumer<f32>, samples: usize) 
 ///
 /// Portable, and tested here, because a ring-emptying rule that is only exercised
 /// by a real sound card is a rule nobody checks.
+///
+/// Not `#[cfg(target_os = "macos")]`, despite only the macOS `imp` calling it:
+/// on Windows its callers are the tests above, and gating it would take them
+/// with it — which is the coverage the doc comment is claiming.
+#[cfg_attr(windows, allow(dead_code))]
 fn pull(consumer: &mut Consumer<f32>, out: &mut [f32]) -> usize {
     // One chunk rather than a `pop` per sample; see `mixer::pull_block` for why
     // that adds up.

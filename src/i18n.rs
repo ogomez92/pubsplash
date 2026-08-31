@@ -172,12 +172,6 @@ fn catalog() -> Option<&'static Catalog> {
     CATALOG.get().and_then(|c| c.as_ref())
 }
 
-/// Whether a non-English catalog is active. Used only to decide whether a
-/// language change needs a restart notice.
-pub fn is_translated() -> bool {
-    catalog().is_some()
-}
-
 // --- lookup ----------------------------------------------------------------
 
 /// Translates one message. Returns `msgid` unchanged when there is no catalog
@@ -829,6 +823,11 @@ fn unquote(text: &str) -> String {
 /// Escapes a string for writing into a `.po`. Used by the `gen-po` tool, which
 /// is why it lives here beside [`unquote`] rather than in the binary — the two
 /// have to agree, and a round-trip test can only be written where both are.
+/// Only `gen-po` calls this. It lives here rather than in that binary so the
+/// round-trip test below can hold it against [`unquote`], its inverse — this
+/// file is `#[path]`-included into three binaries besides the app, and it is
+/// dead in all of them but one.
+#[allow(dead_code)]
 pub fn po_escape(text: &str) -> String {
     let mut out = String::with_capacity(text.len() + 8);
     for c in text.chars() {
@@ -1035,6 +1034,35 @@ msgstr[1] "{n} oyentes"
         let listeners = &catalog.entries[&(None, "Listeners: {count}".to_string())][0];
         let args: &[(&str, &dyn std::fmt::Display)] = &[("count", &12)];
         assert_eq!(interpolate(listeners, args), "Oyentes: 12");
+    }
+
+    #[test]
+    fn a_context_help_message_is_only_reachable_with_its_context() {
+        // The property that let the F1 help go untranslated while nothing looked
+        // wrong: `gen-po` files every `help.toml` message under the control's
+        // help-id as its `msgctxt`, so the catalog carries all 228 of them and
+        // the binary embeds all of them -- and a context-free `translate` finds
+        // none of them. `ui::help::message_for_stamp` must therefore ask through
+        // `translate_ctx`. If that is ever changed back, F1 reads English out on
+        // a translated install and no test but this one would say so.
+        let catalog = Catalog::parse(CATALOGS.iter().find(|(c, _)| *c == "es").unwrap().1)
+            .expect("the Spanish catalog parses");
+        let id = "dialog.appPicker.refresh";
+        let english = "Look for applications again. Use this after starting an application, or after playing something in one, so that it shows up in the list.";
+
+        assert!(
+            catalog.entries.get(&(None, english.to_string())).is_none(),
+            "a context-keyed message must not be reachable without its context"
+        );
+        let translated = catalog
+            .entries
+            .get(&(Some(id.to_string()), english.to_string()))
+            .expect("the help message is filed under its help-id");
+        assert!(
+            translated[0].starts_with("Vuelve a buscar"),
+            "unexpected translation: {}",
+            translated[0]
+        );
     }
 
     #[test]

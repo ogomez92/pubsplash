@@ -129,13 +129,24 @@ fn messages() -> &'static HashMap<String, String> {
 
 /// The message for a stamped property value — index + 1, or 0/negative for a
 /// control that was never tagged. Portable, so both `imp`s resolve the same way.
+///
+/// The authored English goes through [`crate::i18n::translate_ctx`] keyed by the
+/// control's help-id, which is the `msgctxt` `gen-po` writes for every
+/// `help.toml` entry. Without that step the catalogs still *carry* all 228
+/// translated help messages and the binary still embeds them — nothing looks
+/// wrong anywhere — but F1 reads the English out on a translated install,
+/// because a `msgctxt` entry is only ever found by a lookup that supplies one.
 fn message_for_stamp(raw: isize) -> String {
     if raw <= 0 {
-        return generic().to_string();
+        return generic();
     }
     id_for((raw - 1) as usize)
-        .and_then(|id| messages().get(&id).cloned())
-        .unwrap_or_else(|| generic().to_string())
+        .and_then(|id| {
+            messages()
+                .get(&id)
+                .map(|message| crate::i18n::translate_ctx(&id, message))
+        })
+        .unwrap_or_else(generic)
 }
 
 /// A window property for the stamp, a low-level keyboard hook for the keys, and
