@@ -19,7 +19,7 @@ pub mod star;
 /// Every engine, in the order the picker shows them: the two that need no
 /// setup first, then the rest alphabetically.
 pub const ALL: &[(&str, &str)] = &[
-    (SAPI, "SAPI 5"),
+    (SAPI, LOCAL_VOICE_NAME),
     (EDGE, "Microsoft Edge"),
     (AWS, "AWS Polly"),
     (AZURE, "Azure"),
@@ -31,6 +31,19 @@ pub const ALL: &[(&str, &str)] = &[
 ];
 
 pub const SAPI: &str = "sapi";
+
+/// What the local voice is called in the interface.
+///
+/// The engine *id* is `sapi` on both platforms — deliberately, so that a
+/// settings file written on one resolves on the other, and because `resolve_id`
+/// falls back to it (see `tts::sapi`'s header). The **name** is a different
+/// question: "SAPI 5" is a Windows API that does not exist on a Mac, where this
+/// engine is `AVSpeechSynthesizer` and what a user calls it is the system voice.
+/// Showing a Mac user "SAPI 5" would be naming someone else's operating system.
+#[cfg(windows)]
+pub const LOCAL_VOICE_NAME: &str = "SAPI 5";
+#[cfg(not(windows))]
+pub const LOCAL_VOICE_NAME: &str = "System voice";
 pub const EDGE: &str = "edge";
 pub const AWS: &str = "polly";
 pub const AZURE: &str = "azure";
@@ -59,7 +72,7 @@ pub fn display_name(engine: &str) -> &'static str {
     ALL.iter()
         .find(|(id, _)| *id == engine)
         .map(|(_, name)| *name)
-        .unwrap_or("SAPI 5")
+        .unwrap_or(LOCAL_VOICE_NAME)
 }
 
 /// Whether an engine's voice ids are opaque keys rather than the voice's own

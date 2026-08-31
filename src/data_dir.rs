@@ -2,8 +2,8 @@
 //! Where Pubsplash keeps everything it writes: settings, logs, crash dumps,
 //! caches, sound packs and the update staging area.
 //!
-//! There are two layouts, decided once per process from the folder the running
-//! executable sits in:
+//! On Windows there are two layouts, decided once per process from the folder
+//! the running executable sits in. On macOS there is one — see below.
 //!
 //! - **Portable** — a copy unpacked from the release ZIP, which the ZIP's
 //!   `portable.txt` marker identifies. Everything goes in `user_data\` beside
@@ -15,6 +15,17 @@
 //!   `%LOCALAPPDATA%\pubsplash`, as it has always been. An installed copy must
 //!   not write beside its executable, because a per-machine install lives in
 //!   Program Files, which an unelevated Pubsplash cannot write to.
+//!
+//! **macOS has only the second of those**, `~/Library/Application Support/pubsplash`,
+//! and that is a decision rather than an omission. Portable exists on Windows
+//! because a Windows install is a folder of loose files that someone may want to
+//! carry on a stick; a Mac application already *is* a single self-contained
+//! object, one that the user drags where they like and that the system may
+//! relocate, translocate or run read-only from a quarantined mount. Writing
+//! settings inside the bundle is a thing macOS actively works against. So
+//! [`is_portable`] is always false there, the migration below never runs, and
+//! `update::install_kind` — which reads the same marker to decide whether a copy
+//! may overwrite its own folder — does not exist on macOS at all.
 //!
 //! Resolved from `current_exe`, never the working directory, which a shortcut's
 //! "Start in" can point anywhere — the same rule [`crate::update::install_kind`],
@@ -65,6 +76,26 @@ fn resolved() -> &'static Root {
 }
 
 /// The folder every other path in the app hangs off.
+/// The file name of a sibling helper binary, with the extension this platform
+/// gives an executable.
+///
+/// Pubsplash ships three helpers beside itself — the plugin scanner, the Sound
+/// Pack Manager and the updater — and every one is found by name next to
+/// `current_exe`. Spelling `.exe` at the call sites made all three unfindable on
+/// macOS, and the symptom was not obvious: the scanner reported itself
+/// *missing*, which reads as a broken install rather than as a wrong file name.
+///
+/// Here rather than beside its callers because this is the module that already
+/// answers "where do Pubsplash's files live", and because it depends on nothing
+/// but `std` — which is what lets the standalone binaries `#[path]`-include it.
+pub fn binary_name(stem: &str) -> String {
+    if cfg!(windows) {
+        format!("{stem}.exe")
+    } else {
+        stem.to_string()
+    }
+}
+
 pub fn root() -> &'static Path {
     &resolved().path
 }
@@ -82,22 +113,37 @@ pub fn is_portable_dir(dir: &Path) -> bool {
     dir.join(PORTABLE_MARKER).is_file()
 }
 
-/// `%LOCALAPPDATA%\pubsplash` — where every non-portable layout keeps its data,
-/// and where a portable copy from before this existed left its own.
+/// The per-user data folder: `%LOCALAPPDATA%\pubsplash` on Windows,
+/// `~/Library/Application Support/pubsplash` on macOS.
+///
+/// On Windows this is also where a portable copy from before the portable layout
+/// existed left its own data, which is what [`migrate_from_legacy`] goes looking
+/// for — hence the name.
 pub fn legacy_root() -> PathBuf {
     dirs::data_local_dir()
-        .expect("LOCALAPPDATA should always exist on Windows")
+        .expect("the per-user data directory should always resolve")
         .join("pubsplash")
 }
 
 /// The data folder for a portable copy, or `None` if this is not one.
+///
+/// Always `None` on macOS: there is no portable layout there, so nothing beside
+/// the executable is ever consulted and a stray `portable.txt` inside somebody's
+/// `.app` cannot redirect where their settings live.
+#[cfg(windows)]
 fn portable_root() -> Option<PathBuf> {
     let exe = std::env::current_exe().ok()?;
     portable_root_in(exe.parent()?)
 }
 
+#[cfg(not(windows))]
+fn portable_root() -> Option<PathBuf> {
+    None
+}
+
 /// The pure half of [`portable_root`], so the rule is testable without a real
 /// portable install.
+#[cfg(windows)]
 fn portable_root_in(install_dir: &Path) -> Option<PathBuf> {
     is_portable_dir(install_dir).then(|| install_dir.join(PORTABLE_DATA_DIR))
 }
@@ -183,6 +229,20 @@ fn copy_dir(from: &Path, to: &Path) -> std::io::Result<()> {
 
 #[cfg(test)]
 mod tests {
+    use super::binary_name;
+
+    /// The helpers are found by name next to the running executable, so the
+    /// extension has to follow the platform rather than the developer's.
+    #[test]
+    fn a_helper_binary_takes_this_platforms_extension() {
+        let scanner = binary_name("pubsplash-scan");
+        if cfg!(windows) {
+            assert_eq!(scanner, "pubsplash-scan.exe");
+        } else {
+            assert_eq!(scanner, "pubsplash-scan");
+        }
+    }
+
     use super::*;
 
     /// A scratch directory that cleans itself up, so these tests leave nothing
@@ -214,6 +274,10 @@ mod tests {
         std::fs::write(dir.join(name), body).expect("writing a scratch file");
     }
 
+    /// The portable rule is Windows-only, so its tests are too — on macOS
+    /// `portable_root` is a constant `None` and `portable_root_in` does not
+    /// exist to be asked.
+    #[cfg(windows)]
     #[test]
     fn the_marker_puts_the_data_beside_the_executable() {
         let scratch = Scratch::new("marker");
@@ -224,6 +288,7 @@ mod tests {
         );
     }
 
+    #[cfg(windows)]
     #[test]
     fn without_the_marker_there_is_no_portable_root() {
         let scratch = Scratch::new("no-marker");
@@ -234,6 +299,7 @@ mod tests {
     /// The data folder must never be the install folder itself: the portable
     /// updater replaces the files it ships at the top level, and the user's
     /// settings have to sit somewhere it does not look.
+    #[cfg(windows)]
     #[test]
     fn the_portable_root_is_a_subfolder() {
         let scratch = Scratch::new("subfolder");

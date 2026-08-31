@@ -4,14 +4,27 @@
 fn main() {
     validate_default_sound_pack();
 
-    if std::env::var("CARGO_CFG_WINDOWS").is_ok() {
-        let mut res = winresource::WindowsResource::new();
-        res.set_icon("assets/icon/pubsplash.ico");
-        res.set_manifest(COMMON_CONTROLS_V6_MANIFEST);
-        res.compile().expect("failed to embed Windows resources");
-    }
+    embed_windows_resources();
 }
 
+/// `winresource` is a Windows-only build dependency, so this cannot be a
+/// runtime `if` on `CARGO_CFG_WINDOWS` -- the crate is not in the graph at all
+/// on another platform and naming it would fail to compile. `cfg(windows)` in a
+/// build script is the *host*, which is also what a `[target.'cfg(windows)']`
+/// build-dependency section matches; the two agree because Windows builds are
+/// native.
+#[cfg(windows)]
+fn embed_windows_resources() {
+    let mut res = winresource::WindowsResource::new();
+    res.set_icon("assets/icon/pubsplash.ico");
+    res.set_manifest(COMMON_CONTROLS_V6_MANIFEST);
+    res.compile().expect("failed to embed Windows resources");
+}
+
+#[cfg(not(windows))]
+fn embed_windows_resources() {}
+
+#[cfg(windows)]
 const COMMON_CONTROLS_V6_MANIFEST: &str = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
   <assemblyIdentity version="1.0.0.0" processorArchitecture="*" name="Pubsplash" type="win32"/>

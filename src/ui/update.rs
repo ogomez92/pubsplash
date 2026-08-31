@@ -251,9 +251,14 @@ fn offer(app: &Rc<App>, trigger: Trigger, manifest: crate::update::manifest::Man
     };
     let current = crate::update::version::current();
 
-    // A layout we do not recognise — a source build, or a copy someone has
-    // pulled files out of — must never overwrite itself. Say what is available
-    // and let the user decide what to do about it.
+    // A layout that cannot update itself in place. On Windows that means a
+    // layout we do not recognise — a source build, or a copy someone has pulled
+    // files out of — and overwriting it would be reckless. On macOS it is *every*
+    // copy: the app ships as a DMG the user drags to Applications, there is no
+    // installer and no portable folder, and replacing a running bundle is the
+    // system's job rather than ours. Same behaviour either way — say what is
+    // available and let the user decide — but not the same news, so not the same
+    // wording.
     if kind == install_kind::InstallKind::Unknown {
         if !trigger.reports_quiet_outcomes() {
             log::info!(
@@ -263,12 +268,22 @@ fn offer(app: &Rc<App>, trigger: Trigger, manifest: crate::update::manifest::Man
         }
         let ask = MessageDialog::builder(
             owner.as_widget(),
-            &t!(
-                "Pubsplash {version} is available; you are running {current}. This copy was not \
-                 installed in a way Pubsplash can update on its own. Open the download page?",
-                version = manifest.version,
-                current = current
-            ),
+            &if cfg!(target_os = "macos") {
+                t!(
+                    "Pubsplash {version} is available; you are running {current}. Pubsplash does \
+                     not update itself on macOS. Open the download page?",
+                    version = manifest.version,
+                    current = current
+                )
+            } else {
+                t!(
+                    "Pubsplash {version} is available; you are running {current}. This copy was \
+                     not installed in a way Pubsplash can update on its own. Open the download \
+                     page?",
+                    version = manifest.version,
+                    current = current
+                )
+            },
             &t!("Update available"),
         )
         .with_style(MessageDialogStyle::YesNo | MessageDialogStyle::IconQuestion)
@@ -382,7 +397,10 @@ fn apply(app: &Rc<App>, plan: ApplyPlan) {
     }
     // DETACHED_PROCESS so it does not inherit this process's console, and a new
     // process group so nothing that signals Pubsplash's group on the way out can
-    // reach the one process that has to survive it.
+    // reach the one process that has to survive it. Windows-only because the
+    // helper is: macOS replaces a running bundle quite happily, so there is no
+    // separate process that has to outlive us there.
+    #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
         const CREATE_NEW_PROCESS_GROUP: u32 = 0x0000_0200;

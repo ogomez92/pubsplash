@@ -3,12 +3,17 @@
 //! Typing an executable name from memory is the one thing a screen-reader user
 //! cannot verify, so the picker offers the running apps instead. "Running" is
 //! deliberately narrower than "in the process table": what matters is whether
-//! Windows has ever seen the process open an audio stream, which is exactly
-//! what the WASAPI session list records — sessions stay enumerable while they
-//! are `Inactive` or `Expired`, so an app that played a sound a minute ago is
-//! still offered. Everything else the user might want (an app that has not made
-//! a sound yet) is reachable through the wider view, keyed off having a visible
+//! the OS has ever seen the process open an audio stream, which is exactly what
+//! the WASAPI session list records — sessions stay enumerable while they are
+//! `Inactive` or `Expired`, so an app that played a sound a minute ago is still
+//! offered. Everything else the user might want (an app that has not made a
+//! sound yet) is reachable through the wider view, keyed off having a visible
 //! window, and anything still missing can be typed by hand.
+//!
+//! The platform seam is those two questions and nothing else: which pids have
+//! made a sound, and which pids own a window. [`candidates`] — the filtering,
+//! the system-process exclusion, the dedupe and the sort — takes them as plain
+//! pid sets and is portable, which is also why it is the part that has tests.
 
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
@@ -162,70 +167,7 @@ fn candidates(
 /// than one process tree — two Brave windows launched separately are two roots,
 /// and the one that is making a sound is the one the user means.
 pub(crate) fn session_pids() -> HashSet<u32> {
-    use windows::Win32::Foundation::S_OK;
-    use windows::Win32::Media::Audio::{
-        DEVICE_STATE_ACTIVE, IAudioSessionControl2, IAudioSessionManager2, IMMDeviceEnumerator,
-        MMDeviceEnumerator, eRender,
-    };
-    use windows::Win32::System::Com::{CLSCTX_ALL, CoCreateInstance};
-    use windows_core::Interface;
-
-    let mut pids = HashSet::new();
-    device::ensure_com_initialized();
-    // SAFETY: plain COM calls; every interface pointer comes from a checked
-    // `Result` and is dropped by windows-rs at the end of its scope.
-    unsafe {
-        let enumerator: IMMDeviceEnumerator =
-            match CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL) {
-                Ok(e) => e,
-                Err(e) => {
-                    log::warn!("app list: creating the device enumerator: {e}");
-                    return pids;
-                }
-            };
-        let Ok(devices) = enumerator.EnumAudioEndpoints(eRender, DEVICE_STATE_ACTIVE) else {
-            return pids;
-        };
-        let count = devices.GetCount().unwrap_or(0);
-        for i in 0..count {
-            let Ok(device) = devices.Item(i) else {
-                continue;
-            };
-            let manager: IAudioSessionManager2 = match device.Activate(CLSCTX_ALL, None) {
-                Ok(m) => m,
-                Err(e) => {
-                    log::debug!("app list: no session manager on output {i}: {e}");
-                    continue;
-                }
-            };
-            let Ok(sessions) = manager.GetSessionEnumerator() else {
-                continue;
-            };
-            let session_count = sessions.GetCount().unwrap_or(0);
-            for s in 0..session_count {
-                let Ok(control) = sessions.GetSession(s) else {
-                    continue;
-                };
-                let Ok(control) = control.cast::<IAudioSessionControl2>() else {
-                    continue;
-                };
-                // The system-sounds session reports the pid of whatever service
-                // is hosting it, which is not an app anyone wants to capture.
-                // Note the exact comparison: this method answers "no" with
-                // `S_FALSE`, which `is_ok` would also accept, and skipping on
-                // that would silently drop every session on the machine.
-                if control.IsSystemSoundsSession() == S_OK {
-                    continue;
-                }
-                if let Ok(pid) = control.GetProcessId()
-                    && pid != 0
-                {
-                    pids.insert(pid);
-                }
-            }
-        }
-    }
-    pids
+    imp::session_pids()
 }
 
 /// Pids owning at least one visible, titled top-level window — the same signal
@@ -234,35 +176,146 @@ pub(crate) fn session_pids() -> HashSet<u32> {
 ///
 /// Second tiebreaker for `device::resolve_apps`, after [`session_pids`].
 pub(crate) fn windowed_pids() -> HashSet<u32> {
-    use windows::Win32::Foundation::{HWND, LPARAM, TRUE};
-    use windows::Win32::UI::WindowsAndMessaging::{
-        EnumWindows, GetWindowTextLengthW, GetWindowThreadProcessId, IsWindowVisible,
-    };
-    use windows_core::BOOL;
+    imp::windowed_pids()
+}
 
-    unsafe extern "system" fn visit(hwnd: HWND, param: LPARAM) -> BOOL {
-        // SAFETY: `param` is the `&mut HashSet` handed to `EnumWindows` below,
-        // which outlives the enumeration.
+#[cfg(windows)]
+mod imp {
+    use super::device;
+    use std::collections::HashSet;
+
+    pub fn session_pids() -> HashSet<u32> {
+        use windows::Win32::Foundation::S_OK;
+        use windows::Win32::Media::Audio::{
+            DEVICE_STATE_ACTIVE, IAudioSessionControl2, IAudioSessionManager2, IMMDeviceEnumerator,
+            MMDeviceEnumerator, eRender,
+        };
+        use windows::Win32::System::Com::{CLSCTX_ALL, CoCreateInstance};
+        use windows_core::Interface;
+
+        let mut pids = HashSet::new();
+        device::ensure_com_initialized();
+        // SAFETY: plain COM calls; every interface pointer comes from a checked
+        // `Result` and is dropped by windows-rs at the end of its scope.
         unsafe {
-            let pids = &mut *(param.0 as *mut HashSet<u32>);
-            if IsWindowVisible(hwnd).as_bool() && GetWindowTextLengthW(hwnd) > 0 {
-                let mut pid = 0u32;
-                GetWindowThreadProcessId(hwnd, Some(&mut pid));
-                if pid != 0 {
-                    pids.insert(pid);
+            let enumerator: IMMDeviceEnumerator =
+                match CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL) {
+                    Ok(e) => e,
+                    Err(e) => {
+                        log::warn!("app list: creating the device enumerator: {e}");
+                        return pids;
+                    }
+                };
+            let Ok(devices) = enumerator.EnumAudioEndpoints(eRender, DEVICE_STATE_ACTIVE) else {
+                return pids;
+            };
+            let count = devices.GetCount().unwrap_or(0);
+            for i in 0..count {
+                let Ok(device) = devices.Item(i) else {
+                    continue;
+                };
+                let manager: IAudioSessionManager2 = match device.Activate(CLSCTX_ALL, None) {
+                    Ok(m) => m,
+                    Err(e) => {
+                        log::debug!("app list: no session manager on output {i}: {e}");
+                        continue;
+                    }
+                };
+                let Ok(sessions) = manager.GetSessionEnumerator() else {
+                    continue;
+                };
+                let session_count = sessions.GetCount().unwrap_or(0);
+                for s in 0..session_count {
+                    let Ok(control) = sessions.GetSession(s) else {
+                        continue;
+                    };
+                    let Ok(control) = control.cast::<IAudioSessionControl2>() else {
+                        continue;
+                    };
+                    // The system-sounds session reports the pid of whatever service
+                    // is hosting it, which is not an app anyone wants to capture.
+                    // Note the exact comparison: this method answers "no" with
+                    // `S_FALSE`, which `is_ok` would also accept, and skipping on
+                    // that would silently drop every session on the machine.
+                    if control.IsSystemSoundsSession() == S_OK {
+                        continue;
+                    }
+                    if let Ok(pid) = control.GetProcessId()
+                        && pid != 0
+                    {
+                        pids.insert(pid);
+                    }
                 }
             }
         }
-        TRUE
+        pids
     }
 
-    let mut pids: HashSet<u32> = HashSet::new();
-    // SAFETY: `visit` matches WNDENUMPROC and only touches `pids`, which is
-    // borrowed for the duration of the (synchronous) call.
-    unsafe {
-        let _ = EnumWindows(Some(visit), LPARAM(&mut pids as *mut HashSet<u32> as isize));
+    pub fn windowed_pids() -> HashSet<u32> {
+        use windows::Win32::Foundation::{HWND, LPARAM, TRUE};
+        use windows::Win32::UI::WindowsAndMessaging::{
+            EnumWindows, GetWindowTextLengthW, GetWindowThreadProcessId, IsWindowVisible,
+        };
+        use windows_core::BOOL;
+
+        unsafe extern "system" fn visit(hwnd: HWND, param: LPARAM) -> BOOL {
+            // SAFETY: `param` is the `&mut HashSet` handed to `EnumWindows` below,
+            // which outlives the enumeration.
+            unsafe {
+                let pids = &mut *(param.0 as *mut HashSet<u32>);
+                if IsWindowVisible(hwnd).as_bool() && GetWindowTextLengthW(hwnd) > 0 {
+                    let mut pid = 0u32;
+                    GetWindowThreadProcessId(hwnd, Some(&mut pid));
+                    if pid != 0 {
+                        pids.insert(pid);
+                    }
+                }
+            }
+            TRUE
+        }
+
+        let mut pids: HashSet<u32> = HashSet::new();
+        // SAFETY: `visit` matches WNDENUMPROC and only touches `pids`, which is
+        // borrowed for the duration of the (synchronous) call.
+        unsafe {
+            let _ = EnumWindows(Some(visit), LPARAM(&mut pids as *mut HashSet<u32> as isize));
+        }
+        pids
     }
-    pids
+}
+
+/// **Neither question is answered on macOS yet**, and each has a different
+/// shape from its Windows twin.
+///
+/// "Which pids have made a sound" is `kAudioHardwarePropertyProcessObjectList`
+/// (macOS 14.2+), which enumerates Core Audio process objects and can be asked
+/// per process whether it is running input or output — closer to what this
+/// module wants than the WASAPI session list, since it is a live answer rather
+/// than a session that lingers after the sound stopped. That difference will
+/// need a decision: this picker deliberately keeps offering an app that played
+/// a sound a minute ago.
+///
+/// "Which pids own a window" has no clean equivalent at all. `CGWindowListCopy-
+/// WindowInfo` is the usual answer and needs no permission for the on-screen
+/// list, but Screen Recording consent for window *titles* — so the "visible and
+/// titled" test has to become "visible, on the normal window layer, and not
+/// ours".
+///
+/// Empty sets are the honest answer for now, and they degrade the way the
+/// module already expects: `candidates` shows nothing under "has audio", the
+/// wider view shows nothing, and the user can still type an executable name by
+/// hand.
+#[cfg(target_os = "macos")]
+mod imp {
+    use std::collections::HashSet;
+
+    pub fn session_pids() -> HashSet<u32> {
+        HashSet::new()
+    }
+
+    pub fn windowed_pids() -> HashSet<u32> {
+        HashSet::new()
+    }
 }
 
 #[cfg(test)]

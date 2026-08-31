@@ -285,13 +285,21 @@ impl Vst3Plugin {
         self.lock().plugin.get_editor_size().ok()
     }
 
-    pub fn editor_open(&self, hwnd: *mut std::ffi::c_void) -> bool {
+    /// Embeds the plugin's editor in `native_handle`, which is whatever
+    /// `WxWidget::get_handle` gave for the host panel: an `HWND` on Windows, an
+    /// `NSView*` on macOS. VST3 calls those `kPlatformTypeHWND` and
+    /// `kPlatformTypeNSView`, and `vst3-host` picks the right one from which
+    /// constructor was used — the pointer itself is the same value either way.
+    pub fn editor_open(&self, native_handle: *mut std::ffi::c_void) -> bool {
         let _suspended = self.suspend.raise();
         let mut inner = self.lock();
         if inner.editor_open {
             return true;
         }
-        let handle = WindowHandle::from_hwnd(hwnd);
+        #[cfg(windows)]
+        let handle = WindowHandle::from_hwnd(native_handle);
+        #[cfg(target_os = "macos")]
+        let handle = WindowHandle::from_nsview(native_handle);
         match inner.plugin.open_editor(handle) {
             Ok(()) => {
                 inner.editor_open = true;
@@ -737,6 +745,69 @@ fn arrangements_list(arrangements: &[SpeakerArrangement]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Loads a real VST3 from this machine and runs audio through it.
+    ///
+    /// Every other test in this file checks the layout negotiation in isolation;
+    /// this is the one that says the whole path works — bundle discovery, the
+    /// `dlopen`, the factory, the layout, `setActive`, and a block of audio in
+    /// and out. `vst3-host` names macOS as its exercised platform, but "the
+    /// crate works" and "this host works" are different claims.
+    ///
+    /// Ignored because it needs a plugin installed and loads third-party code
+    /// into the test process. Point it at one with
+    /// `PUBSPLASH_TEST_VST3=/Library/Audio/Plug-Ins/VST3/Thing.vst3 \
+    ///  cargo test hosts_a_real_plugin -- --include-ignored --nocapture`.
+    #[test]
+    #[ignore = "loads a third-party plugin into this process"]
+    fn hosts_a_real_plugin() {
+        use crate::config::FxSlotConfig;
+        use crate::vst::instance::{PluginInstance, Processed, PtrScratch};
+        use crate::vst::types::{PluginFormat, PluginInfo};
+
+        let Ok(bundle) = std::env::var("PUBSPLASH_TEST_VST3") else {
+            println!("set PUBSPLASH_TEST_VST3 to a .vst3 bundle to run this");
+            return;
+        };
+        // The path a host loads is the binary inside the bundle, which is what
+        // the real scan gets from `discover`. Spelled out here so the test needs
+        // only a bundle path.
+        let bundle = std::path::Path::new(&bundle);
+        let stem = bundle.file_stem().expect("a named bundle");
+        let binary = bundle.join("Contents").join("MacOS").join(stem);
+        assert!(binary.is_file(), "no binary at {}", binary.display());
+        println!("loading {}", binary.display());
+
+        let info = PluginInfo {
+            path: binary.to_string_lossy().to_string(),
+            format: PluginFormat::Vst3,
+            ..Default::default()
+        };
+        let plugin = Vst3Plugin::load(&info, &FxSlotConfig::default()).expect("the plugin loads");
+        println!("loaded, editor: {}", plugin.has_editor());
+
+        let instance = PluginInstance::Vst3(plugin);
+        let frames = BLOCK_FRAMES;
+        let tone: Vec<f32> = (0..frames)
+            .map(|i| (i as f32 / frames as f32 * std::f32::consts::TAU).sin() * 0.5)
+            .collect();
+        let mut dry = [tone.clone(), tone];
+        let mut out = [vec![0.0f32; frames], vec![0.0f32; frames]];
+        let mut scratch = PtrScratch::new(8, frames);
+
+        // Twice: the first block of a freshly activated plugin is often silence
+        // while it fills its own latency, and a test that read only that would
+        // report a working plugin as broken.
+        let _ = instance.process(&mut dry, &mut out, &mut scratch);
+        let processed = instance.process(&mut dry, &mut out, &mut scratch);
+
+        let peak = out[0].iter().fold(0f32, |a, &s| a.max(s.abs()));
+        println!("processed: {processed:?}  out peak: {peak:.4}");
+        assert!(
+            !matches!(processed, Processed::Passthrough),
+            "the plugin never processed a block"
+        );
+    }
 
     /// `SpeakerArrangement` has no 6-channel constant exposed; 5.1 is
     /// kStereo | kLfe | kCenter | kSurroundLeft | kSurroundRight.

@@ -233,19 +233,9 @@ pub fn format_countdown(secs: u64) -> String {
 
 /// A local date and time as Unix seconds, or `None` if no such moment exists.
 ///
-/// Win32 rather than a date crate for the same reason `mastodon::local_hour`
-/// gives: the tree has neither `chrono` nor `time`, and pulling one in for a
-/// single conversion is a lot of dependency. `month` is **1-based**, matching
-/// `wxdragon::DateTime::month()` (which converts wx's 0-based value for us at
-/// both ends — see the crate's `datetime.rs`), so components read straight off a
-/// `DatePickerCtrl` pass through unchanged.
-///
-/// `TzSpecificLocalTimeToSystemTime` is the load-bearing call: it applies the
-/// machine's time zone *and its DST rules for that particular date*, so a
-/// schedule set either side of a transition lands on the right instant. It is
-/// also what rejects a time that does not exist — the hour a spring-forward
-/// skips — and an impossible date such as 31 February. Requires the
-/// `Win32_System_Time` feature on the `windows` crate.
+/// The conversion itself is [`crate::localtime::to_unix`]; this is the name the
+/// scheduling UI reaches it by, and the doc comment there is where the DST gap
+/// and fold rules are written down.
 pub fn local_to_unix(
     year: i32,
     month: u16,
@@ -254,36 +244,7 @@ pub fn local_to_unix(
     minute: u16,
     second: u16,
 ) -> Option<u64> {
-    use windows::Win32::Foundation::{FILETIME, SYSTEMTIME};
-    use windows::Win32::System::Time::{SystemTimeToFileTime, TzSpecificLocalTimeToSystemTime};
-
-    let local = SYSTEMTIME {
-        wYear: u16::try_from(year).ok()?,
-        wMonth: month,
-        // Ignored by the conversion, which derives it from the date.
-        wDayOfWeek: 0,
-        wDay: day,
-        wHour: hour,
-        wMinute: minute,
-        wSecond: second,
-        wMilliseconds: 0,
-    };
-    let mut utc = SYSTEMTIME::default();
-    // SAFETY: both calls only read the `SYSTEMTIME` they are given and write
-    // their out-parameter, and all three are owned locals here.
-    unsafe {
-        TzSpecificLocalTimeToSystemTime(None, &local, &mut utc).ok()?;
-    }
-    let mut file = FILETIME::default();
-    unsafe {
-        SystemTimeToFileTime(&utc, &mut file).ok()?;
-    }
-    let ticks = (u64::from(file.dwHighDateTime) << 32) | u64::from(file.dwLowDateTime);
-    // FILETIME counts 100 ns intervals from 1601-01-01; this is the offset to
-    // the Unix epoch. A time before 1970 is not something the pickers can
-    // produce, but answering `None` beats wrapping.
-    const EPOCH_TICKS: u64 = 116_444_736_000_000_000;
-    ticks.checked_sub(EPOCH_TICKS).map(|t| t / 10_000_000)
+    crate::localtime::to_unix(year, month, day, hour, minute, second)
 }
 
 #[cfg(test)]
@@ -455,29 +416,6 @@ mod tests {
         assert!(!format_countdown(272).contains(':'));
     }
 
-    /// `local_to_unix` against the clock it is meant to agree with.
-    ///
-    /// A tolerance rather than equality: `GetLocalTime` and `now_unix` are two
-    /// separate readings and the second can tick between them.
-    #[test]
-    fn local_to_unix_agrees_with_now() {
-        // SAFETY: `GetLocalTime` only writes the `SYSTEMTIME` it returns.
-        let now = unsafe { windows::Win32::System::SystemInformation::GetLocalTime() };
-        let converted = local_to_unix(
-            i32::from(now.wYear),
-            now.wMonth,
-            now.wDay,
-            now.wHour,
-            now.wMinute,
-            now.wSecond,
-        )
-        .expect("the current local time must be convertible");
-        let unix = crate::mastodon::now_unix();
-        assert!(
-            converted.abs_diff(unix) <= 2,
-            "converted {converted} vs now_unix {unix}"
-        );
-    }
 
     #[test]
     fn local_to_unix_rejects_what_does_not_exist() {

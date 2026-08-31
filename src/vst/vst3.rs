@@ -2,20 +2,20 @@
 //! and list the audio module classes. Hand-rolled COM-style vtable calls —
 //! no Steinberg SDK bindings. Compiled only into the `pubsplash-scan` helper
 //! process (via `#[path]` in `src/bin/scan_helper.rs`).
+//!
+//! Almost all of this is portable: VST3's factory interface is the same
+//! `FUnknown`-derived vtable on every platform, the `PClassInfo` layout is
+//! fixed by the specification, and `extern "system"` is `extern "C"` everywhere
+//! Pubsplash runs. The platform seam is only how the module is opened and a
+//! symbol found — `LoadLibraryExW`/`GetProcAddress` against `dlopen`/`dlsym`.
 
 use super::types::ScanOutput;
 use std::ffi::{CStr, c_void};
-use std::os::windows::ffi::OsStrExt;
 use std::path::Path;
-use windows::Win32::System::LibraryLoader::{
-    GetProcAddress, LOAD_WITH_ALTERED_SEARCH_PATH, LoadLibraryExW,
-};
-use windows::core::{PCWSTR, s};
 
 const K_RESULT_OK: i32 = 0;
 const AUDIO_MODULE_CLASS: &str = "Audio Module Class";
 
-type InitDllFn = unsafe extern "system" fn() -> bool;
 type GetFactoryFn = unsafe extern "system" fn() -> *mut IPluginFactory;
 
 #[repr(C)]
@@ -63,22 +63,17 @@ fn cid_hex(cid: &[u8; 16]) -> String {
 }
 
 pub fn scan(path: &Path) -> Result<ScanOutput, String> {
-    let wide: Vec<u16> = path.as_os_str().encode_wide().chain([0]).collect();
+    let module = imp::open(path)?;
     unsafe {
-        // LOAD_WITH_ALTERED_SEARCH_PATH: dependency DLLs shipped next to the
-        // plugin must resolve from the plugin's folder, not the helper's.
-        let module = LoadLibraryExW(PCWSTR(wide.as_ptr()), None, LOAD_WITH_ALTERED_SEARCH_PATH)
-            .map_err(|e| format!("could not load module: {e}"))?;
+        // The module's own initializer, if it has one. Windows calls it
+        // `InitDll`; macOS calls it `bundleEntry` and hands it the bundle, which
+        // the module keeps a reference to -- so the two are not the same
+        // function under different names and `imp` supplies each its own way.
+        imp::initialize(&module)?;
 
-        if let Some(init) = GetProcAddress(module, s!("InitDll")) {
-            let init: InitDllFn = std::mem::transmute(init);
-            if !init() {
-                return Err("InitDll returned false".to_string());
-            }
-        }
-
-        let get_factory =
-            GetProcAddress(module, s!("GetPluginFactory")).ok_or("no GetPluginFactory export")?;
+        let get_factory = module
+            .symbol("GetPluginFactory")
+            .ok_or("no GetPluginFactory export")?;
         let get_factory: GetFactoryFn = std::mem::transmute(get_factory);
         let factory = get_factory();
         if factory.is_null() {
@@ -129,5 +124,134 @@ pub fn scan(path: &Path) -> Result<ScanOutput, String> {
             unique_id: None,
             class_ids,
         })
+    }
+}
+
+/// `LoadLibraryExW` with `LOAD_WITH_ALTERED_SEARCH_PATH`, so dependency DLLs
+/// shipped next to the plugin resolve from the plugin's folder rather than from
+/// the helper's.
+#[cfg(windows)]
+mod imp {
+    use std::ffi::c_void;
+    use std::os::windows::ffi::OsStrExt;
+    use std::path::Path;
+    use windows::Win32::Foundation::HMODULE;
+    use windows::Win32::System::LibraryLoader::{
+        GetProcAddress, LOAD_WITH_ALTERED_SEARCH_PATH, LoadLibraryExW,
+    };
+    use windows::core::{PCSTR, PCWSTR};
+
+    type InitDllFn = unsafe extern "system" fn() -> bool;
+
+    pub struct Module(HMODULE);
+
+    impl Module {
+        pub fn symbol(&self, name: &str) -> Option<*const c_void> {
+            // `GetProcAddress` wants a NUL-terminated ASCII name, and every
+            // symbol this file asks for is a literal in the caller.
+            let name = format!("{name}\0");
+            unsafe { GetProcAddress(self.0, PCSTR(name.as_ptr())) }
+                .map(|f| f as *const c_void)
+        }
+    }
+
+    pub fn open(path: &Path) -> Result<Module, String> {
+        let wide: Vec<u16> = path.as_os_str().encode_wide().chain([0]).collect();
+        unsafe {
+            LoadLibraryExW(PCWSTR(wide.as_ptr()), None, LOAD_WITH_ALTERED_SEARCH_PATH)
+                .map(Module)
+                .map_err(|e| format!("could not load module: {e}"))
+        }
+    }
+
+    /// # Safety
+    /// `module` must be a loaded VST3 module.
+    pub unsafe fn initialize(module: &Module) -> Result<(), String> {
+        let Some(init) = module.symbol("InitDll") else {
+            return Ok(());
+        };
+        let init: InitDllFn = unsafe { std::mem::transmute(init) };
+        if unsafe { init() } {
+            Ok(())
+        } else {
+            Err("InitDll returned false".to_string())
+        }
+    }
+}
+
+/// `dlopen`/`dlsym`.
+///
+/// `RTLD_LOCAL` keeps the plugin's symbols out of the global namespace, so two
+/// plugins exporting the same symbol cannot bind to each other's — the nearest
+/// thing here to what `LOAD_WITH_ALTERED_SEARCH_PATH` protects against on
+/// Windows. A bundle's own dependencies are found through its `LC_RPATH`, which
+/// is the loader's business and needs nothing from us.
+///
+/// The module is deliberately never `dlclose`d: this process exits immediately
+/// after printing, and unloading a plugin that has started a thread is the class
+/// of crash the helper exists to keep away from Pubsplash.
+#[cfg(target_os = "macos")]
+mod imp {
+    use std::ffi::{CString, c_void};
+    use std::path::Path;
+
+    const RTLD_NOW: i32 = 0x2;
+    const RTLD_LOCAL: i32 = 0x4;
+
+    /// The macOS module entry point. Unlike Windows' `InitDll` it is handed the
+    /// module's own `CFBundleRef`, which the plugin keeps in order to find its
+    /// resources — so it cannot be called with no argument.
+    type BundleEntryFn = unsafe extern "system" fn(*mut c_void) -> bool;
+
+    pub struct Module(*mut c_void);
+
+    impl Module {
+        pub fn symbol(&self, name: &str) -> Option<*const c_void> {
+            let name = CString::new(name).ok()?;
+            // SAFETY: `self.0` is a live handle from `dlopen`.
+            let sym = unsafe { libc::dlsym(self.0, name.as_ptr()) };
+            (!sym.is_null()).then_some(sym as *const c_void)
+        }
+    }
+
+    pub fn open(path: &Path) -> Result<Module, String> {
+        let c_path =
+            CString::new(path.as_os_str().as_encoded_bytes()).map_err(|e| e.to_string())?;
+        // SAFETY: `c_path` is a NUL-terminated path that outlives the call.
+        let handle = unsafe { libc::dlopen(c_path.as_ptr(), RTLD_NOW | RTLD_LOCAL) };
+        if handle.is_null() {
+            // SAFETY: `dlerror` returns a static message or null.
+            let reason = unsafe {
+                let msg = libc::dlerror();
+                if msg.is_null() {
+                    "unknown error".to_string()
+                } else {
+                    std::ffi::CStr::from_ptr(msg).to_string_lossy().into_owned()
+                }
+            };
+            return Err(format!("could not load module: {reason}"));
+        }
+        Ok(Module(handle))
+    }
+
+    /// # Safety
+    /// `module` must be a loaded VST3 module.
+    ///
+    /// The bundle pointer passed to `bundleEntry` is null. That is not a
+    /// shortcut: this helper only reads the factory's class list, and a module
+    /// that genuinely needs its bundle to do that will say so by returning
+    /// false, which is reported as a scan failure like any other. Building a
+    /// real `CFBundleRef` would mean linking CoreFoundation into the helper for
+    /// the benefit of plugins that have not been observed to need it.
+    pub unsafe fn initialize(module: &Module) -> Result<(), String> {
+        let Some(entry) = module.symbol("bundleEntry") else {
+            return Ok(());
+        };
+        let entry: BundleEntryFn = unsafe { std::mem::transmute(entry) };
+        if unsafe { entry(std::ptr::null_mut()) } {
+            Ok(())
+        } else {
+            Err("bundleEntry returned false".to_string())
+        }
     }
 }

@@ -69,16 +69,19 @@ pub struct LocalTime {
 
 impl LocalTime {
     /// The machine's current local time.
+    ///
+    /// Through [`crate::localtime`] rather than `GetLocalTime` directly: that is
+    /// the module that owns the wall clock on both platforms, and it carries the
+    /// real IANA rules rather than the single transition pair Win32 applies.
     pub fn now() -> Self {
-        // SAFETY: `GetLocalTime` only writes the `SYSTEMTIME` it returns.
-        let t = unsafe { windows::Win32::System::SystemInformation::GetLocalTime() };
+        let t = crate::localtime::now();
         Self {
-            year: i32::from(t.wYear),
-            month: u32::from(t.wMonth),
-            day: u32::from(t.wDay),
-            hour: u32::from(t.wHour),
-            minute: u32::from(t.wMinute),
-            second: u32::from(t.wSecond),
+            year: t.year,
+            month: u32::from(t.month),
+            day: u32::from(t.day),
+            hour: u32::from(t.hour),
+            minute: u32::from(t.minute),
+            second: u32::from(t.second),
         }
     }
 

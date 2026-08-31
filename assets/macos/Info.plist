@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Extra Info.plist keys merged into the one cargo-packager generates.
+
+  The two usage descriptions are not documentation: macOS **kills** a bundled
+  app that touches the microphone or a process tap without them, with no error
+  the app can catch and nothing in its own log. They are the difference between
+  a microphone source working and Pubsplash disappearing the moment one is
+  added. The strings are shown verbatim in the permission prompt, so they say
+  what the permission is for in the user's terms rather than in the API's.
+
+  LSMinimumSystemVersion is 14.4 because that is when Core Audio process taps
+  arrived, which is what an Application source is built on.
+-->
+<plist version="1.0">
+<dict>
+	<!-- The Finder, the Dock and the menu bar all read these. cargo-packager
+	     derives its own from the crate name, which is lowercase; overriding here
+	     rather than with `product-name` keeps the Windows installer's naming
+	     exactly as it is. -->
+	<key>CFBundleName</key>
+	<string>Pubsplash</string>
+	<key>CFBundleDisplayName</key>
+	<string>Pubsplash</string>
+
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Pubsplash needs the microphone so you can talk on your stream.</string>
+
+	<key>NSAudioCaptureUsageDescription</key>
+	<string>Pubsplash needs to record audio from other apps so you can put their sound on your stream.</string>
+
+	<!-- Desktop Audio. macOS puts "everything this machine is playing" behind
+	     the screen-recording permission even when no video is wanted: the API
+	     that captures system audio while leaving out our own is ScreenCaptureKit,
+	     and there is no audio-only form of it. Without this key the prompt has
+	     nothing to say and Desktop Audio cannot start. -->
+	<key>NSScreenCaptureUsageDescription</key>
+	<string>Pubsplash needs this to put the sound of other apps on your stream. It captures what your Mac is playing, never a picture of your screen, and leaves out Pubsplash's own speech and sound effects.</string>
+
+	<!-- `instance::reject_and_exit` shows the "already running" alert with
+	     osascript, which is Apple events. Without this the second copy exits
+	     with only its stderr line, which nobody sees. -->
+	<key>NSAppleEventsUsageDescription</key>
+	<string>Pubsplash uses this only to tell you when a second copy is already running.</string>
+
+	<key>LSMinimumSystemVersion</key>
+	<string>14.4</string>
+
+	<!-- A normal windowed app: it belongs in the Dock and takes focus. -->
+	<key>LSUIElement</key>
+	<false/>
+
+	<key>NSHighResolutionCapable</key>
+	<true/>
+
+	<key>LSApplicationCategoryType</key>
+	<string>public.app-category.music</string>
+</dict>
+</plist>

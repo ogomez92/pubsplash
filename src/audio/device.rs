@@ -1,11 +1,28 @@
-//! WASAPI device discovery for the source-edit UI and capture setup, plus the
+//! Audio device discovery for the source-edit UI and capture setup, plus the
 //! process lookup that binds an Application source to a running executable.
+//!
+//! Two halves that read as one module because the UI asks them together, but
+//! they are portable to very different degrees. The **process** half is
+//! `sysinfo` and pure logic — name matching, the parent walk that roots a
+//! browser's tree, the pid pinning, the caches — and none of it knows what OS it
+//! is on. The **endpoint** half is the platform's own audio API and lives in
+//! `imp` below, along with the one other genuinely platform-shaped thing here:
+//! turning an executable path into the name a user recognises.
+// Items below are reached only from the Windows `imp` in this file (or from the
+// subsystem it belongs to). They are not dead in the codebase, only unreached
+// while the macOS side of this seam is unbuilt, and each will be wanted again
+// the moment it is -- so this is scoped to the file rather than being a
+// crate-wide allow, and comes off with the last stub here.
+#![cfg_attr(not(windows), allow(dead_code))]
+
 
 use std::collections::{HashMap, HashSet};
-use std::os::windows::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
-use wasapi::{DeviceEnumerator, DeviceState, Direction};
+
+/// An opened input or output endpoint. See `render::Device` for the output
+/// side, which owns the same idea for the same reason.
+pub use imp::Device;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DeviceInfo {
@@ -13,15 +30,14 @@ pub struct DeviceInfo {
     pub name: String,
 }
 
-/// Must be called once on every thread that touches WASAPI.
+/// Must be called once on every thread that touches the platform audio API.
 pub fn ensure_com_initialized() {
-    // Ignore "already initialized" results.
-    let _ = wasapi::initialize_mta();
+    imp::ensure_com_initialized();
 }
 
 /// Lists active capture devices (microphones).
 pub fn capture_devices() -> Vec<DeviceInfo> {
-    devices_for(&Direction::Capture)
+    imp::capture_devices()
 }
 
 /// Lists active render devices (speakers, headphones).
@@ -30,89 +46,43 @@ pub fn capture_devices() -> Vec<DeviceInfo> {
 /// Desktop Audio source captures. They are the two halves of one rule — see
 /// [`effective_output_device_id`].
 pub fn render_devices() -> Vec<DeviceInfo> {
-    devices_for(&Direction::Render)
+    imp::render_devices()
 }
 
-fn devices_for(direction: &Direction) -> Vec<DeviceInfo> {
-    ensure_com_initialized();
-    let mut devices = Vec::new();
-    let Ok(enumerator) = DeviceEnumerator::new() else {
-        return devices;
-    };
-    let Ok(collection) = enumerator.get_device_collection(direction) else {
-        return devices;
-    };
-    for device in &collection {
-        let Ok(device) = device else { continue };
-        if let (Ok(id), Ok(name)) = (device.get_id(), device.get_friendlyname()) {
-            devices.push(DeviceInfo { id, name });
-        }
-    }
-    devices
-}
-
-/// Resolves a configured device id to a WASAPI device, or the default capture
-/// device when `id` is `None`.
+/// Resolves a configured device id to a device, or the default capture device
+/// when `id` is `None`.
 ///
 /// A configured device is never silently swapped for a different one: going on
 /// air through the laptop's built-in microphone because the good one was a
 /// moment late to enumerate is worse than going on air silent. The caller
 /// retries instead (see `capture::spawn`).
 ///
-/// The state check is the point of this function. `IMMDeviceEnumerator::
-/// GetDevice` happily returns endpoints in *any* state, including `Unplugged`
-/// and `NotPresent`, and `Activate` on one of those fails with a bare
-/// `ERROR_FILE_NOT_FOUND` that reads like a bug in us. USB interfaces sit in
-/// exactly that state for a moment while Windows brings them up, which is a
-/// window Pubsplash lands in because it opens its sources within a few hundred
-/// milliseconds of launch. Rejecting a non-`Active` endpoint here turns that
-/// into an accurate, retryable answer.
-pub fn capture_device(id: Option<&str>) -> Result<wasapi::Device, String> {
-    ensure_com_initialized();
-    let enumerator = DeviceEnumerator::new().map_err(|e| e.to_string())?;
-    let Some(id) = id else {
-        return enumerator
-            .get_default_device(&Direction::Capture)
-            .map_err(|e| format!("opening the default microphone: {e}"));
-    };
-    let device = enumerator
-        .get_device(id)
-        .map_err(|e| format!("looking up the configured microphone: {e}"))?;
-    match device.get_state() {
-        Ok(DeviceState::Active) => Ok(device),
-        Ok(state) => Err(format!("the configured microphone is {state:?}")),
-        Err(e) => Err(format!("reading the configured microphone's state: {e}")),
-    }
+/// The state check is the point of this function, and it is not a Windows
+/// detail — it is why the retry loop above it works. See `imp` for what "not
+/// active" means on each platform.
+pub fn capture_device(id: Option<&str>) -> Result<Device, String> {
+    imp::capture_device(id)
 }
 
-/// Resolves a configured render device id to a WASAPI device, for a Desktop
-/// Audio source pinned to one endpoint. [`capture_device`]'s rules exactly,
-/// including the `Active` state check and its reasons.
-pub fn render_device(id: &str) -> Result<wasapi::Device, String> {
-    ensure_com_initialized();
-    let enumerator = DeviceEnumerator::new().map_err(|e| e.to_string())?;
-    let device = enumerator
-        .get_device(id)
-        .map_err(|e| format!("looking up the configured output device: {e}"))?;
-    match device.get_state() {
-        Ok(DeviceState::Active) => Ok(device),
-        Ok(state) => Err(format!("the configured output device is {state:?}")),
-        Err(e) => Err(format!("reading the configured output device's state: {e}")),
-    }
+/// Resolves a configured render device id to a device, for a Desktop Audio
+/// source pinned to one endpoint. [`capture_device`]'s rules exactly, including
+/// the state check and its reasons.
+pub fn render_device(id: &str) -> Result<Device, String> {
+    imp::render_device(id)
 }
 
 /// The endpoint Pubsplash is really playing out of at this moment, with a
 /// `None` setting resolved through the system default.
 ///
-/// The one place the feedback check asks its question. Windows' process
-/// loopback (what a `device_id: None` Desktop Audio source uses) carries no
-/// endpoint id and is inherently all-endpoints, so pinning a Desktop Audio
-/// source to one device means *endpoint* loopback — which captures everything
-/// on that endpoint, Pubsplash's own speech and cues included. Since every
-/// sound Pubsplash makes leaves through this one device, keeping the two apart
-/// is a single comparison; it is made twice, once by the Desktop Audio dialog
-/// so the user is told, and once in `capture::run` so a setting that collided
-/// later still cannot feed back.
+/// The one place the feedback check asks its question. Process loopback (what a
+/// `device_id: None` Desktop Audio source uses) carries no endpoint id and is
+/// inherently all-endpoints, so pinning a Desktop Audio source to one device
+/// means *endpoint* loopback — which captures everything on that endpoint,
+/// Pubsplash's own speech and cues included. Since every sound Pubsplash makes
+/// leaves through this one device, keeping the two apart is a single comparison;
+/// it is made twice, once by the Desktop Audio dialog so the user is told, and
+/// once at capture-open time so a setting that collided later still cannot feed
+/// back.
 ///
 /// `None` here means the answer is unknown — no default device, or the
 /// enumeration failed — and a caller must read that as "cannot rule out a
@@ -121,13 +91,313 @@ pub fn effective_output_device_id() -> Option<String> {
     if let Some(id) = crate::audio::render::output_device_id() {
         return Some(id);
     }
-    ensure_com_initialized();
-    DeviceEnumerator::new()
-        .ok()?
-        .get_default_device(&Direction::Render)
-        .ok()?
-        .get_id()
-        .ok()
+    imp::default_render_device_id()
+}
+
+/// WASAPI, through `IMMDeviceEnumerator`, plus the executable version resource.
+///
+/// `IMMDeviceEnumerator::GetDevice` happily returns endpoints in *any* state,
+/// including `Unplugged` and `NotPresent`, and `Activate` on one of those fails
+/// with a bare `ERROR_FILE_NOT_FOUND` that reads like a bug in us. USB
+/// interfaces sit in exactly that state for a moment while Windows brings them
+/// up, which is a window Pubsplash lands in because it opens its sources within
+/// a few hundred milliseconds of launch. Rejecting a non-`Active` endpoint turns
+/// that into an accurate, retryable answer.
+#[cfg(windows)]
+mod imp {
+    use super::{DeviceInfo, first_string};
+    use std::os::windows::ffi::OsStrExt;
+    use std::path::Path;
+    use wasapi::{DeviceEnumerator, DeviceState, Direction};
+
+    pub use wasapi::Device;
+
+    pub fn ensure_com_initialized() {
+        // Ignore "already initialized" results.
+        let _ = wasapi::initialize_mta();
+    }
+
+    pub fn capture_devices() -> Vec<DeviceInfo> {
+        devices_for(&Direction::Capture)
+    }
+
+    pub fn render_devices() -> Vec<DeviceInfo> {
+        devices_for(&Direction::Render)
+    }
+
+    fn devices_for(direction: &Direction) -> Vec<DeviceInfo> {
+        ensure_com_initialized();
+        let mut devices = Vec::new();
+        let Ok(enumerator) = DeviceEnumerator::new() else {
+            return devices;
+        };
+        let Ok(collection) = enumerator.get_device_collection(direction) else {
+            return devices;
+        };
+        for device in &collection {
+            let Ok(device) = device else { continue };
+            if let (Ok(id), Ok(name)) = (device.get_id(), device.get_friendlyname()) {
+                devices.push(DeviceInfo { id, name });
+            }
+        }
+        devices
+    }
+
+    pub fn capture_device(id: Option<&str>) -> Result<Device, String> {
+        ensure_com_initialized();
+        let enumerator = DeviceEnumerator::new().map_err(|e| e.to_string())?;
+        let Some(id) = id else {
+            return enumerator
+                .get_default_device(&Direction::Capture)
+                .map_err(|e| format!("opening the default microphone: {e}"));
+        };
+        let device = enumerator
+            .get_device(id)
+            .map_err(|e| format!("looking up the configured microphone: {e}"))?;
+        match device.get_state() {
+            Ok(DeviceState::Active) => Ok(device),
+            Ok(state) => Err(format!("the configured microphone is {state:?}")),
+            Err(e) => Err(format!("reading the configured microphone's state: {e}")),
+        }
+    }
+
+    pub fn render_device(id: &str) -> Result<Device, String> {
+        ensure_com_initialized();
+        let enumerator = DeviceEnumerator::new().map_err(|e| e.to_string())?;
+        let device = enumerator
+            .get_device(id)
+            .map_err(|e| format!("looking up the configured output device: {e}"))?;
+        match device.get_state() {
+            Ok(DeviceState::Active) => Ok(device),
+            Ok(state) => Err(format!("the configured output device is {state:?}")),
+            Err(e) => Err(format!("reading the configured output device's state: {e}")),
+        }
+    }
+
+    /// The system's current default output endpoint id.
+    pub fn default_render_device_id() -> Option<String> {
+        ensure_com_initialized();
+        DeviceEnumerator::new()
+            .ok()?
+            .get_default_device(&Direction::Render)
+            .ok()?
+            .get_id()
+            .ok()
+    }
+
+    /// The name users recognize for an executable, from its version resource.
+    ///
+    /// Neither of the two candidate fields wins outright: `nvda.exe` describes
+    /// itself as "NVDA application (has UIAccess)" but has product "NVDA", while
+    /// `explorer.exe` is the other way round ("Windows Explorer" against the
+    /// product "Microsoft® Windows® Operating System"). This name is spoken on
+    /// every visit to the strip, so take whichever is shorter.
+    ///
+    /// `None` when the file has no version resource, which is common for console
+    /// tools and portable builds.
+    pub fn friendly_name(path: &Path) -> Option<String> {
+        read_version_strings(path, &["FileDescription", "ProductName"])
+            .into_iter()
+            .flatten()
+            .min_by_key(|s| s.chars().count())
+    }
+
+    /// Reads the named `\StringFileInfo\` entries from a file's version resource,
+    /// in the order requested. Entries that are missing or blank come back `None`.
+    fn read_version_strings(path: &Path, fields: &[&str]) -> Vec<Option<String>> {
+        read_version_strings_inner(path, fields).unwrap_or_else(|| vec![None; fields.len()])
+    }
+
+    fn read_version_strings_inner(path: &Path, fields: &[&str]) -> Option<Vec<Option<String>>> {
+        use windows::Win32::Storage::FileSystem::{
+            GetFileVersionInfoSizeW, GetFileVersionInfoW, VerQueryValueW,
+        };
+        use windows_core::PCWSTR;
+
+        /// The `\VarFileInfo\Translation` entry: which language/codepage the
+        /// string table under `\StringFileInfo\` is filed under.
+        #[repr(C)]
+        #[derive(Clone, Copy)]
+        struct LangCodepage {
+            language: u16,
+            codepage: u16,
+        }
+
+        let wide: Vec<u16> = path
+            .as_os_str()
+            .encode_wide()
+            .chain(std::iter::once(0))
+            .collect();
+        // SAFETY: `wide` is a NUL-terminated path that outlives every call below,
+        // and `block` is sized by the API itself before it is filled.
+        unsafe {
+            let size = GetFileVersionInfoSizeW(PCWSTR(wide.as_ptr()), None);
+            if size == 0 {
+                return None;
+            }
+            let mut block = vec![0u8; size as usize];
+            GetFileVersionInfoW(
+                PCWSTR(wide.as_ptr()),
+                None,
+                size,
+                block.as_mut_ptr() as *mut std::ffi::c_void,
+            )
+            .ok()?;
+
+            let mut translations: *mut std::ffi::c_void = std::ptr::null_mut();
+            let mut len: u32 = 0;
+            let key: Vec<u16> = "\\VarFileInfo\\Translation\0".encode_utf16().collect();
+            if !VerQueryValueW(
+                block.as_ptr() as *const std::ffi::c_void,
+                PCWSTR(key.as_ptr()),
+                &mut translations,
+                &mut len,
+            )
+            .as_bool()
+                || len < std::mem::size_of::<LangCodepage>() as u32
+            {
+                return None;
+            }
+            let translation = *(translations as *const LangCodepage);
+
+            let read = |field: &str| -> Option<String> {
+                let sub_block: Vec<u16> = format!(
+                    "\\StringFileInfo\\{:04x}{:04x}\\{field}\0",
+                    translation.language, translation.codepage
+                )
+                .encode_utf16()
+                .collect();
+                let mut value: *mut std::ffi::c_void = std::ptr::null_mut();
+                let mut chars: u32 = 0;
+                if !VerQueryValueW(
+                    block.as_ptr() as *const std::ffi::c_void,
+                    PCWSTR(sub_block.as_ptr()),
+                    &mut value,
+                    &mut chars,
+                )
+                .as_bool()
+                    || chars == 0
+                {
+                    return None;
+                }
+                let text = std::slice::from_raw_parts(value as *const u16, chars as usize);
+                first_string(&String::from_utf16_lossy(text))
+            };
+            Some(fields.iter().map(|field| read(field)).collect())
+        }
+    }
+}
+
+/// Core Audio, through the HAL's property API. See [`crate::audio::coreaudio`]
+/// for the primitives and, in particular, for why a stored device id is a
+/// **UID string** and never an `AudioDeviceID`.
+///
+/// There is one device list here, not a capture list and a render list: a
+/// device is an input or an output according to whether it carries streams in
+/// that scope, and every USB interface carries both. So both pickers walk the
+/// same list and filter it, and an interface correctly appears in each.
+///
+/// The Windows `Active`-state rule has a direct equivalent and it is kept:
+/// a configured UID that no live device claims is an **error the caller
+/// retries**, never a silent fall back to the default device. `capture` clears
+/// a Desktop Audio source against whatever the output device is, so a fallback
+/// could put the output back onto the endpoint that check just approved.
+#[cfg(target_os = "macos")]
+mod imp {
+    use super::DeviceInfo;
+    use crate::audio::coreaudio::{self, Scope};
+    use std::path::Path;
+
+    /// An opened device. A bare `AudioDeviceID`, which is all a Core Audio
+    /// `AudioUnit` needs to be pointed at one.
+    ///
+    /// Deliberately not `Clone`-into-storage anywhere: it is valid only for as
+    /// long as the device is present, which is why it is resolved from a UID at
+    /// every open rather than cached.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub struct Device(pub u32);
+
+    /// Core Audio needs no per-thread initialization; COM's rule has no
+    /// equivalent here.
+    pub fn ensure_com_initialized() {}
+
+    fn devices_in(scope: Scope) -> Vec<DeviceInfo> {
+        coreaudio::all_devices()
+            .into_iter()
+            .filter(|&device| coreaudio::has_streams(device, scope))
+            .filter_map(coreaudio::describe)
+            .map(|(id, name)| DeviceInfo { id, name })
+            .collect()
+    }
+
+    pub fn capture_devices() -> Vec<DeviceInfo> {
+        devices_in(Scope::Input)
+    }
+
+    pub fn render_devices() -> Vec<DeviceInfo> {
+        devices_in(Scope::Output)
+    }
+
+    /// Resolves a UID to a device, checking it really is an input.
+    ///
+    /// The scope check is not pedantry. Core Audio is happy to hand back the
+    /// device for any UID, so a settings file naming an output-only device — or
+    /// a UID that used to be an interface and is now something else — would
+    /// otherwise open an input `AudioUnit` that never delivers a frame. Saying
+    /// so is what lets the supervisor report it and retry.
+    pub fn capture_device(id: Option<&str>) -> Result<Device, String> {
+        let Some(id) = id else {
+            return coreaudio::default_device(Scope::Input)
+                .map(Device)
+                .ok_or_else(|| "there is no default microphone".to_string());
+        };
+        open(id, Scope::Input, "microphone")
+    }
+
+    pub fn render_device(id: &str) -> Result<Device, String> {
+        open(id, Scope::Output, "output device")
+    }
+
+    fn open(uid: &str, scope: Scope, what: &str) -> Result<Device, String> {
+        let device = coreaudio::device_for_uid(uid)
+            .ok_or_else(|| format!("the configured {what} is not connected"))?;
+        if !coreaudio::has_streams(device, scope) {
+            return Err(format!(
+                "the configured {what} has no {} streams",
+                match scope {
+                    Scope::Input => "input",
+                    Scope::Output => "output",
+                }
+            ));
+        }
+        Ok(Device(device))
+    }
+
+    pub fn default_render_device_id() -> Option<String> {
+        coreaudio::default_device(Scope::Output).and_then(coreaudio::device_uid)
+    }
+
+    /// The name a Mac user recognises for a running executable: the enclosing
+    /// application bundle's name.
+    ///
+    /// A process path is `/Applications/Music.app/Contents/MacOS/Music`, and the
+    /// part a person would call it is the `.app` directory's stem — which is
+    /// exactly what the Dock, the Finder and Force Quit all show. So the rule is
+    /// to walk up for the nearest `.app` ancestor and take its file stem,
+    /// falling back to `None` for a plain command-line binary that is in no
+    /// bundle, which is the same answer the Windows side gives for a file with
+    /// no version resource.
+    ///
+    /// This deliberately does not read `Contents/Info.plist`. The localized
+    /// `CFBundleDisplayName` in there would be marginally better, and parsing a
+    /// (possibly binary) plist to get it is a dependency and a decode path for a
+    /// string that differs from the bundle name only rarely.
+    pub fn friendly_name(path: &Path) -> Option<String> {
+        path.ancestors()
+            .find(|dir| dir.extension().is_some_and(|ext| ext == "app"))
+            .and_then(Path::file_stem)
+            .map(|stem| stem.to_string_lossy().into_owned())
+    }
 }
 
 /// A running process matched to an Application source's configured name.
@@ -435,6 +705,27 @@ pub fn list_processes() -> Vec<(u32, String, Option<PathBuf>)> {
         .collect()
 }
 
+/// Every running process as `(pid, parent pid)`.
+///
+/// For `audio::tap::tree_of`, which has to name each process of an application
+/// explicitly because a Core Audio tap has no "and its descendants" flag — see
+/// that module's header. Shares `SYSTEM` with the two functions above, so this
+/// costs a refresh and no second enumeration.
+#[cfg(target_os = "macos")]
+pub fn process_parents() -> Vec<(u32, Option<u32>)> {
+    let mut system = lock_system();
+    system.refresh_processes_specifics(
+        sysinfo::ProcessesToUpdate::All,
+        true,
+        sysinfo::ProcessRefreshKind::nothing(),
+    );
+    system
+        .processes()
+        .iter()
+        .map(|(pid, process)| (pid.as_u32(), process.parent().map(sysinfo::Pid::as_u32)))
+        .collect()
+}
+
 /// Finds the PID of a running process by executable name (case-insensitive,
 /// with or without `.exe`).
 pub fn find_process(name: &str) -> Option<u32> {
@@ -492,24 +783,19 @@ fn lock_pins() -> std::sync::MutexGuard<'static, HashMap<String, u32>> {
 /// given file, but this runs on the UI pump every couple of seconds.
 static DESCRIPTIONS: OnceLock<Mutex<HashMap<PathBuf, Option<String>>>> = OnceLock::new();
 
-/// The name users recognize for an executable, from its version resource.
-/// `None` when the file has no version resource, which is common for console
-/// tools and portable builds.
+/// The name users recognize for an executable — `None` when there is nothing
+/// better to call it than its file name, which the caller then falls back to.
 ///
-/// Neither of the two candidate fields wins outright: `nvda.exe` describes
-/// itself as "NVDA application (has UIAccess)" but has product "NVDA", while
-/// `explorer.exe` is the other way round ("Windows Explorer" against the
-/// product "Microsoft® Windows® Operating System"). This name is spoken on
-/// every visit to the strip, so take whichever is shorter.
+/// Cached here, resolved per platform in `imp`: a Windows version resource, a
+/// macOS application bundle. Both are comparatively expensive and neither answer
+/// changes for a given file, and this runs on the UI pump every couple of
+/// seconds.
 pub(crate) fn friendly_name(path: &Path) -> Option<String> {
     let cache = DESCRIPTIONS.get_or_init(|| Mutex::new(HashMap::new()));
     if let Some(cached) = lock_recovering(cache, "the executable description cache").get(path) {
         return cached.clone();
     }
-    let name = read_version_strings(path, &["FileDescription", "ProductName"])
-        .into_iter()
-        .flatten()
-        .min_by_key(|s| s.chars().count());
+    let name = imp::friendly_name(path);
     lock_recovering(cache, "the executable description cache")
         .insert(path.to_path_buf(), name.clone());
     name
@@ -532,94 +818,29 @@ fn first_string(raw: &str) -> Option<String> {
     (!text.is_empty()).then(|| text.to_string())
 }
 
-/// Reads the named `\StringFileInfo\` entries from a file's version resource,
-/// in the order requested. Entries that are missing or blank come back `None`.
-fn read_version_strings(path: &Path, fields: &[&str]) -> Vec<Option<String>> {
-    read_version_strings_inner(path, fields).unwrap_or_else(|| vec![None; fields.len()])
-}
-
-fn read_version_strings_inner(path: &Path, fields: &[&str]) -> Option<Vec<Option<String>>> {
-    use windows::Win32::Storage::FileSystem::{
-        GetFileVersionInfoSizeW, GetFileVersionInfoW, VerQueryValueW,
-    };
-    use windows_core::PCWSTR;
-
-    /// The `\VarFileInfo\Translation` entry: which language/codepage the
-    /// string table under `\StringFileInfo\` is filed under.
-    #[repr(C)]
-    #[derive(Clone, Copy)]
-    struct LangCodepage {
-        language: u16,
-        codepage: u16,
-    }
-
-    let wide: Vec<u16> = path
-        .as_os_str()
-        .encode_wide()
-        .chain(std::iter::once(0))
-        .collect();
-    // SAFETY: `wide` is a NUL-terminated path that outlives every call below,
-    // and `block` is sized by the API itself before it is filled.
-    unsafe {
-        let size = GetFileVersionInfoSizeW(PCWSTR(wide.as_ptr()), None);
-        if size == 0 {
-            return None;
-        }
-        let mut block = vec![0u8; size as usize];
-        GetFileVersionInfoW(
-            PCWSTR(wide.as_ptr()),
-            None,
-            size,
-            block.as_mut_ptr() as *mut std::ffi::c_void,
-        )
-        .ok()?;
-
-        let mut translations: *mut std::ffi::c_void = std::ptr::null_mut();
-        let mut len: u32 = 0;
-        let key: Vec<u16> = "\\VarFileInfo\\Translation\0".encode_utf16().collect();
-        if !VerQueryValueW(
-            block.as_ptr() as *const std::ffi::c_void,
-            PCWSTR(key.as_ptr()),
-            &mut translations,
-            &mut len,
-        )
-        .as_bool()
-            || len < std::mem::size_of::<LangCodepage>() as u32
-        {
-            return None;
-        }
-        let translation = *(translations as *const LangCodepage);
-
-        let read = |field: &str| -> Option<String> {
-            let sub_block: Vec<u16> = format!(
-                "\\StringFileInfo\\{:04x}{:04x}\\{field}\0",
-                translation.language, translation.codepage
-            )
-            .encode_utf16()
-            .collect();
-            let mut value: *mut std::ffi::c_void = std::ptr::null_mut();
-            let mut chars: u32 = 0;
-            if !VerQueryValueW(
-                block.as_ptr() as *const std::ffi::c_void,
-                PCWSTR(sub_block.as_ptr()),
-                &mut value,
-                &mut chars,
-            )
-            .as_bool()
-                || chars == 0
-            {
-                return None;
-            }
-            let text = std::slice::from_raw_parts(value as *const u16, chars as usize);
-            first_string(&String::from_utf16_lossy(text))
-        };
-        Some(fields.iter().map(|field| read(field)).collect())
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The invariant both pickers depend on: every row has an id that can be
+    /// stored and resolved again, and a name to show. A machine with no audio
+    /// hardware at all is allowed; a row with an empty id is not.
+    #[test]
+    fn every_listed_device_has_an_id_and_a_name() {
+        for device in capture_devices().into_iter().chain(render_devices()) {
+            assert!(!device.id.is_empty(), "{device:?}");
+            assert!(!device.name.is_empty(), "{device:?}");
+        }
+    }
+
+    /// A configured device that is not there must be an error rather than a
+    /// quiet fallback to the default one, on both platforms and for the reason
+    /// `render::output_render_device` gives.
+    #[test]
+    fn an_unknown_device_id_is_an_error() {
+        assert!(capture_device(Some("{not-a-real-device}")).is_err());
+        assert!(render_device("{not-a-real-device}").is_err());
+    }
 
     fn row(pid: u32, parent: u32, name: &str) -> ProcRow {
         (pid, (parent != 0).then_some(parent), name.to_string())

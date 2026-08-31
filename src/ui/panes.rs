@@ -9,24 +9,46 @@
 //! The target is computed from where focus *actually is*, not from a remembered
 //! ring position: standing on a mixer slider that sits between two lists, F6
 //! goes forward to the list after it rather than back to the first one. That is
-//! why [`page_order`] walks the real Win32 Tab order of the page rather than
+//! why the Windows `page_order` walks the real Tab order of the page rather than
 //! consulting a table — a control we know nothing about still has a position
 //! relative to the lists.
 //!
 //! The key itself is caught by the app-wide hook in [`super::help`] (one hook
 //! for the whole process) and handed here through [`request`]; [`pump`] does the
 //! work on the UI thread, from the idle pump.
+//!
+//! ## macOS
+//!
+//! **Not ported, and deliberately not ported as-is.** The premise above is a
+//! Windows premise: that the interface is one long Tab chain and F6 is the
+//! coarse jump through it. On macOS that premise does not hold. Full-keyboard
+//! Tab navigation is off by default (`AppleKeyboardUIMode` is 2, where Tab
+//! reaches only text fields and lists), and the navigation model a VoiceOver
+//! user actually uses is the VO cursor, which already moves freely and reads
+//! the interface without needing coarse stops carved into a chain.
+//!
+//! So a Tab-order walk is the wrong shape here even where it would compile. The
+//! ring rule in [`target`] is portable and stays, tests and all, because
+//! whatever macOS ends up doing will still be "step to the next list, wrap onto
+//! the tab bar". What has to be designed — with a VoiceOver user, not from
+//! documentation — is what the coarse stops should be when there is no chain to
+//! be coarse about, and which key should reach them. That decision belongs to
+//! the accessibility phase.
+// Items below are reached only from the Windows `imp` in this file (or from the
+// subsystem it belongs to). They are not dead in the codebase, only unreached
+// while the macOS side of this seam is unbuilt, and each will be wanted again
+// the moment it is -- so this is scoped to the file rather than being a
+// crate-wide allow, and comes off with the last stub here.
+#![cfg_attr(not(windows), allow(dead_code))]
 
-use std::rc::Rc;
+
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use windows::Win32::Foundation::HWND;
-use windows::Win32::UI::WindowsAndMessaging::{
-    GUITHREADINFO, GW_CHILD, GW_HWNDNEXT, GetGUIThreadInfo, GetWindow,
-};
 use wxdragon::prelude::*;
 
 use super::{App, Widgets};
+
+pub use imp::pump;
 
 /// Set by the hook when F6 is pressed over the main frame; read and cleared by
 /// [`pump`].
@@ -81,33 +103,6 @@ fn target(lists: &[usize], focus: Option<usize>, backward: bool) -> Option<Targe
     }
 }
 
-fn hwnd_of(widget: &dyn WxWidget) -> HWND {
-    HWND(widget.get_handle())
-}
-
-/// The page's controls in Tab order.
-///
-/// On MSW a sibling's Tab order *is* its Z order, so this is the same walk
-/// `GetNextDlgTabItem` does: children of a window in Z order, depth first so a
-/// control nested in a container (a mixer slider inside the mixer panel) lands
-/// between the containers's neighbours rather than after all of them.
-fn page_order(page: HWND) -> Vec<HWND> {
-    fn walk(parent: HWND, out: &mut Vec<HWND>) {
-        let mut child = unsafe { GetWindow(parent, GW_CHILD) };
-        while let Ok(hwnd) = child {
-            if hwnd.0.is_null() {
-                break;
-            }
-            out.push(hwnd);
-            walk(hwnd, out);
-            child = unsafe { GetWindow(hwnd, GW_HWNDNEXT) };
-        }
-    }
-    let mut out = Vec::new();
-    walk(page, &mut out);
-    out
-}
-
 /// Every list in the main window. Only the ones on the current page survive the
 /// filter in [`pump`], so this needs no per-tab table: a new list on a tab needs
 /// only a `Widgets` field and a line here.
@@ -124,67 +119,127 @@ fn all_lists(w: &Widgets) -> [&ListBox; 8] {
     ]
 }
 
-/// The window with keyboard focus, however deep — the same route `help::pump`
-/// takes, since wxdragon exposes no `FindFocus`.
-fn focused() -> HWND {
-    let mut info = GUITHREADINFO {
-        cbSize: std::mem::size_of::<GUITHREADINFO>() as u32,
-        ..Default::default()
+/// A Z-order walk of the page for the Tab positions, `GUITHREADINFO` for the
+/// focused window (wxdragon exposes no `FindFocus`), and `set_focus` to land.
+#[cfg(windows)]
+mod imp {
+    use super::{App, Target, all_lists, target, BACKWARD, REQUESTED};
+    use std::rc::Rc;
+    use std::sync::atomic::Ordering;
+    use windows::Win32::Foundation::HWND;
+    use windows::Win32::UI::WindowsAndMessaging::{
+        GUITHREADINFO, GW_CHILD, GW_HWNDNEXT, GetGUIThreadInfo, GetWindow,
     };
-    unsafe {
-        if GetGUIThreadInfo(0, &mut info).is_ok() {
-            info.hwndFocus
-        } else {
-            HWND::default()
+    use wxdragon::prelude::*;
+
+    fn hwnd_of(widget: &dyn WxWidget) -> HWND {
+        HWND(widget.get_handle())
+    }
+
+    /// The page's controls in Tab order.
+    ///
+    /// On MSW a sibling's Tab order *is* its Z order, so this is the same walk
+    /// `GetNextDlgTabItem` does: children of a window in Z order, depth first so a
+    /// control nested in a container (a mixer slider inside the mixer panel) lands
+    /// between the containers's neighbours rather than after all of them.
+    fn page_order(page: HWND) -> Vec<HWND> {
+        fn walk(parent: HWND, out: &mut Vec<HWND>) {
+            let mut child = unsafe { GetWindow(parent, GW_CHILD) };
+            while let Ok(hwnd) = child {
+                if hwnd.0.is_null() {
+                    break;
+                }
+                out.push(hwnd);
+                walk(hwnd, out);
+                child = unsafe { GetWindow(hwnd, GW_HWNDNEXT) };
+            }
         }
+        let mut out = Vec::new();
+        walk(page, &mut out);
+        out
+    }
+
+    /// The window with keyboard focus, however deep — the same route `help::pump`
+    /// takes, since wxdragon exposes no `FindFocus`.
+    fn focused() -> HWND {
+        let mut info = GUITHREADINFO {
+            cbSize: std::mem::size_of::<GUITHREADINFO>() as u32,
+            ..Default::default()
+        };
+        unsafe {
+            if GetGUIThreadInfo(0, &mut info).is_ok() {
+                info.hwndFocus
+            } else {
+                HWND::default()
+            }
+        }
+    }
+
+    /// Called each pump tick. One relaxed load unless F6 was actually pressed.
+    pub fn pump(app: &Rc<App>) {
+        if !REQUESTED.swap(false, Ordering::Relaxed) {
+            return;
+        }
+        if app.shutting_down.get() {
+            // Widgets are being torn down; touching them would be a use-after-free.
+            return;
+        }
+        let backward = BACKWARD.load(Ordering::Relaxed);
+        app.widgets(|w| {
+            let selected = w.notebook.selection();
+            let Some(page) = usize::try_from(selected)
+                .ok()
+                .and_then(|i| w.notebook.get_page(i))
+            else {
+                return;
+            };
+            let order = page_order(hwnd_of(&page));
+            let focus = focused();
+            let position = |hwnd: HWND| order.iter().position(|&h| h == hwnd);
+
+            // Focus on the tab bar (or on nothing we can place) reads as `None`,
+            // which the ring treats as "outside the page".
+            let at = position(focus);
+            let mut lists: Vec<usize> = all_lists(w)
+                .iter()
+                .filter_map(|list| position(hwnd_of(*list)))
+                .collect();
+            lists.sort_unstable();
+
+            match target(&lists, at, backward) {
+                // Focusing a list must never move its selection — see `ui::list`.
+                // Arriving is enough for the screen reader to read the current row.
+                Some(Target::List(i)) => {
+                    if let Some(&hwnd) = order.get(i)
+                        && let Some(list) = all_lists(w).iter().find(|l| hwnd_of(**l) == hwnd)
+                    {
+                        list.set_focus();
+                    }
+                }
+                Some(Target::TabBar) => w.notebook.set_focus(),
+                None => {}
+            }
+        });
     }
 }
 
-/// Called each pump tick. One relaxed load unless F6 was actually pressed.
-pub fn pump(app: &Rc<App>) {
-    if !REQUESTED.swap(false, Ordering::Relaxed) {
-        return;
-    }
-    if app.shutting_down.get() {
-        // Widgets are being torn down; touching them would be a use-after-free.
-        return;
-    }
-    let backward = BACKWARD.load(Ordering::Relaxed);
-    app.widgets(|w| {
-        let selected = w.notebook.selection();
-        let Some(page) = usize::try_from(selected)
-            .ok()
-            .and_then(|i| w.notebook.get_page(i))
-        else {
-            return;
-        };
-        let order = page_order(hwnd_of(&page));
-        let focus = focused();
-        let position = |hwnd: HWND| order.iter().position(|&h| h == hwnd);
+/// F6 does nothing on macOS yet. See the module header — this is a design
+/// decision waiting on a VoiceOver user, not a missing API.
+///
+/// [`request`] still runs, because `help`'s hook is where it is called from and
+/// that hook does not exist here either, so nothing sets the flag in the first
+/// place. Draining it anyway keeps the two platforms' state machines identical.
+#[cfg(target_os = "macos")]
+mod imp {
+    use super::{App, BACKWARD, REQUESTED};
+    use std::rc::Rc;
+    use std::sync::atomic::Ordering;
 
-        // Focus on the tab bar (or on nothing we can place) reads as `None`,
-        // which the ring treats as "outside the page".
-        let at = position(focus);
-        let mut lists: Vec<usize> = all_lists(w)
-            .iter()
-            .filter_map(|list| position(hwnd_of(*list)))
-            .collect();
-        lists.sort_unstable();
-
-        match target(&lists, at, backward) {
-            // Focusing a list must never move its selection — see `ui::list`.
-            // Arriving is enough for the screen reader to read the current row.
-            Some(Target::List(i)) => {
-                if let Some(&hwnd) = order.get(i)
-                    && let Some(list) = all_lists(w).iter().find(|l| hwnd_of(**l) == hwnd)
-                {
-                    list.set_focus();
-                }
-            }
-            Some(Target::TabBar) => w.notebook.set_focus(),
-            None => {}
+    pub fn pump(_app: &Rc<App>) {
+        if REQUESTED.swap(false, Ordering::Relaxed) {
+            let _ = BACKWARD.load(Ordering::Relaxed);
         }
-    });
+    }
 }
 
 #[cfg(test)]

@@ -200,9 +200,13 @@ mod tests {
         assert!(!is_supported(Path::new("noextension")));
     }
 
+    /// Built from components rather than a literal, because a separator is not
+    /// a separator on both platforms: `C:\music\01 Hello.mp3` is one long file
+    /// name to a Unix `Path`, and the test would be asserting nothing.
     #[test]
     fn a_track_is_named_by_its_filename_without_the_extension() {
-        assert_eq!(track_title(Path::new(r"C:\music\01 Hello.mp3")), "01 Hello");
+        let path = Path::new("music").join("01 Hello.mp3");
+        assert_eq!(track_title(&path), "01 Hello");
     }
 
     /// Without shuffle the list is the folder's own order, over and over.

@@ -1,6 +1,6 @@
 # Pubsplash
 
-Pubsplash is a Windows app for accessible live audio streaming. It sends a mix to Audiopub or a direct Icecast server and works well with screen readers such as NVDA and JAWS.
+Pubsplash is an app for accessible live audio streaming, on Windows and on macOS. It sends a mix to Audiopub or a direct Icecast server and works well with screen readers such as NVDA and JAWS on Windows, and with VoiceOver on a Mac.
 
 You can combine microphones, desktop audio, application audio, text-to-speech, and sound cues; adjust the mix; add VST effects; read and send Audiopub chat; and record an MP3 locally.
 
@@ -8,24 +8,42 @@ You can combine microphones, desktop audio, application audio, text-to-speech, a
 
 You need:
 
-- Windows 10 or Windows 11
+- Windows 10 or Windows 11, or macOS 14.4 or newer on an Apple-silicon Mac
 - An Audiopub account trusted to stream, or Icecast source credentials
 - An audio device if you plan to use a microphone
+
+Two things are Windows-only for now, and each says so where it comes up: updating in place, and pinning a **Desktop Audio** source to one playback device. Everything else - microphones, desktop and application audio, the media player, text-to-speech, VST3 effects, chat, recording - works on both.
 
 ## Install
 
 Download the newest release from the [GitHub releases page](https://github.com/ironcross32/pubsplash/releases).
 
-These two links always point at the newest release, so they never go stale:
+These links always point at the newest release, so they never go stale:
 
-- [**Installer**](https://github.com/ironcross32/pubsplash/releases/latest/download/pubsplash-setup.exe)
-- [**Portable ZIP**](https://github.com/ironcross32/pubsplash/releases/latest/download/pubsplash-portable.zip)
+- [**Installer**](https://github.com/ironcross32/pubsplash/releases/latest/download/pubsplash-setup.exe) (Windows)
+- [**Portable ZIP**](https://github.com/ironcross32/pubsplash/releases/latest/download/pubsplash-portable.zip) (Windows)
+- [**Disk image**](https://github.com/ironcross32/pubsplash/releases/latest/download/pubsplash-macos-arm64.dmg) (macOS)
 
-The two keep their data in different places. The installed copy uses `%LOCALAPPDATA%\pubsplash`. The portable copy uses a `user_data` folder inside the folder you unzipped. This allows Pubsplash and your user data to travel with you. Updates leave `user_data` alone.
+### Windows
+
+The installer and the portable ZIP keep their data in different places. The installed copy uses `%LOCALAPPDATA%\pubsplash`. The portable copy uses a `user_data` folder inside the folder you unzipped. This allows Pubsplash and your user data to travel with you. Updates leave `user_data` alone.
 
 One thing does not travel with a portable copy: saved passwords and API keys are encrypted for the Windows account that entered them, so on a different machine or a different user account they read as blank and have to be entered again. Everything else will still work.
 
 Both kinds keep themselves up to date — see [Automatic updates](#automatic-updates). Every release is also on the [releases page](https://github.com/ironcross32/pubsplash/releases) under its version number, along with debug symbols.
+
+### macOS
+
+Open the disk image and drag Pubsplash to your Applications folder. It needs macOS 14.4 or newer and an Apple-silicon Mac. Settings, logs and sound packs live in `~/Library/Application Support/pubsplash`. Recordings go to your **Music** folder unless you choose another under **Recording** on Preferences' **Archiving** tab.
+
+macOS will ask your permission the first time Pubsplash needs something, and each request comes only when you actually reach for that feature:
+
+- **Microphone**, the first time you add a microphone source.
+- **System Audio Recording**, the first time you add an **Application** source. This is what lets Pubsplash hear the app you choose.
+- **Screen Recording**, the first time you add a **Desktop Audio** source. macOS puts "everything this machine is playing" behind that permission; Pubsplash captures only the sound, never a picture of your screen.
+- **Accessibility**, only if you mark one of your own shortcuts **Global** on Preferences' **Keybinds** tab. Without it those shortcuts still work while Pubsplash is in front; nothing else is affected.
+
+If you say no to one and change your mind, they are all in **System Settings > Privacy & Security** under those names.
 
 ## Getting started
 
@@ -124,13 +142,15 @@ Speech is played locally by default. Enable **Send speech to the stream** if lis
 | Ctrl+M | Toggle monitoring for the focused mixer strip |
 | Ctrl+O | Open a file on your first media player |
 
-Use **Preferences > Keybinds** to add, change, or remove shortcuts. Global shortcuts can work while another application is focused; they must include Ctrl, Alt, or Shift, or be a function key.
+Use **Preferences > Keybinds** to add, change, or remove shortcuts. Global shortcuts can work while another application is focused; they must include Ctrl, Alt, or Shift, or be a function key. On a Mac they additionally need the Accessibility permission, which Pubsplash asks for the first time you mark a shortcut global. A shortcut is stored the same way on both systems, so a settings file carries your shortcuts from one machine to the other.
 
 Mixer sliders change by 1% with arrow keys and by 10% with Page Up or Page Down. Home and End move to maximum and minimum. A slider's context menu can enable volume boost up to 500%.
 
 ## Choosing devices
 
-The **Audio** tab of Preferences chooses which playback device Pubsplash plays out of. Everything Pubsplash plays for you goes there - sources you are monitoring, text-to-speech, and sound cues - so you can monitor on headphones while the rest of the machine keeps using the speakers. It is not what your listeners hear. The default, **Default output device (follow system)**, uses whatever Windows is currently using, so it moves with you when you plug in a headset. **Play a test sound** checks your choice without starting a stream.
+The **Audio** tab of Preferences chooses which playback device Pubsplash plays out of. Everything Pubsplash plays for you goes there - sources you are monitoring, text-to-speech, and sound cues - so you can monitor on headphones while the rest of the machine keeps using the speakers. It is not what your listeners hear. The default, **Default output device (follow system)**, uses whatever the system is currently using, so it moves with you when you plug in a headset. **Play a test sound** checks your choice without starting a stream.
+
+On a Mac, a **Desktop Audio** source captures everything the machine is playing except Pubsplash itself, so your own speech and sound cues never reach your listeners. It needs the Screen Recording permission, which is where macOS keeps system-audio capture. The one option it does not have there is pinning it to a single playback device, described below: clear the device and it captures everything.
 
 A **Desktop Audio** source captures all of your playback devices at once by default, leaving out Pubsplash's own audio. Its **Edit** dialog can instead pin it to one device by name. There is one rule: that device cannot be the one Pubsplash plays out of. Capturing a single device captures *everything* on it with nothing left out, so aiming it at Pubsplash's own output would send your speech and sound cues straight back to your listeners. Pubsplash refuses that pairing and says so, leaving the dialog open so you can pick another - and if you later change the output device to one a Desktop Audio source is capturing, it tells you and that source falls back to capturing every device with Pubsplash excluded. Either way, Pubsplash's own audio never reaches your stream.
 
@@ -148,21 +168,25 @@ The **Sound packs** tab controls startup, shutdown, listener, and chat sounds. Y
 
 Pubsplash checks for updates at startup by default. Change this on Preferences' **General** tab, or use **Check for updates now**. Updates are verified before installation and never interrupt an active stream or recording.
 
+On a Mac, Pubsplash tells you when a new version is out and opens the download page; installing it is dragging the new copy to Applications as you did the first time.
+
 ## Troubleshooting
 
 If a source is silent, check its device or application selection and look for "(reconnecting)" in the mixer. For connection problems, verify the service credentials and consult the log.
 
 If listeners hear nothing at the start of a broadcast, read the Status line on the **Home** tab. **"Streaming (waiting for the server to accept the stream)"** means your audio is going out but Audio Pub has not finished checking it yet, and a stream page will play silence until it does — this normally clears in a few seconds. **"Streaming (the server has lost the source)"** means the server has stopped receiving you even though your own connection looks healthy; it will end the stream in a few minutes if that does not recover. A stream that stays unaccepted for three quarters of a minute is explained in the log.
 
-Open **Go to > Go to Pubsplash data directory** to find the data folder. Logs are in %LOCALAPPDATA%\pubsplash\logs\. On Preferences' **Logging & debugging** tab, increase the log level temporarily or choose **Compress logs** to create a ZIP containing logs and crash dumps for a bug report. The archive does not include settings, passwords, or API keys.
+Open **Go to > Go to Pubsplash data directory** to find the data folder. Logs are in `%LOCALAPPDATA%\pubsplash\logs\` on Windows and `~/Library/Application Support/pubsplash/logs/` on a Mac. On Preferences' **Logging & debugging** tab, increase the log level temporarily or choose **Compress logs** to create a ZIP containing logs and crash dumps for a bug report. The archive does not include settings, passwords, or API keys.
 
 ## Building from source
 
-Install Rust stable, Visual Studio 2019 or later with the Windows SDK, CMake, and Ninja. Then run:
+On Windows, install Rust stable, Visual Studio 2019 or later with the Windows SDK, CMake, and Ninja. On macOS, install Rust stable, the Xcode command line tools, CMake, and Ninja (`brew install cmake ninja`). Then run:
 
     cargo build --release
 
 The first build downloads the required prebuilt wxWidgets libraries.
+
+To build a Mac app bundle and disk image, install [cargo-packager](https://github.com/crabnebula-dev/cargo-packager) and run `cargo packager --release --formats app,dmg`. A bundle built this way runs on the machine that built it and nowhere else; see `assets/macos/README.md` for what real signing needs.
 
 ## License
 

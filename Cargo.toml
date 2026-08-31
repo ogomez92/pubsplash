@@ -5,6 +5,17 @@ edition = "2024"
 # Several binaries live here, so `cargo run` is ambiguous without naming the
 # default target.
 default-run = "pubsplash"
+# Every binary is declared below, `src/main.rs` included. Auto-discovery is off
+# so that `src/bin/updater_win.rs` -- the Windows half of `pubsplash-update`,
+# which its `bin/updater.rs` seam includes with `#[path]` -- is a module rather
+# than a sixth binary.
+autobins = false
+
+# The app itself. Spelled out because `autobins = false` above turns off the
+# auto-discovery that would otherwise find `src/main.rs`.
+[[bin]]
+name = "pubsplash"
+path = "src/main.rs"
 
 # Loads a single VST plugin and reports its info; kept out-of-process so a
 # crashing plugin cannot take down Pubsplash during a scan.
@@ -44,11 +55,13 @@ path = "src/bin/gen_help.rs"
 name = "gen-po"
 path = "src/bin/gen_po.rs"
 
-[build-dependencies]
+# Embeds the Windows resource script; build.rs only calls it under
+# `CARGO_CFG_WINDOWS`, and it has nothing to do on any other platform.
+[target.'cfg(windows)'.build-dependencies]
 winresource = "0.1"
 
 [dependencies]
-wxdragon = "0.9"
+wxdragon = "0.9.20"
 
 log = "0.4"
 # `async` gives `WriteMode::Async`, which keeps log writes off the audio
@@ -95,7 +108,6 @@ sha2 = "0.10"
 hmac = "0.12"
 urlencoding = "2"
 
-wasapi = "0.23"
 mp3lame-encoder = "0.2"
 rtrb = "0.3"
 hound = "3.5"
@@ -110,8 +122,86 @@ sysinfo = { version = "0.36", default-features = false, features = ["system"] }
 # and the default feature set drags in bzip2, lzma, zstd, xz and an AES stack
 # none of which would ever be reached.
 zip = { version = "8", default-features = false, features = ["deflate-flate2-zlib-rs"] }
+# The local wall clock, and the only thing in the tree that knows a time zone.
+# It replaced three separate Win32 calls -- `GetLocalTime` in two places and
+# `TzSpecificLocalTimeToSystemTime` in `schedule` -- which were between them the
+# app's only reason to ask for the `Win32_System_Time` feature. Worth having on
+# Windows on its own account: jiff carries the real IANA rules, so a schedule
+# set across a DST transition lands on the right instant on either platform.
+jiff = "0.2"
+
+# Windows-only. `wasapi` is the capture and render stack, and the `windows`
+# crates are everything else Win32: DPAPI, the keyboard hook, MSAA/UIA, the
+# minidump writer, SAPI, and the process/registry queries. Everything that
+# needs them sits behind `crate::platform`, so no portable module names them.
+[target.'cfg(windows)'.dependencies]
+wasapi = "0.23"
 windows-core = "0.62.2"
 windows = { version = "0.62", features = ["Win32_Media_Speech", "Win32_Media_Audio", "Win32_System_Com", "Win32_System_Com_StructuredStorage", "Win32_Foundation", "Win32_System_Registry", "Win32_System_LibraryLoader", "Win32_Storage_FileSystem", "Win32_System_Diagnostics_Debug", "Win32_System_Kernel", "Win32_System_Memory", "Win32_System_Threading", "Win32_System_SystemInformation", "Win32_System_Time", "Win32_UI_WindowsAndMessaging", "Win32_UI_Input_KeyboardAndMouse", "Win32_UI_Accessibility", "Win32_UI_Controls", "Win32_Globalization", "Win32_UI_Shell", "Win32_System_Variant", "Win32_System_Ole", "Win32_Security_Cryptography"] }
+
+# macOS-only. The Keychain, which is where `secret::Secret` keeps the key it
+# encrypts stored credentials with -- the nearest equivalent to what DPAPI does
+# for the same type on Windows.
+[target.'cfg(target_os = "macos")'.dependencies]
+security-framework = "3"
+# `crash.rs` only: `sigaction`, `dladdr` and `backtrace`. Already in the tree
+# several times over transitively; named here so the crash handler's FFI is
+# declared by the crate that owns those declarations rather than by hand.
+libc = "0.2"
+# Core Audio, for capture, playback and device enumeration. The `objc2` family
+# rather than `coreaudio-rs`/`coreaudio-sys` for two reasons: these are
+# pre-generated bindings with no `bindgen` and so no libclang at build time, and
+# wxdragon already pulls objc2 0.3 into the tree, so they share one version of
+# it instead of standing up a second FFI stack beside it.
+#
+# They are bindings and nothing more -- no stream abstraction, no device
+# manager. That is what is wanted here: `audio::capture` and `audio::monitor`
+# already own the supervisor loop, the backoff, the ring buffers and the health
+# accounting, and a crate that owns those too would have to be fought rather
+# than used.
+objc2-core-audio = "0.3"
+objc2-audio-toolbox = "0.3"
+objc2-core-audio-types = "0.3"
+# A device's UID and name come back as `CFString`s, which have to be retained
+# and copied out. Already in the tree under `objc2-core-audio`; named here
+# because this crate uses it directly.
+objc2-core-foundation = "0.3"
+# The local system voice: `AVSpeechSynthesizer` and the `AVAudioPCMBuffer`s its
+# `write(_:toBufferCallback:)` hands back, which is the slot SAPI fills on
+# Windows. Same objc2 family as the Core Audio bindings above, so no second FFI
+# stack.
+objc2-avf-audio = "0.3"
+# The three pieces that API needs beyond the framework binding itself: `objc2`
+# for `Retained` and the message sends, `objc2-foundation` for the `NSString`
+# the utterance is built from, and `block2` for the buffer callback -- the API
+# is block-based and there is no other way to receive the audio.
+objc2 = "0.6"
+objc2-foundation = "0.3"
+block2 = "0.6"
+# `AVSpeechSynthesizer` delivers its buffers only through the *main* run loop --
+# measured, not assumed -- so the speech worker starts each utterance on the main
+# queue and waits on its own thread. This is the only thing in the tree that
+# dispatches, and `tts/sapi_mac.rs` documents why at length.
+dispatch2 = "0.3"
+# `ui/help.rs`: the screen-reader announcement (`NSAccessibilityAnnouncement-
+# Requested`), the app-wide key monitor that replaces the Windows low-level
+# keyboard hook, and the key-window checks that gate both. wxdragon already
+# builds against this, so it is the same copy.
+objc2-app-kit = "0.3"
+# `ui/global_keys.rs` only: the `CGEventTap` that lets a binding marked *global*
+# fire while another application is in front. It is the one thing in the app that
+# needs the Accessibility permission, and it is asked for lazily -- see that
+# file's header.
+objc2-core-graphics = "0.3"
+# Desktop Audio: `SCStream` with `capturesAudio` and, crucially,
+# `excludesCurrentProcessAudio` -- Apple's supported "everything the machine is
+# playing except me" flag. It replaced a Core Audio process tap built with
+# `CATapDescription(excludingProcesses:)`, whose exclusion did not bind
+# reliably; `audio/screen_audio.rs` carries the measurement that decided it.
+objc2-screen-capture-kit = "0.3"
+# The `CMSampleBuffer` ScreenCaptureKit delivers its audio in. Only
+# `audio/screen_audio.rs` names it.
+objc2-core-media = "0.3"
 
 [dev-dependencies]
 # `test-util` gives `#[tokio::test(start_paused = true)]`, which lets the
@@ -153,8 +243,15 @@ debug = "line-tables-only"
 [package.metadata.packager]
 before-packaging-command = "cargo build --release --bin pubsplash --bin pubsplash-scan --bin pubsplash-soundpack --bin pubsplash-update --bin soundpack"
 identifier = "com.github.ironcross32.pubsplash"
+# Windows' format. macOS is packaged with `cargo packager --formats app,dmg`
+# (see the release workflow's macOS job), because this key is not per-platform
+# and NSIS is what a bare `cargo packager` should still mean on the shipping
+# platform.
 formats = ["nsis"]
-icons = ["assets/icon/pubsplash.ico"]
+# Both are listed: cargo-packager picks the `.ico` for NSIS and the `.icns` for
+# the app bundle. The `.icns` is generated from the same artwork -- see
+# `assets/macos/README.md` for the one command that rebuilds it.
+icons = ["assets/icon/pubsplash.ico", "assets/icon/pubsplash.icns"]
 # Extra files copied next to the exe in the install directory, which is where
 # the Help menu looks for them. Both are generated from the Markdown sources at
 # package time (see the release workflow's "Convert docs to HTML" step) —
@@ -176,3 +273,18 @@ binaries = [
 # elevation prompted) at install time, instead of forcing the per-user default.
 [package.metadata.packager.nsis]
 installer-mode = "both"
+
+# macOS. Everything here is about being allowed to run at all rather than about
+# presentation -- see the two plists for what each key buys and what breaks
+# without it.
+[package.metadata.packager.macos]
+# Core Audio process taps, which an Application source is built on, arrived in
+# 14.4. Kept in step with LSMinimumSystemVersion in the Info.plist.
+minimum-system-version = "14.4"
+# Merged into the generated Info.plist. Carries the microphone and audio-capture
+# usage descriptions, without which macOS kills the app the moment it opens a
+# capture -- silently, and with nothing in Pubsplash's own log.
+info-plist-path = "assets/macos/Info.plist"
+# Hardened-runtime entitlements. `disable-library-validation` in particular is
+# what allows third-party VST3 plugins to be loaded at all.
+entitlements = "assets/macos/entitlements.plist"

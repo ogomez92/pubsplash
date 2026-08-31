@@ -32,6 +32,10 @@ pub struct NameContext {
     pub apps: HashMap<String, AppProcess>,
     /// Identity names of sources whose capture thread is failing and retrying.
     pub failing: HashSet<String>,
+    /// Identity names of sources that cannot run on this build at all, so no
+    /// retry is going on behind them. See [`with_state`] for why the two are
+    /// kept apart.
+    pub unavailable: HashSet<String>,
     /// Display names for TTS voices whose configured id is an opaque key,
     /// keyed by engine id and then voice id. Only engines that need it are
     /// looked up, and an id the catalog has never seen is simply absent.
@@ -54,6 +58,7 @@ impl NameContext {
         sources: &[SourceConfig],
         apps: HashMap<String, AppProcess>,
         failing: HashSet<String>,
+        unavailable: HashSet<String>,
         media: HashMap<String, crate::media::player::Status>,
         schedulers: HashMap<String, crate::media::scheduler::Status>,
     ) -> Self {
@@ -79,6 +84,7 @@ impl NameContext {
             },
             apps,
             failing,
+            unavailable,
             voice_labels: voice_labels_for(sources),
             media,
             schedulers,
@@ -165,12 +171,22 @@ fn voice_display<'a>(
     }
 }
 
-/// Marks a label whose source cannot currently reach its device. The capture
-/// thread keeps retrying, so this is a state the source comes back from — the
-/// word has to say that, or a user hearing it would go looking for a setting to
-/// fix instead of waiting a couple of seconds.
+/// Marks a label whose source is not carrying audio, with *which* of the two
+/// reasons it is.
+///
+/// **The two words have to say opposite things, which is why they are separate
+/// states.** A capture thread that is retrying will probably come back, so
+/// "reconnecting" tells the user to wait a couple of seconds rather than go
+/// looking for a setting to fix. A source that cannot run on this build at all
+/// has nothing retrying behind it, and calling that "reconnecting" sends
+/// somebody hunting for a flapping device that was never there — which is
+/// exactly what a Desktop Audio source did on macOS, for the life of every
+/// session. "Unavailable" is the one that means *change something*; the log
+/// carries the reason.
 fn with_state(label: String, source: &SourceConfig, ctx: &NameContext) -> String {
-    if ctx.failing.contains(&source.name) {
+    if ctx.unavailable.contains(&source.name) {
+        t!("{label} (unavailable)", label = label)
+    } else if ctx.failing.contains(&source.name) {
         t!("{label} (reconnecting)", label = label)
     } else {
         label
@@ -487,6 +503,7 @@ mod tests {
                 },
             )]),
             failing: HashSet::new(),
+            unavailable: HashSet::new(),
             voice_labels: HashMap::from([(
                 crate::tts::engines::ELEVENLABS.to_string(),
                 HashMap::from([("21m00Tcm4TlvDq8ikWAM".to_string(), "Rachel".to_string())]),
@@ -539,6 +556,32 @@ mod tests {
     /// A source whose device dropped out is retrying, not broken, and both
     /// forms have to say so — the mixer strip is the only place a screen-reader
     /// user finds out their microphone is not on air.
+    /// The two states must not be confusable: one asks the user to wait, the
+    /// other to change something.
+    #[test]
+    fn an_unavailable_source_is_not_called_reconnecting() {
+        let mut ctx = ctx();
+        let src = source(SourceKindConfig::DesktopAudio { device_id: None });
+        ctx.unavailable.insert(src.name.clone());
+        assert!(
+            list_label(&src, &ctx).ends_with("(unavailable)"),
+            "{}",
+            list_label(&src, &ctx)
+        );
+        assert!(!list_label(&src, &ctx).contains("reconnecting"));
+    }
+
+    /// A source can be in both sets while the engine retires it; the permanent
+    /// answer is the one worth showing.
+    #[test]
+    fn unavailable_wins_over_reconnecting() {
+        let mut ctx = ctx();
+        let src = source(SourceKindConfig::DesktopAudio { device_id: None });
+        ctx.failing.insert(src.name.clone());
+        ctx.unavailable.insert(src.name.clone());
+        assert!(list_label(&src, &ctx).ends_with("(unavailable)"));
+    }
+
     #[test]
     fn a_reconnecting_source_says_so_in_both_forms() {
         let src = source(SourceKindConfig::Microphone {
@@ -788,15 +831,19 @@ mod tests {
             strip_label(&src, &ctx()),
             "Text-to-Speech (Blastbay Libby - English (United States))"
         );
+        // The local voice's *name* is the platform's -- see
+        // `tts::engines::LOCAL_VOICE_NAME` -- so what is pinned here is how the
+        // label is composed, not which operating system is running it.
+        let local = crate::tts::engines::LOCAL_VOICE_NAME;
         assert_eq!(
             list_label(&src, &ctx()),
-            "Text-to-Speech: SAPI 5, Blastbay Libby - English (United States)"
+            format!("Text-to-Speech: {local}, Blastbay Libby - English (United States)")
         );
         let default_voice = source(SourceKindConfig::Tts(TtsSourceConfig::default()));
         assert_eq!(strip_label(&default_voice, &ctx()), "Text-to-Speech");
         assert_eq!(
             list_label(&default_voice, &ctx()),
-            "Text-to-Speech: SAPI 5, default voice"
+            format!("Text-to-Speech: {local}, default voice")
         );
     }
 
@@ -821,7 +868,10 @@ mod tests {
         }));
         assert_eq!(
             list_label(&unknown, &ctx()),
-            "Text-to-Speech: SAPI 5, default voice"
+            format!(
+                "Text-to-Speech: {}, default voice",
+                crate::tts::engines::LOCAL_VOICE_NAME
+            )
         );
     }
 

@@ -11,6 +11,10 @@ pub mod engine;
 pub mod engines;
 pub mod net;
 pub mod queue;
+/// The local, offline system voice. SAPI 5 on Windows; the same slot on macOS,
+/// where `AVSpeechSynthesizer` is what will fill it. The engine id stays `sapi`
+/// on both — see the macOS file for why.
+#[cfg_attr(not(windows), path = "sapi_mac.rs")]
 pub mod sapi;
 pub mod speaker;
 pub mod ssml;
@@ -58,14 +62,30 @@ mod tests {
         assert_eq!(voice_count_for_model(engines::OPENAI, ""), None);
     }
 
+    /// The local voice keeps the id `sapi` on every platform and takes its
+    /// *name* from the platform, so a settings file moves between them while a
+    /// Mac user is never shown the name of a Windows API.
     #[test]
     fn the_picker_list_carries_ids_and_display_names() {
         let names = engine_names();
         assert!(
             names
                 .iter()
-                .any(|(id, name)| *id == "sapi" && *name == "SAPI 5")
+                .any(|(id, name)| *id == "sapi" && *name == engines::LOCAL_VOICE_NAME)
         );
         assert_eq!(names.len(), engines::ALL.len());
+    }
+
+    /// The id is the thing a settings file stores, so it must not follow the
+    /// name across platforms.
+    #[test]
+    fn the_local_voice_id_is_the_same_on_every_platform() {
+        assert_eq!(engines::SAPI, "sapi");
+        assert_eq!(engines::resolve_id("sapi"), engines::SAPI);
+        assert_eq!(
+            engines::resolve_id("something-unknown"),
+            engines::SAPI,
+            "an unknown engine must still be able to talk"
+        );
     }
 }

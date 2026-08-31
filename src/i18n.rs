@@ -117,8 +117,10 @@ pub fn init(configured: Option<&str>) {
     }
 }
 
-/// The language tag Windows reports for the user's interface, such as `es-ES`.
-/// Falls back to `en` if the call fails, which leaves the UI in English.
+/// The language tag the system reports for the user's interface, such as
+/// `es-ES`. Falls back to `en` if it cannot be read, which leaves the UI in
+/// English.
+#[cfg(windows)]
 fn system_language() -> String {
     use windows::Win32::Globalization::GetUserDefaultLocaleName;
     let mut buf = [0u16; 85]; // LOCALE_NAME_MAX_LENGTH
@@ -128,6 +130,28 @@ fn system_language() -> String {
     }
     // The count includes the terminating null.
     String::from_utf16_lossy(&buf[..(len as usize).saturating_sub(1)])
+}
+
+/// The POSIX answer to the same question, read from the environment.
+///
+/// `LC_ALL` overrides `LANG` by the usual precedence, and the encoding suffix a
+/// value may carry (`es_ES.UTF-8`) is dropped -- [`best_match`] wants the tag
+/// and nothing else. An unset variable falls back to English, which is the same
+/// answer a failed Win32 call gives.
+///
+/// This is deliberately weaker than the Windows path, and on macOS that shows:
+/// a bundle launched from the Finder inherits neither variable, so a Spanish Mac
+/// started by double-clicking reads as English until the language is chosen in
+/// Preferences. The full answer there is `NSLocale.preferredLanguages`, which
+/// needs a Mac to write and test against.
+#[cfg(not(windows))]
+fn system_language() -> String {
+    std::env::var("LC_ALL")
+        .or_else(|_| std::env::var("LANG"))
+        .ok()
+        .map(|tag| tag.split('.').next().unwrap_or("").to_string())
+        .filter(|tag| !tag.is_empty() && tag != "C" && tag != "POSIX")
+        .unwrap_or_else(|| "en".to_string())
 }
 
 /// Picks the catalog for a language tag, matching the base language when the

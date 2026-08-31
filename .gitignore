@@ -6,3 +6,10 @@
 
 # Agent scratch: proposed README edits, per agents.md. Not repo content.
 /proposed_doc.md
+
+# Throwaway macOS accessibility spike, not repo content.
+/spike/
+
+# Finder metadata. Created on any macOS machine that opens a folder; never
+# repo content.
+.DS_Store

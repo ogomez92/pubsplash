@@ -197,12 +197,7 @@ fn default_dir() -> std::path::PathBuf {
 /// shape as `super::recording_filename`, so two captures never collide and they
 /// sort in the order they were taken.
 fn archive_filename() -> String {
-    use windows::Win32::System::SystemInformation::GetLocalTime;
-    let t = unsafe { GetLocalTime() };
-    format!(
-        "pubsplash-logs_{:04}-{:02}-{:02}_{:02}-{:02}-{:02}.zip",
-        t.wYear, t.wMonth, t.wDay, t.wHour, t.wMinute, t.wSecond
-    )
+    format!("pubsplash-logs_{}.zip", crate::localtime::now().file_stamp())
 }
 
 #[cfg(test)]

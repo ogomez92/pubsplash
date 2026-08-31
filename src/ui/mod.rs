@@ -18,6 +18,19 @@ mod home;
 mod keybinds;
 mod keybinds_ui;
 mod list;
+/// Translating macOS key codes into the Windows VK codes a chord is stored as.
+/// macOS-only, but its table and tests are plain data and compile anywhere the
+/// module is built.
+#[cfg(target_os = "macos")]
+mod mac_keys;
+/// The two keyboard behaviours wxWidgets does not give a macOS user: ENTER on a
+/// dialog's confirm button, and arrow traversal inside a radio group.
+#[cfg(target_os = "macos")]
+mod mac_ui;
+/// The `CGEventTap` a *global* keybinding needs on macOS, and the only thing in
+/// the app that asks for the Accessibility permission.
+#[cfg(target_os = "macos")]
+mod global_keys;
 mod logging_ui;
 mod mastodon_post;
 mod mastodon_prefs;
@@ -25,14 +38,24 @@ mod mastodon_templates;
 mod media;
 mod scheduler;
 mod scheduler_ui;
+// The three accessibility modules below are the ones the port measurement found
+// to be Windows problems rather than accessibility problems: on macOS the native
+// controls announce what these fight wx to achieve on MSW. Each `*_mac.rs`
+// records what its Windows twin exists for and why none of it is needed, and
+// keeps the same public surface so no call site is cfg'd.
+#[cfg_attr(not(windows), path = "native_acc_mac.rs")]
 mod native_acc;
 mod panes;
+#[cfg_attr(not(windows), path = "picker_acc_mac.rs")]
 mod picker_acc;
 mod preferences;
 mod scan_dialog;
 mod scenes;
 mod schedule_ui;
 mod sends;
+/// The slider key convention, shared by both platforms.
+mod slider_keys;
+#[cfg_attr(not(windows), path = "slider_uia_mac.rs")]
 mod slider_uia;
 mod sound_preview;
 mod stream_info_dialog;
@@ -53,9 +76,6 @@ use std::rc::Rc;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
-use windows::Win32::UI::Shell::ShellExecuteW;
-use windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
-use windows::core::{PCWSTR, w};
 use wxdragon::prelude::*;
 
 // wxWidgets key codes (not exported by wxdragon).
@@ -311,6 +331,10 @@ pub struct Runtime {
     /// Identity names (`SourceConfig.name`) of sources whose capture thread is
     /// currently failing and retrying. Drives the "(reconnecting)" labels.
     pub failing: HashSet<String>,
+    /// Identity names of sources that cannot run on this build at all. Drives
+    /// the "(unavailable)" labels, which say the opposite of "(reconnecting)":
+    /// do not wait, change something.
+    pub unavailable: HashSet<String>,
     /// Whether the outgoing audio connection is down and being retried.
     ///
     /// Deliberately *not* a [`StreamState`] variant. During a reconnect the
@@ -664,6 +688,7 @@ impl Default for Runtime {
             encoder_failed: false,
             apps: HashMap::new(),
             failing: HashSet::new(),
+            unavailable: HashSet::new(),
             // Seeded from the catalog prewarmed before the UI was built, so the
             // labels start out agreeing with it and the first pump tick has no
             // phantom refresh to do.
@@ -686,8 +711,15 @@ impl Default for Runtime {
 
 /// An MSAA accessible object that only supplies a name, leaving all other
 /// behavior to the control's default accessibility.
+///
+/// Windows-only, because `wxAccessible` is: wxdragon's whole `accessible`
+/// module is `wxUSE_ACCESSIBILITY`, which is wxMSW. macOS has no need of a
+/// stand-in — [`set_accessible_name`] reaches VoiceOver through
+/// `set_accessibility_label` instead.
+#[cfg(windows)]
 struct NameOnlyAccessible(String);
 
+#[cfg(windows)]
 impl wxdragon::accessible::AccessibleImpl for NameOnlyAccessible {
     /// Delegates the child count, which is what "name only" is supposed to mean
     /// for every method but this one.
@@ -707,7 +739,7 @@ impl wxdragon::accessible::AccessibleImpl for NameOnlyAccessible {
     /// [`native_acc`] instead. Keep it anyway — the next control with children
     /// would otherwise inherit a silent lie.
     fn get_child_count(&self) -> (wxdragon::accessible::AccStatus, i32) {
-        (wxdragon::ffi::wxd_AccStatus_WXD_ACC_NOT_IMPLEMENTED, 0)
+        (wxdragon::accessible::AccStatus::NotImplemented, 0)
     }
 
     fn get_name(&self, child_id: i32) -> (wxdragon::accessible::AccStatus, Option<String>) {
@@ -717,11 +749,11 @@ impl wxdragon::accessible::AccessibleImpl for NameOnlyAccessible {
         // control's name.
         if child_id == 0 {
             (
-                wxdragon::ffi::wxd_AccStatus_WXD_ACC_OK,
+                wxdragon::accessible::AccStatus::Ok,
                 Some(self.0.clone()),
             )
         } else {
-            (wxdragon::ffi::wxd_AccStatus_WXD_ACC_NOT_IMPLEMENTED, None)
+            (wxdragon::accessible::AccStatus::NotImplemented, None)
         }
     }
 }
@@ -729,15 +761,26 @@ impl wxdragon::accessible::AccessibleImpl for NameOnlyAccessible {
 /// Gives a control an explicit accessible name for screen readers. Needed
 /// where the visual label (or adjacent StaticText) is not announced.
 ///
-/// Not for list boxes: replacing wx's accessible leaves the control's MSAA
-/// object split across two unrelated COM object graphs, which made every list
-/// announce its selected row twice on focus. Lists use [`native_acc::install`],
-/// which takes wx out of the loop entirely.
+/// Not for list boxes: on Windows, replacing wx's accessible leaves the
+/// control's MSAA object split across two unrelated COM object graphs, which
+/// made every list announce its selected row twice on focus. Lists use
+/// [`native_acc::install`], which takes wx out of the loop entirely. On macOS a
+/// list cannot be named at all — see `native_acc_mac` — so the rule holds there
+/// too, for a different reason.
+///
+/// The two platforms reach it by different wx APIs. `set_accessible` installs a
+/// `wxAccessible`, which is **wxMSW-only** and silently does nothing anywhere
+/// else, so macOS goes through `set_accessibility_label` instead — the native
+/// VoiceOver label, which the port measurement confirmed names sliders, text
+/// fields and checkboxes correctly.
 pub fn set_accessible_name(widget: &dyn WxWidget, name: &str) {
+    #[cfg(windows)]
     widget.set_accessible(wxdragon::accessible::Accessible::new(
         widget,
         NameOnlyAccessible(name.to_string()),
     ));
+    #[cfg(not(windows))]
+    widget.set_accessibility_label(name);
 }
 
 /// Builds a labelled group box, handing back the sizer together with the
@@ -773,7 +816,9 @@ pub fn key_of(event: &WindowEventData) -> Option<(i32, bool)> {
 pub struct Widgets {
     pub frame: Frame,
     /// The tab bar. Kept so [`panes`] can reach the current page and focus the
-    /// tabs themselves.
+    /// tabs themselves — which is why it reads as unused wherever `panes` has no
+    /// implementation yet.
+    #[cfg_attr(not(windows), allow(dead_code))]
     pub notebook: Notebook,
     pub overview: ListBox,
     pub stream_button: Button,
@@ -1452,6 +1497,7 @@ impl App {
             sources,
             run.apps.clone(),
             run.failing.clone(),
+            run.unavailable.clone(),
             media,
             schedulers,
         )
@@ -2111,12 +2157,7 @@ impl App {
 /// `recording_<yyyy-mm-dd>_<HH-MM-SS>.mp3`. The prefix is always the literal
 /// word "recording" so files sort together regardless of the stream title.
 fn recording_filename() -> String {
-    use windows::Win32::System::SystemInformation::GetLocalTime;
-    let t = unsafe { GetLocalTime() };
-    format!(
-        "recording_{:04}-{:02}-{:02}_{:02}-{:02}-{:02}.mp3",
-        t.wYear, t.wMonth, t.wDay, t.wHour, t.wMinute, t.wSecond
-    )
+    format!("recording_{}.mp3", crate::localtime::now().file_stamp())
 }
 
 /// Checks the Audio Pub site URL and returns it normalized (no trailing slash).
@@ -2535,6 +2576,8 @@ pub fn ok_button(parent: &dyn WxWidget, label: &str) -> Button {
         .with_label(label)
         .build();
     button.set_default();
+    #[cfg(target_os = "macos")]
+    mac_ui::set_enter_activates(&button);
     button
 }
 
@@ -2551,6 +2594,8 @@ pub fn dismiss_button(parent: &dyn WxWidget, label: &str) -> Button {
         .with_label(label)
         .build();
     button.set_default();
+    #[cfg(target_os = "macos")]
+    mac_ui::set_enter_activates(&button);
     button
 }
 
@@ -3074,7 +3119,7 @@ fn build_menu(app: &Rc<App>, frame: &Frame) {
 fn launch_sound_pack_manager() -> Result<(), String> {
     let exe = std::env::current_exe()
         .map_err(|e| t!("Pubsplash could not find its own program file: {e}", e = e))?;
-    let manager = exe.with_file_name("pubsplash-soundpack.exe");
+    let manager = exe.with_file_name(crate::data_dir::binary_name("pubsplash-soundpack"));
     if !manager.is_file() {
         return Err(t!(
             "The Sound Pack Manager ({path}) is missing. Reinstall Pubsplash to restore it.",
@@ -3106,10 +3151,12 @@ fn open_doc(name: &str, fallback_url: &str) -> Result<(), String> {
         .map_err(|e| t!("Could not open {url}: {e}", url = fallback_url, e = e))
 }
 
-/// Opens the data directory — settings, logs, crash dumps — in Explorer.
+/// Opens the data directory — settings, logs, crash dumps — in the system file
+/// browser.
 ///
 /// Created first: on a first run that has never saved anything the directory may
-/// not exist yet, and `ShellExecuteW` on a missing path only reports a number.
+/// not exist yet, and neither platform's opener says anything useful about a
+/// path that is not there.
 fn open_data_dir() -> Result<(), String> {
     let dir = crate::config::config_dir();
     std::fs::create_dir_all(&dir)
@@ -3120,27 +3167,53 @@ fn open_data_dir() -> Result<(), String> {
 
 /// Finds a documentation file that ships with Pubsplash.
 ///
-/// Both the installer (everything lands in `$INSTDIR`) and the portable ZIP put
-/// the docs directly beside `pubsplash.exe`, so the sibling check covers every
-/// shipped layout. Walking on up the exe's ancestors additionally picks up a
-/// source checkout, where the generated HTML sits at the repository root and the
-/// exe is down in `target/<profile>`. Resolved from the exe, never the working
-/// directory, which a shortcut's "Start in" can point anywhere.
+/// Resolved from the exe, never the working directory, which a shortcut's
+/// "Start in" can point anywhere. Where to look is [`doc_dirs`]; a miss is not
+/// an error, because [`open_doc`] falls back to the copy on the web.
 fn find_doc(name: &str) -> Option<PathBuf> {
     let exe = std::env::current_exe().ok()?;
-    doc_in(exe.parent()?.ancestors().take(4), name)
+    doc_in(doc_dirs(exe.parent()?).into_iter(), name)
+}
+
+/// The directories a shipped document may be in, nearest first.
+///
+/// Both the Windows installer (everything lands in `$INSTDIR`) and the portable
+/// ZIP put the docs directly beside `pubsplash.exe`, so the sibling check covers
+/// every shipped layout there. Walking on up the exe's ancestors additionally
+/// picks up a source checkout, where the generated HTML sits at the repository
+/// root and the exe is down in `target/<profile>`.
+///
+/// **A macOS bundle needs one more, and no ancestor of the exe is it.** The exe
+/// is at `Pubsplash.app/Contents/MacOS/pubsplash` and cargo-packager puts the
+/// packaged resources in `Contents/Resources` — a *sibling* of the directory
+/// holding the exe, so the ancestor walk passes it by and Help > Readme silently
+/// opened the web copy instead of the one that shipped.
+fn doc_dirs(exe_dir: &Path) -> Vec<PathBuf> {
+    let mut dirs: Vec<PathBuf> = exe_dir.ancestors().take(4).map(PathBuf::from).collect();
+    if cfg!(target_os = "macos")
+        && let Some(contents) = exe_dir.parent()
+    {
+        dirs.push(contents.join("Resources"));
+    }
+    dirs
 }
 
 /// The pure half of [`find_doc`], split out so it can be tested.
-fn doc_in<'a>(dirs: impl Iterator<Item = &'a Path>, name: &str) -> Option<PathBuf> {
-    dirs.map(|dir| dir.join(name)).find(|path| path.is_file())
+fn doc_in<P: AsRef<Path>>(dirs: impl Iterator<Item = P>, name: &str) -> Option<PathBuf> {
+    dirs.map(|dir| dir.as_ref().join(name))
+        .find(|path| path.is_file())
 }
 
 /// Opens a file path or URL with whatever the user has it associated with.
 ///
 /// `ShellExecuteW` rather than `cmd /C start`: the latter flashes a console
 /// window and treats `&` in a path as a command separator.
+#[cfg(windows)]
 fn shell_open(target: &str) -> Result<(), String> {
+    use windows::Win32::UI::Shell::ShellExecuteW;
+    use windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
+    use windows::core::{PCWSTR, w};
+
     let wide: Vec<u16> = target.encode_utf16().chain(std::iter::once(0)).collect();
     let result = unsafe {
         ShellExecuteW(
@@ -3158,6 +3231,31 @@ fn shell_open(target: &str) -> Result<(), String> {
         Ok(())
     } else {
         Err(t!("ShellExecute failed with code {code}", code = code))
+    }
+}
+
+/// `/usr/bin/open`, which is the documented way to ask Launch Services to open
+/// a path or a URL with whatever the user has chosen for it.
+///
+/// The argument is passed as a real `argv` entry, never through a shell, so a
+/// path containing spaces, quotes or `&` needs no escaping and cannot be
+/// re-parsed as anything else. `--` stops a path beginning with `-` being read
+/// as an option.
+///
+/// `status()` rather than `spawn()`: `open` hands the request to Launch Services
+/// and exits immediately, so this does not wait for the application to appear,
+/// and a non-zero exit is the only way to learn that the target was unopenable.
+#[cfg(target_os = "macos")]
+fn shell_open(target: &str) -> Result<(), String> {
+    let status = std::process::Command::new("/usr/bin/open")
+        .arg("--")
+        .arg(target)
+        .status()
+        .map_err(|e| format!("could not run open: {e}"))?;
+    if status.success() {
+        Ok(())
+    } else {
+        Err(format!("open failed with {status}"))
     }
 }
 
@@ -3567,7 +3665,17 @@ fn pump_events(app: &Rc<App>) {
                 labels_dirty |= app.run.borrow_mut().failing.insert(name);
             }
             crate::audio::EngineEvent::SourceRecovered { name } => {
-                labels_dirty |= app.run.borrow_mut().failing.remove(&name);
+                let mut run = app.run.borrow_mut();
+                labels_dirty |= run.failing.remove(&name);
+                labels_dirty |= run.unavailable.remove(&name);
+            }
+            // A warning rather than a debug line: nothing is retrying behind
+            // this, so the log is where the reason lives for good. Not a modal,
+            // by the rule for notices that can arrive unbidden -- this one fires
+            // at launch, before the user has done anything.
+            crate::audio::EngineEvent::SourceUnavailable { name, message } => {
+                log::warn!("Source {name:?} cannot run: {message}");
+                labels_dirty |= app.run.borrow_mut().unavailable.insert(name);
             }
             // The recording lifecycle. All four report through the log and the
             // Home tab's status line, never a modal: these can fire while the
@@ -3842,9 +3950,18 @@ mod recording_failure_tests {
     use std::io::ErrorKind;
     use std::path::PathBuf;
 
+    /// The folder the message must name, and the file it must not.
+    ///
+    /// Built from components rather than a literal path, because a backslash is
+    /// not a separator on both platforms — as one string, `h:\shows\...` has no
+    /// parent at all on Unix and every assertion below would pass vacuously.
+    fn folder() -> PathBuf {
+        PathBuf::from("shows-that-are-not-there")
+    }
+
     fn failure(kind: Option<ErrorKind>) -> RecordingStartFailure {
         RecordingStartFailure {
-            path: PathBuf::from(r"h:\shows\recording_2026-08-03.mp3"),
+            path: folder().join("recording_2026-08-03.mp3"),
             kind,
         }
     }
@@ -3854,7 +3971,7 @@ mod recording_failure_tests {
     #[test]
     fn a_missing_folder_is_named_along_with_where_to_change_it() {
         let text = recording_failure_message(&failure(Some(ErrorKind::NotFound)), "detail", false);
-        assert!(text.contains(r"h:\shows"), "{text}");
+        assert!(text.contains(&folder().display().to_string()), "{text}");
         assert!(!text.contains("recording_2026-08-03.mp3"), "{text}");
         assert!(text.contains("does not exist"), "{text}");
         assert!(text.contains("Preferences"), "{text}");
@@ -3874,7 +3991,7 @@ mod recording_failure_tests {
     fn an_encoder_failure_does_not_blame_the_folder() {
         let text = recording_failure_message(&failure(None), "detail", false);
         assert!(text.contains("encoder"), "{text}");
-        assert!(!text.contains(r"h:\shows"), "{text}");
+        assert!(!text.contains(&folder().display().to_string()), "{text}");
     }
 
     /// A modal arriving mid-broadcast reads as the stream having died unless it
@@ -3943,18 +4060,21 @@ mod snapshot_key_tests {
     }
 }
 
-#[cfg(test)]
+/// `NameOnlyAccessible` is a `wxAccessible`, which is wxMSW-only — see
+/// [`set_accessible_name`], which reaches VoiceOver by a different API entirely.
+/// There is nothing here to test on another platform.
+#[cfg(all(test, windows))]
 mod accessible_tests {
     use super::NameOnlyAccessible;
     use wxdragon::accessible::AccessibleImpl;
-    use wxdragon::ffi::{wxd_AccStatus_WXD_ACC_NOT_IMPLEMENTED, wxd_AccStatus_WXD_ACC_OK};
+    use wxdragon::accessible::AccStatus;
 
     #[test]
     fn child_count_is_delegated() {
         // Answering "0 children" is taken at face value by wxWidgets, so any
         // control that grows real MSAA children would be published as empty.
         let (status, _) = NameOnlyAccessible("Bypass selected plugin".into()).get_child_count();
-        assert_eq!(status, wxd_AccStatus_WXD_ACC_NOT_IMPLEMENTED);
+        assert_eq!(status, AccStatus::NotImplemented);
     }
 
     #[test]
@@ -3962,13 +4082,13 @@ mod accessible_tests {
         let acc = NameOnlyAccessible("Speech engine".into());
         assert_eq!(
             acc.get_name(0),
-            (wxd_AccStatus_WXD_ACC_OK, Some("Speech engine".to_string()))
+            (AccStatus::Ok, Some("Speech engine".to_string()))
         );
         // Children must keep their own text; naming them would announce every
         // one of them as the control's name.
         assert_eq!(
             acc.get_name(1),
-            (wxd_AccStatus_WXD_ACC_NOT_IMPLEMENTED, None)
+            (AccStatus::NotImplemented, None)
         );
     }
 }
@@ -4390,6 +4510,22 @@ mod doc_tests {
             super::doc_in([root].into_iter(), "no-such-doc.html"),
             None,
             "a doc that does not exist must not resolve"
+        );
+    }
+
+    /// The bundle layout is the one the ancestor walk cannot reach on its own:
+    /// `Contents/Resources` is a sibling of the directory holding the exe, not
+    /// an ancestor of it.
+    #[test]
+    #[cfg(target_os = "macos")]
+    fn a_bundles_resources_folder_is_searched() {
+        let exe_dir = std::path::Path::new("/Applications/Pubsplash.app/Contents/MacOS");
+        assert!(
+            super::doc_dirs(exe_dir)
+                .contains(&std::path::PathBuf::from(
+                    "/Applications/Pubsplash.app/Contents/Resources"
+                )),
+            "a bundled copy must find the readme that shipped with it"
         );
     }
 

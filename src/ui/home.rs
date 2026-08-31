@@ -832,6 +832,23 @@ fn apply_strip_name(strip: &MixerStrip, speak_value: bool) {
     } else {
         t!("{name} volume", name = name)
     });
+    // Re-fit and re-lay out, then erase and repaint. A `StaticText` keeps the
+    // rect its sizer first gave it, so a strip renaming itself from
+    // "Microphone" to "Microphone (reconnecting)" gets a longer string in a
+    // control sized for the shorter one -- on Cocoa the overflow is drawn
+    // outside the control's bounds and over the slider next to it, and the old
+    // text underneath is never cleared. `fit` takes the control to its new best
+    // size, the parent's `layout` gives the row back its spacing, and the
+    // parent-wide `refresh` erases the ground the old text was drawn on (the
+    // control's own rect is not enough, since the strays are outside it).
+    //
+    // Unconditional rather than `cfg`'d: relabelling in place without laying
+    // out is wrong everywhere, and MSW only hides it by erasing more eagerly.
+    strip.label.fit();
+    if let Some(parent) = strip.label.get_parent() {
+        parent.layout();
+        parent.refresh(true, None);
+    }
     super::set_accessible_name(&strip.slider, &spoken);
     let value = format!("{}%", strip.slider.value());
     if speak_value {

@@ -387,33 +387,49 @@ fn prompt_for_code(parent: &Dialog) -> Option<String> {
 mod tests {
     use super::*;
 
-    fn last(title: &str, ago: Duration) -> LastStream {
+    /// The "now" every case below measures from, a day ahead of the real clock.
+    ///
+    /// Deliberately not `Instant::now()`: an `Instant` cannot be moved back
+    /// before the process — on Windows, before the machine — started, so
+    /// `Instant::now() - ago` *panics* whenever `ago` exceeds the uptime. That
+    /// is what a freshly booted machine did to the hour-ago case here, and it
+    /// says nothing about the code under test. [`decide_start`] takes `now` as
+    /// an argument precisely so the clock can be chosen, so choose one.
+    fn anchor() -> Instant {
+        Instant::now() + Duration::from_secs(86_400)
+    }
+
+    /// A previous stream that ended `ago` before `now`. Both ends come from one
+    /// anchor, so the elapsed span is exactly `ago` rather than `ago` minus
+    /// however long the test took to reach here — which is what makes the
+    /// boundary case below an exact assertion.
+    fn last(title: &str, ago: Duration, now: Instant) -> LastStream {
         LastStream {
             title: title.to_string(),
-            ended: Instant::now() - ago,
+            ended: now - ago,
         }
     }
 
     #[test]
     fn the_first_stream_of_a_session_is_announced() {
         assert_eq!(
-            decide_start("Show", None, Instant::now()),
+            decide_start("Show", None, anchor()),
             StartAction::PostStart
         );
     }
 
     #[test]
     fn a_quick_restart_under_the_same_title_says_nothing() {
-        let now = Instant::now();
+        let now = anchor();
         assert_eq!(
-            decide_start("Show", Some(&last("Show", Duration::from_secs(5))), now),
+            decide_start("Show", Some(&last("Show", Duration::from_secs(5), now)), now),
             StartAction::Nothing
         );
         // The boundary belongs to the reconnect side.
         assert_eq!(
             decide_start(
                 "Show",
-                Some(&last("Show", RECONNECT_WINDOW - Duration::from_millis(1))),
+                Some(&last("Show", RECONNECT_WINDOW - Duration::from_millis(1), now)),
                 now
             ),
             StartAction::Nothing
@@ -422,11 +438,12 @@ mod tests {
 
     #[test]
     fn a_later_restart_under_the_same_title_asks() {
+        let now = anchor();
         assert_eq!(
             decide_start(
                 "Show",
-                Some(&last("Show", RECONNECT_WINDOW + Duration::from_secs(1))),
-                Instant::now()
+                Some(&last("Show", RECONNECT_WINDOW + Duration::from_secs(1), now)),
+                now
             ),
             StartAction::AskAboutResuming
         );
@@ -435,8 +452,9 @@ mod tests {
     #[test]
     fn a_different_title_is_a_new_broadcast_however_soon_it_starts() {
         for ago in [Duration::from_secs(1), Duration::from_secs(3600)] {
+            let now = anchor();
             assert_eq!(
-                decide_start("Tuesday", Some(&last("Monday", ago)), Instant::now()),
+                decide_start("Tuesday", Some(&last("Monday", ago, now)), now),
                 StartAction::PostStart,
                 "after {ago:?}"
             );
