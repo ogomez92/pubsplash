@@ -1,0 +1,5 @@
+# Its own workspace, so it has its own target directory.
+/target
+# Written on first run and never to be committed: it is the secret every room's
+# host key is derived from, so publishing it hands out every key at once.
+pubsplash-chat.secret

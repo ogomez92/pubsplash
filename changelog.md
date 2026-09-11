@@ -4,6 +4,22 @@
 
 ### Additions
 
+- **Chat for Icecast services.** A direct Icecast mount can now have chat: a new `chat/` server ships in this repository as a single self-contained binary, and an Icecast service points at it with a Chat server, Chat room and Chat host key in Setup streaming services. The Chat tab then reads and sends exactly as it does for an Audio Pub stream, and messages are spoken by whichever speech engine is configured.
+
+- Listeners open the chat room's own web page and write with no account and no registration.
+
+- That page carries a **play button and a volume slider** for the stream itself, so listening and chatting happen in one place. The volume starts at 50% and is remembered. Pubsplash publishes the listen address when a stream starts and takes it down when the stream ends.
+
+- The chat page's message list is a **listbox**: arrow keys read back through history, Home and End jump to the ends, and Control+C copies the message you are on. **Alt+1 to Alt+0 read the last ten messages aloud** from anywhere on the page, and pressing the same number twice copies that one.
+
+- New messages are announced on a live region, and the announcement is built from the same text as the visible row.
+
+- The chat page follows the **browser's language** (English or Spanish), with `?lang=es` on the URL to override it and a `--lang` server option for a station whose audience needs a different default.
+
+- Anti-spam without accounts: five messages per ten seconds per person, a looser ceiling for a whole address, and a refused message never counts against the sender. A nickname is held by whoever claimed it first in a room and cannot be changed again for five minutes, so nobody can answer themselves under a second name or borrow the name of whoever spoke last. The host key overrides both.
+
+- `pubsplash-chat key <room>` prints a room's host key. Keys are derived from one server secret, so a deployment serves any number of rooms with nothing stored per room.
+
 - **Mastodon is now part of each streaming service.** Every service — the built-in Audiopub site, an Icecast station, a YouTube target — has its own Mastodon account, its own announcement settings and its own templates, and a stream is announced by the account belonging to the service it is going to.
 
 - A **Mastodon announcements** button in Setup streaming services opens those settings for the service highlighted in the list.

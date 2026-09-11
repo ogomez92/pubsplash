@@ -2240,6 +2240,41 @@ fn validate_site_url(raw: &str) -> Result<String, String> {
     Ok(trimmed.trim_end_matches('/').to_string())
 }
 
+/// Builds the chat target for a direct Icecast service, or explains what is
+/// missing.
+///
+/// Both fields or neither: a chat server with no room, or a room with no
+/// server, is a half-typed setting, and what it produces later is chat that
+/// quietly does not work -- which nobody would connect back to this dialog. The
+/// host key is optional; without one our own messages simply appear as an
+/// ordinary listener's, which is a fair way to run a room where the operator
+/// has not handed one out.
+///
+/// The broadcaster's name in the room is the service's own nickname. The user
+/// has already named this service, and a second field for the same idea is a
+/// second thing to keep in step.
+fn icecast_chat_target(
+    site: &SiteConfig,
+    nickname: &str,
+) -> Result<Option<crate::net::pubchat::ChatTarget>, String> {
+    let url = site.chat_url.trim();
+    let room = site.chat_room.trim();
+    if url.is_empty() && room.is_empty() {
+        return Ok(None);
+    }
+    if url.is_empty() {
+        return Err(t!(
+            "Enter the chat server address, or clear the chat room to turn chat off."
+        ));
+    }
+    if room.is_empty() {
+        return Err(t!(
+            "Enter the chat room name, or clear the chat server to turn chat off."
+        ));
+    }
+    crate::net::pubchat::ChatTarget::new(url, room, nickname, site.chat_host_key.clone()).map(Some)
+}
+
 /// Turns a stored service into the snapshot the network thread runs on.
 ///
 /// `ffmpeg_path` is app-wide config (`connection.ffmpeg_path`) rather than part
@@ -2315,6 +2350,10 @@ pub fn service_profile_from(
             // URL is no reason to refuse to broadcast — but it is every reason
             // to refuse to *connect* quietly and let it be found later.
             crate::net::stats::stats_target(&server, port, &mount, &listener_url)?;
+            // Checked here, with the dialog still open, for the same reason
+            // the listener URL above is: a chat server typed wrong is otherwise
+            // a stream that starts fine and silently has no chat.
+            let chat = icecast_chat_target(site, &nickname)?;
             Ok(ServiceProfile::Icecast {
                 id: site.id.clone(),
                 nickname,
@@ -2324,6 +2363,7 @@ pub fn service_profile_from(
                 username: site.icecast_username(),
                 password: site.icecast_password.clone(),
                 listener_url,
+                chat,
             })
         }
         StreamingServiceType::Youtube => {

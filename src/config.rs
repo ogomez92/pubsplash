@@ -425,6 +425,25 @@ pub struct SiteConfig {
     /// rejects a very thin video track is easier to fix by raising a number than
     /// by rebuilding.
     pub rtmp_video_bitrate_kbps: u32,
+    /// The Pubsplash Chat server this service's listeners write to, e.g.
+    /// `https://chat.example.com`. Empty means no chat, which is what every
+    /// Icecast service had before this existed and still the right answer for a
+    /// mount nobody is chatting about.
+    ///
+    /// Icecast is one-way and carries no return channel at all, so chat for a
+    /// direct mount has to be a separate little server alongside it -- `chat/`
+    /// in this repository. See [`crate::net::pubchat`].
+    pub chat_url: String,
+    /// The room on that server. Lowercased, letters/digits/`-`/`_`; the same
+    /// name that appears in the listener URL as `/r/<room>`.
+    pub chat_room: String,
+    /// The room's host key, which marks our messages as the broadcaster's and
+    /// lets us take our own name back from anyone who claimed it.
+    ///
+    /// A [`Secret`] like every other credential: it is exactly as good as an
+    /// identity in that room, and `Secret`'s hand-written `Debug` is what keeps
+    /// it out of the rotating log file users are asked to share.
+    pub chat_host_key: Secret,
     /// The Mastodon account this service announces on, and the settings around
     /// it.
     ///
@@ -466,6 +485,9 @@ impl Default for SiteConfig {
             youtube_channel: String::new(),
             youtube_image: String::new(),
             rtmp_video_bitrate_kbps: DEFAULT_RTMP_VIDEO_KBPS,
+            chat_url: String::new(),
+            chat_room: String::new(),
+            chat_host_key: Secret::default(),
             mastodon: MastodonConfig::default(),
         }
     }

@@ -7,6 +7,7 @@ pub mod icecast;
 pub mod rtmp;
 pub mod sse;
 pub mod stats;
+pub mod pubchat;
 pub mod youtube;
 
 use crate::t;
@@ -19,6 +20,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc as tokio_mpsc;
+use pubchat::ChatTarget;
 use youtube::ChannelRef;
 
 /// A configured streaming service, snapshotted by the UI before it is sent to
@@ -60,6 +62,10 @@ pub enum ServiceProfile {
         /// publish to. Empty counts `mount` itself. See [`stats::stats_target`]
         /// for the forms this accepts.
         listener_url: String,
+        /// The Pubsplash Chat room this service talks to, if the operator runs
+        /// one. `None` is a plain mount with no chat at all, which is what
+        /// every Icecast service was before this existed.
+        chat: Option<ChatTarget>,
     },
     /// An RTMP ingest, published to through ffmpeg. YouTube by default; the URL
     /// is editable, so any RTMP server works.
@@ -275,6 +281,7 @@ enum Connection {
         username: String,
         password: Secret,
         listener_url: String,
+        chat: Option<ChatTarget>,
     },
     Youtube {
         target: RtmpTarget,
@@ -289,13 +296,19 @@ fn audiopub_client(connection: &Connection) -> Option<&AudioPubClient> {
     }
 }
 
-/// What a service calls the thing it sends, for the one message that has to name
-/// it. Chat is Audiopub's alone — a direct Icecast mount has no chat channel at
-/// all, and YouTube's needs a signed-in account (see [`youtube`]).
+/// Why this service cannot send chat, for the one message that has to say so.
+///
+/// Icecast is one-way and has no chat channel of its own, so a direct mount
+/// answers on whether the operator has pointed the service at a Pubsplash Chat
+/// server (see [`pubchat`]). YouTube's needs a signed-in account (see
+/// [`youtube`]).
 fn chat_unavailable(connection: &Connection) -> &'static str {
     match connection {
         Connection::Audiopub { .. } => "chat is available",
-        Connection::Icecast { .. } => "chat is only available for Audiopub and YouTube services",
+        Connection::Icecast { chat: Some(_), .. } => "chat is available",
+        Connection::Icecast { chat: None, .. } => {
+            "an Icecast mount carries no chat of its own. Set a chat server on this service              to give listeners somewhere to write"
+        }
         Connection::Youtube { .. } => {
             "Pubsplash can read YouTube chat but not post to it. Sending needs a signed-in \
              Google account, which YouTube only offers through its quota-limited API"
@@ -475,6 +488,17 @@ async fn discover_endpoint(
 
 async fn end_active_stream(active: &ActiveStream, connection: Option<&Connection>) {
     active.abort();
+    // Take the chat room's play button down with the broadcast. A stale one
+    // plays silence and says nothing about why, which reads as a broken station
+    // rather than as one that is off air.
+    if let Some(Connection::Icecast {
+        chat: Some(chat), ..
+    }) = connection
+        && let Ok(client) = pubchat::client()
+        && let Err(e) = pubchat::set_stream(&client, chat, "", "").await
+    {
+        log::warn!("Chat: could not clear the listen URL on {}: {e}", chat.describe());
+    }
     if let Some(client) = connection.and_then(audiopub_client)
         && let Err(e) = client.end_stream(&active.stream_id).await
     {
@@ -583,7 +607,14 @@ async fn net_loop(mut commands: tokio_mpsc::UnboundedReceiver<NetCommand>, event
                         username,
                         password,
                         listener_url,
+                        chat,
                     } => {
+                        if let Some(chat) = &chat {
+                            log::info!(
+                                "Icecast service {nickname:?} uses chat {}",
+                                chat.describe()
+                            );
+                        }
                         let armed = Connection::Icecast {
                             server,
                             port,
@@ -591,6 +622,7 @@ async fn net_loop(mut commands: tokio_mpsc::UnboundedReceiver<NetCommand>, event
                             username,
                             password,
                             listener_url,
+                            chat,
                         };
                         let checked = match direct_icecast_target(&armed, "audio/mpeg") {
                             Ok(target) => resolve_icecast_host(&target.host)
@@ -744,20 +776,34 @@ async fn net_loop(mut commands: tokio_mpsc::UnboundedReceiver<NetCommand>, event
                     });
                     continue;
                 };
-                let Some(client) = audiopub_client(conn) else {
-                    let _ = events.send(NetEvent::ChatSendFailed {
-                        message: chat_unavailable(conn).into(),
-                    });
-                    continue;
+                // A Pubsplash Chat room takes a `POST`; Audio Pub takes its own
+                // API call. Everything either way arrives back on the feed, so
+                // the Chat tab renders our own message through the same path as
+                // everyone else's rather than echoing it locally.
+                let sent = match conn {
+                    Connection::Icecast { chat: Some(chat), .. } => {
+                        match pubchat::client() {
+                            Ok(client) => {
+                                pubchat::send(&client, chat, chat.nick(), &content).await
+                            }
+                            Err(e) => Err(e),
+                        }
+                    }
+                    _ => match audiopub_client(conn) {
+                        Some(client) => client
+                            .send_chat(&active.stream_id, &content)
+                            .await
+                            .map(|_| ())
+                            .map_err(|e| e.to_string()),
+                        None => Err(chat_unavailable(conn).to_string()),
+                    },
                 };
-                match client.send_chat(&active.stream_id, &content).await {
-                    Ok(_) => {
+                match sent {
+                    Ok(()) => {
                         let _ = events.send(NetEvent::ChatSent);
                     }
-                    Err(e) => {
-                        let _ = events.send(NetEvent::ChatSendFailed {
-                            message: e.to_string(),
-                        });
+                    Err(message) => {
+                        let _ = events.send(NetEvent::ChatSendFailed { message });
                     }
                 }
             }
@@ -776,7 +822,7 @@ async fn net_loop(mut commands: tokio_mpsc::UnboundedReceiver<NetCommand>, event
                 let has_feed = match conn {
                     Connection::Audiopub { .. } => true,
                     Connection::Youtube { chat, .. } => chat.is_some(),
-                    Connection::Icecast { .. } => false,
+                    Connection::Icecast { chat, .. } => chat.is_some(),
                 };
                 if !has_feed {
                     let _ = events.send(NetEvent::ChatFeed(ChatFeedState::Interrupted {
@@ -786,7 +832,7 @@ async fn net_loop(mut commands: tokio_mpsc::UnboundedReceiver<NetCommand>, event
                                  to reconnect"
                                     .into()
                             }
-                            _ => "chat is only available for Audiopub and YouTube services".into(),
+                            _ => chat_unavailable(conn).into(),
                         },
                     }));
                     continue;
@@ -1053,6 +1099,171 @@ fn spawn_chat_feed(
             }
         }
     })
+}
+
+/// Owns the Pubsplash Chat feed for one stream.
+///
+/// Deliberately the same supervisor as [`spawn_chat_feed`] above -- the backoff
+/// ladder, one log line per outage, the `owed_an_answer` override for a user
+/// who pressed the button, and the reconnect doorbell. What differs is only the
+/// protocol underneath, which is the whole reason chat here was built to look
+/// like Audio Pub's feed.
+///
+/// There is no `StreamGone` equivalent: a chat room is not tied to a stream id
+/// and exists because somebody is in it, so a server that is unreachable is an
+/// outage to retry rather than a room that has ended.
+fn spawn_pubchat_feed(
+    chat: ChatTarget,
+    events: EventSender,
+    mut reconnect: tokio_mpsc::UnboundedReceiver<()>,
+) -> tokio::task::JoinHandle<()> {
+    tokio::spawn(async move {
+        let client = match pubchat::client() {
+            Ok(client) => client,
+            Err(e) => {
+                log::warn!("Chat feed: no HTTP client ({e}); this stream will have no chat");
+                return;
+            }
+        };
+        // The watermark lives out here, across reconnects: it is what turns the
+        // server's replayed history into "what was said while we were away"
+        // instead of a hundred messages read aloud on every connect.
+        let mut backlog = pubchat::Backlog::default();
+        let mut reported = false;
+        let mut owed_an_answer = false;
+        let mut attempt: usize = 0;
+
+        loop {
+            match pubchat::open_events(&client, &chat).await {
+                Ok(response) => {
+                    if reported || owed_an_answer {
+                        log::info!("Chat feed: reconnected to {}", chat.describe());
+                        let _ = events.send(NetEvent::ChatFeed(ChatFeedState::Restored));
+                    } else {
+                        log::info!("Chat feed: connected to {}", chat.describe());
+                    }
+                    reported = false;
+                    owed_an_answer = false;
+                    attempt = 0;
+                    match read_pubchat_feed(response, &events, &mut backlog, &mut reconnect).await {
+                        FeedExit::Finished => return,
+                        FeedExit::Forced => {
+                            log::info!("Chat feed: reconnecting at the user's request");
+                            owed_an_answer = true;
+                            continue;
+                        }
+                        FeedExit::Closed => return,
+                        FeedExit::Dropped { reason } => {
+                            log::warn!("Chat feed: connection lost: {reason}");
+                            reported = true;
+                            let _ = events
+                                .send(NetEvent::ChatFeed(ChatFeedState::Interrupted { reason }));
+                        }
+                    }
+                }
+                Err(reason) => {
+                    log::warn!("Chat feed: could not open {}: {reason}", chat.describe());
+                    if !reported || owed_an_answer {
+                        reported = true;
+                        owed_an_answer = false;
+                        let _ =
+                            events.send(NetEvent::ChatFeed(ChatFeedState::Interrupted { reason }));
+                    }
+                }
+            }
+
+            let wait = chat_backoff(attempt);
+            attempt = attempt.saturating_add(1);
+            log::info!(
+                "Chat feed: retrying in {}s (attempt {attempt})",
+                wait.as_secs()
+            );
+            match wait_or_reconnect(&mut reconnect, wait).await {
+                Wake::Closed => return,
+                Wake::User => owed_an_answer = true,
+                Wake::Timer => {}
+            }
+        }
+    })
+}
+
+/// Reads one Pubsplash Chat connection until it ends.
+///
+/// The same watchdog and the same biased `select!` as [`read_chat_feed`], and
+/// for the same reasons: bytes arriving is the only true liveness signal
+/// (keepalive comments are swallowed by the parser), and a waiting reconnect
+/// request must win over a chunk, because a wedged half-open socket is the case
+/// the button exists for.
+async fn read_pubchat_feed(
+    response: reqwest::Response,
+    events: &EventSender,
+    backlog: &mut pubchat::Backlog,
+    reconnect: &mut tokio_mpsc::UnboundedReceiver<()>,
+) -> FeedExit {
+    use futures_util::StreamExt;
+
+    let mut parser = SseParser::new();
+    let mut body = response.bytes_stream();
+
+    loop {
+        let next = tokio::select! {
+            biased;
+            request = reconnect.recv() => match request {
+                Some(()) => {
+                    drain(reconnect);
+                    return FeedExit::Forced;
+                }
+                None => return FeedExit::Closed,
+            },
+            next = tokio::time::timeout(CHAT_IDLE_TIMEOUT, body.next()) => next,
+        };
+        let chunk = match next {
+            Err(_) => {
+                return FeedExit::Dropped {
+                    reason: format!("no data for {} seconds", CHAT_IDLE_TIMEOUT.as_secs()),
+                };
+            }
+            Ok(None) => {
+                return FeedExit::Dropped {
+                    reason: "the chat server closed the connection".to_string(),
+                };
+            }
+            Ok(Some(Err(e))) => {
+                return FeedExit::Dropped {
+                    reason: e.to_string(),
+                };
+            }
+            Ok(Some(Ok(chunk))) => chunk,
+        };
+
+        for raw in parser.feed(&chunk) {
+            match pubchat::ChatEvent::from_sse(&raw) {
+                Some(pubchat::ChatEvent::Hello { history }) => {
+                    let missed = backlog.catch_up(history);
+                    if !missed.is_empty() {
+                        log::info!(
+                            "Chat feed: {} message(s) arrived while we were away",
+                            missed.len()
+                        );
+                    }
+                    for message in missed {
+                        let _ = events.send(NetEvent::Chat(message.into_chat()));
+                    }
+                }
+                Some(pubchat::ChatEvent::Chat(message)) => {
+                    backlog.saw(&message.id);
+                    let _ = events.send(NetEvent::Chat(message.into_chat()));
+                }
+                // Logged rather than surfaced: the chat we missed is replayed
+                // on the next `hello`, so the user is told by the messages
+                // themselves arriving, not by a notice about plumbing.
+                Some(pubchat::ChatEvent::Lagged { missed }) => {
+                    log::warn!("Chat feed: fell behind and lost {missed} message(s)");
+                }
+                None => {}
+            }
+        }
+    }
 }
 
 /// Reads one live-events connection until it ends.
@@ -1905,6 +2116,7 @@ async fn start_stream(
             port,
             mount,
             listener_url,
+            chat,
             ..
         } => {
             let target = direct_icecast_target(conn, content_type)?;
@@ -1934,12 +2146,57 @@ async fn start_stream(
                 }
             };
 
+            // Chat is a separate little server alongside the mount, when the
+            // operator runs one. Like Audio Pub's feed it opens itself and is
+            // never a reason to refuse to broadcast: a chat server that is down
+            // is a log line and a retry, not a failed stream start.
+            let (chat_reconnect, reconnect_rx) = tokio_mpsc::unbounded_channel();
+            let sse_task = chat
+                .clone()
+                .map(|chat| spawn_pubchat_feed(chat, events.clone(), reconnect_rx));
+
+            // Tell the room where to hear us, so its page grows a play button.
+            // The listen URL is the one the *audience* uses, which is not the
+            // mount we publish to whenever a relay sits between the two -- so it
+            // comes from `stats::listen_url`, the same answer the Home tab
+            // shows. Spawned rather than awaited: this runs inside
+            // `StartStream`, and nothing on that path may wait on somebody
+            // else's HTTP server.
+            if let Some(chat) = chat.clone() {
+                match stats::listen_url(server, *port, mount, listener_url) {
+                    Ok(url) => {
+                        let title = title.to_string();
+                        tokio::spawn(async move {
+                            match pubchat::client() {
+                                Ok(client) => {
+                                    if let Err(e) =
+                                        pubchat::set_stream(&client, &chat, &url, &title).await
+                                    {
+                                        log::warn!(
+                                            "Chat: could not publish the listen URL to {}: {e}. \
+                                             Listeners will have chat but no play button.",
+                                            chat.describe()
+                                        );
+                                    } else {
+                                        log::info!("Chat: published listen URL {url} to {}", chat.describe());
+                                    }
+                                }
+                                Err(e) => log::warn!("Chat: no HTTP client to publish the listen URL ({e})"),
+                            }
+                        });
+                    }
+                    Err(reason) => log::warn!(
+                        "Chat: no listen URL to publish ({reason}) Listeners will have chat but \
+                         no play button."
+                    ),
+                }
+            }
+
             Ok(ActiveStream {
                 stream_id,
-                sse_task: None,
+                sse_task,
                 stats_task,
-                // Never rung: a direct Icecast mount has no chat feed at all.
-                chat_reconnect: tokio_mpsc::unbounded_channel().0,
+                chat_reconnect,
                 icecast_task,
             })
         }
@@ -2682,6 +2939,7 @@ mod host_tests {
     #[test]
     fn direct_icecast_target_uses_profile_fields() {
         let conn = Connection::Icecast {
+            chat: None,
             server: "ice.example.org".to_string(),
             port: 9000,
             mount: "/live".to_string(),
@@ -2703,6 +2961,7 @@ mod host_tests {
     #[test]
     fn a_port_in_the_server_field_is_not_appended_twice() {
         let conn = Connection::Icecast {
+            chat: None,
             server: "gomsen.com:8000".to_string(),
             port: 8000,
             mount: "live.mp3".to_string(),
@@ -2720,6 +2979,7 @@ mod host_tests {
     #[test]
     fn a_pasted_listen_url_reaches_the_right_host_and_port() {
         let conn = Connection::Icecast {
+            chat: None,
             server: "http://ice.example.org:9000/live".to_string(),
             port: 8000,
             mount: "live".to_string(),
@@ -2734,6 +2994,7 @@ mod host_tests {
     #[test]
     fn direct_icecast_target_defaults_blank_username() {
         let conn = Connection::Icecast {
+            chat: None,
             server: "ice.example.org".to_string(),
             port: 8000,
             mount: "live".to_string(),
@@ -2748,6 +3009,7 @@ mod host_tests {
     #[test]
     fn direct_icecast_target_accepts_the_root_mount() {
         let conn = Connection::Icecast {
+            chat: None,
             server: "radio.example.org".to_string(),
             port: 8000,
             mount: "/".to_string(),

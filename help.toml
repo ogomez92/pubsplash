@@ -61,6 +61,24 @@ file = "src/ui/connect_dialog.rs"
 message = "Add a new streaming service profile. Choose Audiopub for an Audiopub site, or Icecast for direct source streaming."
 
 [[control]]
+id = "dialog.connect.chatHostKey"
+label = "Host key that marks our chat messages as the broadcaster's"
+file = "src/ui/connect_dialog.rs"
+message = "The room's host key, which marks your messages as the broadcaster's and lets you take your own name back from anyone who claimed it. Run pubsplash-chat key followed by the room name on the server to print it. Optional: without it your messages appear as an ordinary listener's, and the listen URL is not published, so listeners get chat but no play button."
+
+[[control]]
+id = "dialog.connect.chatRoom"
+label = "Chat room name on the chat server"
+file = "src/ui/connect_dialog.rs"
+message = "The room on that chat server. This is the name in the link your listeners open, as in /r/nightowl. Letters, digits, hyphens and underscores only; it is stored in lower case because that is how the server reads it."
+
+[[control]]
+id = "dialog.connect.chatUrl"
+label = "Pubsplash Chat server address for the selected Icecast service"
+file = "src/ui/connect_dialog.rs"
+message = "Address of the Pubsplash Chat server your listeners write to, such as https://chat.example.com. Icecast carries audio one way only and has no chat of its own, so chat for a direct mount is a small separate server you run alongside it. Leave this and the room empty for a mount with no chat."
+
+[[control]]
 id = "dialog.connect.connectButton"
 label = "Connect or disconnect button"
 file = "src/ui/connect_dialog.rs"

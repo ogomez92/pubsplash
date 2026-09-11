@@ -1,0 +1,1464 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>__ROOM__ · __BRAND__</title>
+    <!--
+      The listener page. One file, no build step, no dependency: it is compiled
+      into the server binary, so a deployment cannot serve a page that disagrees
+      with the server answering it.
+
+      The behaviour here is a port of SonicRoom's in-room chat, and the parts
+      that look fussy are the parts that were learned in front of real screen
+      readers:
+
+        * The message list is a LISTBOX you arrow through, not a log you scroll.
+          A blind listener has to be able to go back over what was said without
+          losing their place, and roving `aria-activedescendant` is what lets
+          them do that while the list keeps growing underneath.
+        * The list comes BEFORE the composer in the DOM, so tabbing in lands on
+          history first.
+        * `formatMessage` is the SINGLE source of truth for how a message reads.
+          The visible row and the spoken announcement are built from the same
+          string, so they can never drift apart.
+        * There is exactly ONE live region, it holds ONE span, and it is marked
+          `aria-atomic="false"`. `role="status"` is implicitly atomic, so a
+          region that accumulated announcements was re-read whole on every
+          change -- one press of Alt+1 read back everything still sitting in it.
+        * Alt+1..0 reads the last ten messages back without touching the list,
+          and a second press of the same digit copies that one.
+    -->
+    <style>
+      :root {
+        color-scheme: light dark;
+        --bg: #f6f7f9;
+        --panel: #ffffff;
+        --ink: #16191d;
+        --muted: #5a6270;
+        --line: #d6dae1;
+        --accent: #1a5fb4;
+        --accent-ink: #ffffff;
+        --host: #0b6b4f;
+        --system: #5a6270;
+        --focus: #1a5fb4;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #101215;
+          --panel: #181b20;
+          --ink: #e8eaed;
+          --muted: #a6adb9;
+          --line: #2c3138;
+          --accent: #6ea8fe;
+          --accent-ink: #0b1020;
+          --host: #5fd7ab;
+          --system: #a6adb9;
+          --focus: #6ea8fe;
+        }
+      }
+      /* The palette above is already past 4.5:1; this reinforces the two
+         deliberately-quiet things (muted metadata, hairline borders). */
+      @media (prefers-contrast: more) {
+        :root {
+          --muted: #2b3138;
+          --line: #6b7480;
+        }
+        @media (prefers-color-scheme: dark) {
+          :root {
+            --muted: #d6dae1;
+            --line: #8b94a0;
+          }
+        }
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        height: 100%;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font: 1rem/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+        display: flex;
+        flex-direction: column;
+      }
+
+      .visually-hidden:where(:not(:focus-within, :active)) {
+        position: absolute !important;
+        clip-path: inset(50%) !important;
+        overflow: hidden !important;
+        width: 1px !important;
+        height: 1px !important;
+        margin: -1px !important;
+        padding: 0 !important;
+        border: 0 !important;
+        white-space: nowrap !important;
+      }
+
+      :where(a:any-link, button, select, input, textarea, [tabindex]):focus-visible {
+        outline: 3px solid var(--focus);
+        outline-offset: 2px;
+      }
+
+      .wrap {
+        width: min(60rem, 100%);
+        margin-inline: auto;
+        padding-inline: 1rem;
+      }
+
+      header {
+        background: var(--panel);
+        border-bottom: 1px solid var(--line);
+      }
+      header .wrap {
+        padding-block: 0.75rem;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        gap: 0.25rem 1rem;
+      }
+      h1 {
+        font-size: 1.125rem;
+        margin: 0;
+        font-weight: 650;
+      }
+      .room {
+        margin: 0;
+        color: var(--muted);
+        font-size: 0.9375rem;
+      }
+      .meta {
+        margin: 0;
+        margin-inline-start: auto;
+        color: var(--muted);
+        font-size: 0.875rem;
+        display: flex;
+        gap: 0.75rem;
+        flex-wrap: wrap;
+      }
+      /* State is never colour alone: each of these carries its own glyph. */
+      .state[data-state="live"] {
+        color: var(--host);
+      }
+      .state[data-state="down"] {
+        color: var(--ink);
+        font-weight: 600;
+      }
+
+      .player {
+        background: var(--panel);
+        border-bottom: 1px solid var(--line);
+      }
+      .player .wrap {
+        padding-block: 0.625rem;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem 1rem;
+        align-items: center;
+      }
+      .now {
+        color: var(--muted);
+        font-size: 0.9375rem;
+        min-width: 0;
+        overflow-wrap: anywhere;
+      }
+      .volume {
+        display: flex;
+        gap: 0.5rem;
+        align-items: center;
+        margin-inline-start: auto;
+      }
+      .volume label {
+        font-size: 0.8125rem;
+        color: var(--muted);
+      }
+      #volume {
+        width: 9rem;
+        max-width: 40vw;
+        accent-color: var(--accent);
+      }
+
+      .settings {
+        background: var(--panel);
+        border-bottom: 1px solid var(--line);
+      }
+      .settings .wrap {
+        padding-block: 0.625rem;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem 1.25rem;
+        align-items: end;
+      }
+      .field {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+        min-width: 0;
+      }
+      .field label {
+        font-size: 0.8125rem;
+        color: var(--muted);
+      }
+      input,
+      select,
+      textarea {
+        font: inherit;
+        color: var(--ink);
+        background: var(--bg);
+        border: 1px solid var(--line);
+        border-radius: 0.375rem;
+        padding: 0.4rem 0.55rem;
+        min-width: 0;
+      }
+
+      /* A column, so `flex: 1` on the wrapper below buys it the leftover
+         HEIGHT. As a row it would buy width instead, and the centred
+         `min(60rem, …)` would be overridden by the grow. */
+      main {
+        flex: 1;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+      }
+      main .wrap {
+        flex: 1;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        padding-block: 0.75rem;
+      }
+      h2 {
+        font-size: 0.8125rem;
+        text-transform: none;
+        color: var(--muted);
+        margin: 0 0 0.375rem;
+        font-weight: 600;
+      }
+
+      #list {
+        flex: 1;
+        min-height: 6rem;
+        overflow-y: auto;
+        margin: 0;
+        padding: 0.25rem;
+        list-style: none;
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 0.5rem;
+      }
+      #list li {
+        padding: 0.375rem 0.5rem;
+        border-radius: 0.375rem;
+        overflow-wrap: anywhere;
+        /* Shift+Enter is a real newline in the composer, so it has to be one
+           here too -- otherwise a message reads differently from how it was
+           typed. `pre-wrap` keeps the breaks and still wraps long lines. */
+        white-space: pre-wrap;
+      }
+      #list li[aria-selected="true"] {
+        background: color-mix(in srgb, var(--accent) 18%, transparent);
+        outline: 2px solid var(--accent);
+      }
+      .nick {
+        font-weight: 650;
+      }
+      .host-row .nick {
+        color: var(--host);
+      }
+      .system-row {
+        color: var(--system);
+        font-style: italic;
+      }
+      .when {
+        color: var(--muted);
+        font-size: 0.8125rem;
+      }
+      /* Sits above the list rather than replacing it, so the listbox keeps
+         its place in the tab order in a room where nobody has spoken yet. */
+      .empty {
+        margin: 0 0 0.375rem;
+        padding: 0 0.125rem;
+        color: var(--muted);
+        font-size: 0.875rem;
+      }
+      .namerow {
+        display: flex;
+        gap: 0.375rem;
+        align-items: center;
+      }
+      .namerow input {
+        min-width: 0;
+        flex: 1;
+      }
+      .namerow button {
+        padding: 0.4rem 0.6rem;
+        font-size: 0.8125rem;
+        white-space: nowrap;
+      }
+      #nick[readonly] {
+        background: color-mix(in srgb, var(--muted) 12%, transparent);
+      }
+
+      footer {
+        background: var(--panel);
+        border-top: 1px solid var(--line);
+      }
+      footer .wrap {
+        padding-block: 0.75rem;
+      }
+      form {
+        display: flex;
+        gap: 0.5rem;
+        align-items: end;
+      }
+      #text {
+        flex: 1;
+        resize: vertical;
+        min-height: 2.75rem;
+      }
+      button {
+        font: inherit;
+        font-weight: 600;
+        background: var(--accent);
+        color: var(--accent-ink);
+        border: 1px solid transparent;
+        border-radius: 0.375rem;
+        padding: 0.55rem 1rem;
+        cursor: pointer;
+      }
+      button:disabled {
+        opacity: 0.5;
+        cursor: default;
+      }
+      .hint {
+        margin: 0.375rem 0 0;
+        color: var(--muted);
+        font-size: 0.8125rem;
+      }
+
+      @media (max-width: 32rem) {
+        .volume {
+          margin-inline-start: 0;
+          width: 100%;
+        }
+        #volume {
+          flex: 1;
+          max-width: none;
+        }
+        .meta {
+          margin-inline-start: 0;
+          width: 100%;
+        }
+        .field {
+          flex: 1 1 8rem;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        * {
+          animation-duration: 0.01ms !important;
+          transition-duration: 0.01ms !important;
+          scroll-behavior: auto !important;
+        }
+      }
+    </style>
+  </head>
+  <body data-lang="__LANG__">
+    <header>
+      <div class="wrap">
+        <h1>__BRAND__</h1>
+        <p class="room"><span data-t="room_label"></span> <strong>__ROOM__</strong></p>
+        <p class="meta">
+          <span class="state" id="state" data-state="idle" data-t="connecting"></span>
+          <span id="listeners"></span>
+        </p>
+      </div>
+    </header>
+
+    <!--
+      The radio. Hidden until the broadcaster's app publishes where the show can
+      be heard (`PUT /r/{room}/stream`), so a room with nothing on air shows no
+      dead play button. It comes before the chat because it is why the listener
+      opened the page.
+    -->
+    <div class="player" id="player" hidden>
+      <div class="wrap">
+        <button type="button" id="play" data-t="listen"></button>
+        <span id="now-playing" class="now"></span>
+        <span class="volume">
+          <label for="volume" data-t="volume"></label>
+          <input
+            type="range"
+            id="volume"
+            min="0"
+            max="100"
+            step="5"
+            value="50"
+          />
+        </span>
+      </div>
+    </div>
+
+    <div class="settings">
+      <div class="wrap">
+        <p class="field">
+          <label for="nick" data-t="your_name"></label>
+          <span class="namerow">
+            <input
+              id="nick"
+              name="nick"
+              autocomplete="nickname"
+              maxlength="32"
+              aria-describedby="nick-hint"
+            />
+            <!-- Shown only once the name is in use. A name that could be
+                 retyped on every message is a name nobody can trust, so the
+                 server holds it; this button is how you get it back, and it is
+                 a real control rather than a read-only field with no way out. -->
+            <button type="button" id="rename" hidden data-t="change_name"></button>
+          </span>
+          <span id="nick-hint" class="hint" data-t="nick_hint_free"></span>
+        </p>
+      </div>
+    </div>
+
+    <main>
+      <div class="wrap">
+        <h2 id="messages-label" data-t="messages"></h2>
+        <p class="empty" id="empty" data-t="empty"></p>
+        <!--
+          A real listbox: focusable once, arrowed through, with the active row
+          named by `aria-activedescendant`.
+
+          It is ALWAYS rendered, never hidden while empty. Hiding it took it out
+          of the tab order, so a listener who arrived at a quiet room found no
+          message list at all -- and then had to go and find it once somebody
+          finally spoke. The empty notice above says the room is quiet; the list
+          stays where it is, and stays reachable.
+        -->
+        <ul
+          id="list"
+          role="listbox"
+          tabindex="0"
+          aria-labelledby="messages-label"
+        ></ul>
+      </div>
+    </main>
+
+    <footer>
+      <div class="wrap">
+        <form id="composer">
+          <p class="field" style="flex: 1">
+            <label for="text" class="visually-hidden" data-t="message_label"></label>
+            <textarea
+              id="text"
+              name="text"
+              rows="2"
+              maxlength="2000"
+              aria-describedby="composer-hint"
+            ></textarea>
+          </p>
+          <button type="submit" id="send" data-t="send"></button>
+        </form>
+        <p class="hint" id="composer-hint" data-t="composer_hint"></p>
+      </div>
+    </footer>
+
+    <!--
+      The one announcement channel: arriving messages, the Alt+number readback
+      and page state all speak through here. A single polite region, because two
+      regions of the same politeness compete for the same speech queue.
+    -->
+    <div
+      class="visually-hidden"
+      id="sr-live"
+      role="status"
+      aria-live="polite"
+      aria-atomic="false"
+    ></div>
+
+    <script>
+      "use strict";
+
+      // ---------------------------------------------------------------- i18n
+      //
+      // The page follows the BROWSER's language, not the server's: one chat
+      // server serves listeners in whatever language each of them reads, and
+      // there is nobody to configure it per listener. English and Spanish,
+      // which is what Pubsplash itself ships (`po/`), and anything else falls
+      // back to English.
+      //
+      // `document.documentElement.lang` is set to the match, which is what
+      // decides the VOICE a screen reader reads the page with -- a Spanish page
+      // left marked `lang="en"` is read by an English voice, which is worse
+      // than not translating it at all.
+      const STRINGS = {
+        en: {
+          room_label: "Room:",
+          connecting: "Connecting…",
+          connected: "● Connected",
+          reconnecting: "▲ Reconnecting…",
+          listeners: (n) => `${n} here`,
+          your_name: "Your name",
+          change_name: "Change name",
+          nick_hint_free:
+            "Shown beside everything you send, and held for you once you have spoken.",
+          nick_hint_held: 'Held for you in this room. Use "Change name" to pick another.',
+          messages: "Messages",
+          empty: "No messages yet. Say hello.",
+          message_label: "Message",
+          send: "Send",
+          composer_hint:
+            "Enter sends. Shift plus Enter starts a new line. In the message list, use the arrow keys to read back and Control plus C to copy. Alt plus 1 to 0 reads the last ten messages from anywhere on the page.",
+          just_now: "just now",
+          broadcaster: (nick) => `${nick} (broadcaster)`,
+          said: (who, text, time) => `${who}: ${text} — sent ${time}`,
+          event: (text, time) => `${text} — ${time}`,
+          alt_hint: "Alt plus 1 to 0 reads the last ten messages.",
+          copied: "Message copied.",
+          copy_failed: "Could not copy the message.",
+          copy_unavailable: "Copying is not available in this browser.",
+          no_message: (n) => `There is no message ${n}.`,
+          reconnected: "Chat reconnected.",
+          lost: "Chat connection lost. Reconnecting.",
+          missed: (n) => (n === 1 ? "1 message was missed." : `${n} messages were missed.`),
+          too_fast: "Sending too fast. Wait a moment and try again.",
+          too_fast_in: (n) =>
+            n === 1
+              ? "Sending too fast. Try again in about 1 second."
+              : `Sending too fast. Try again in about ${n} seconds.`,
+          too_long: (n) => `That message is too long. The limit is ${n} characters.`,
+          nothing: "There is nothing to send.",
+          refused: "The chat server refused that message.",
+          unreachable: "Could not reach the chat server. Your message was not sent.",
+          name_taken: "Somebody else in this room is already using that name. Pick another one.",
+          name_locked: (nick, n) =>
+            n === 1
+              ? `Your name is ${nick}. You can change it again in about 1 minute.`
+              : `Your name is ${nick}. You can change it again in about ${n} minutes.`,
+          rename_prompt: "Type a new name, then send a message to claim it.",
+          listen: "Listen",
+          stop: "Stop",
+          volume: "Volume",
+          playing: (name) => (name ? `Playing ${name}.` : "Playing."),
+          stopped: "Stopped.",
+          play_failed: "The stream could not be played.",
+          insecure:
+            "This stream is not available over a secure connection, so the browser will not play it here.",
+          off_air: "The broadcast has ended.",
+          on_air: (name) => (name ? `${name} is on air.` : "The broadcast has started."),
+        },
+        es: {
+          room_label: "Sala:",
+          connecting: "Conectando…",
+          connected: "● Conectado",
+          reconnecting: "▲ Reconectando…",
+          listeners: (n) => (n === 1 ? "1 persona aquí" : `${n} personas aquí`),
+          your_name: "Tu nombre",
+          change_name: "Cambiar nombre",
+          nick_hint_free:
+            "Se muestra junto a todo lo que envíes, y queda reservado para ti en cuanto hables.",
+          nick_hint_held:
+            'Reservado para ti en esta sala. Usa "Cambiar nombre" para elegir otro.',
+          messages: "Mensajes",
+          empty: "Todavía no hay mensajes. Saluda.",
+          message_label: "Mensaje",
+          send: "Enviar",
+          composer_hint:
+            "Intro envía. Mayúsculas más Intro añade una línea nueva. En la lista de mensajes, usa las flechas para releer y Control más C para copiar. Alt más 1 a 0 lee los últimos diez mensajes desde cualquier parte de la página.",
+          just_now: "ahora mismo",
+          broadcaster: (nick) => `${nick} (locutor)`,
+          said: (who, text, time) => `${who}: ${text} — enviado ${time}`,
+          event: (text, time) => `${text} — ${time}`,
+          alt_hint: "Alt más 1 a 0 lee los últimos diez mensajes.",
+          copied: "Mensaje copiado.",
+          copy_failed: "No se pudo copiar el mensaje.",
+          copy_unavailable: "Copiar no está disponible en este navegador.",
+          no_message: (n) => `No hay mensaje ${n}.`,
+          reconnected: "Chat reconectado.",
+          lost: "Se perdió la conexión del chat. Reconectando.",
+          missed: (n) => (n === 1 ? "Se perdió 1 mensaje." : `Se perdieron ${n} mensajes.`),
+          too_fast: "Estás enviando demasiado rápido. Espera un momento e inténtalo de nuevo.",
+          too_fast_in: (n) =>
+            n === 1
+              ? "Estás enviando demasiado rápido. Inténtalo de nuevo en 1 segundo."
+              : `Estás enviando demasiado rápido. Inténtalo de nuevo en unos ${n} segundos.`,
+          too_long: (n) => `Ese mensaje es demasiado largo. El límite son ${n} caracteres.`,
+          nothing: "No hay nada que enviar.",
+          refused: "El servidor de chat rechazó ese mensaje.",
+          unreachable: "No se pudo contactar con el servidor de chat. Tu mensaje no se envió.",
+          name_taken: "Otra persona de esta sala ya está usando ese nombre. Elige otro.",
+          name_locked: (nick, n) =>
+            n === 1
+              ? `Tu nombre es ${nick}. Podrás cambiarlo de nuevo en un minuto.`
+              : `Tu nombre es ${nick}. Podrás cambiarlo de nuevo en unos ${n} minutos.`,
+          rename_prompt: "Escribe un nombre nuevo y envía un mensaje para reservarlo.",
+          listen: "Escuchar",
+          stop: "Parar",
+          volume: "Volumen",
+          playing: (name) => (name ? `Reproduciendo ${name}.` : "Reproduciendo."),
+          stopped: "Parado.",
+          play_failed: "No se pudo reproducir la emisión.",
+          insecure:
+            "Esta emisión no está disponible por una conexión segura, así que el navegador no la reproducirá aquí.",
+          off_air: "La emisión ha terminado.",
+          on_air: (name) => (name ? `${name} está en directo.` : "La emisión ha comenzado."),
+        },
+      };
+
+      // Which language the page speaks, most specific source first:
+      //
+      //   1. `?lang=es` in the URL, which is then remembered for this browser.
+      //      A broadcaster can hand out a link in the language of their show,
+      //      and it is the escape hatch for the common case of somebody running
+      //      a Spanish-language station in an English-language Chrome.
+      //   2. What that browser was last told, so the choice survives a reload
+      //      and every later visit.
+      //   3. The browser's own preferred languages, which is the right default:
+      //      nobody configures a chat page they opened from a link.
+      //   4. The server's `--lang`, for a station whose audience does not have
+      //      their browsers set the way this assumes.
+      //
+      // Only the primary subtag is matched, so `es-419` and `es-ES` both find
+      // `es`. Anything we do not have falls through to the next source rather
+      // than jumping straight to English.
+      const LANG_KEY = "pubsplash-chat:lang";
+      const LOCALE = (() => {
+        const known = (tag) => {
+          const base = String(tag || "").toLowerCase().split("-")[0];
+          return STRINGS[base] ? base : null;
+        };
+        // Storage can throw outright in a locked-down browser, so every touch
+        // of it here is guarded and the page works with none of it.
+        const asked = known(new URLSearchParams(location.search).get("lang"));
+        if (asked) {
+          try {
+            localStorage.setItem(LANG_KEY, asked);
+          } catch {
+            /* the choice just will not persist */
+          }
+          return asked;
+        }
+        try {
+          const saved = known(localStorage.getItem(LANG_KEY));
+          if (saved) return saved;
+        } catch {
+          /* no stored choice available */
+        }
+        const wanted = navigator.languages?.length
+          ? navigator.languages
+          : [navigator.language];
+        for (const tag of wanted) {
+          const base = known(tag);
+          if (base) return base;
+        }
+        return known(document.body.dataset.lang) ?? "en";
+      })();
+      const T = STRINGS[LOCALE];
+      document.documentElement.lang = LOCALE;
+
+      // Fills every element carrying `data-t`. Runs once, before anything is
+      // announced, so the first thing a screen reader reads is already
+      // translated.
+      function applyStrings() {
+        for (const el of document.querySelectorAll("[data-t]")) {
+          const value = T[el.dataset.t];
+          if (typeof value === "string") el.textContent = value;
+        }
+      }
+
+      // ---------------------------------------------------------------- state
+      // The API base is this page's own path, so the whole thing still works
+      // mounted under a prefix (`/chat/r/myshow`) behind somebody's reverse
+      // proxy. Deriving it from `location.origin` would quietly bypass that.
+      const API = location.pathname.replace(/\/+$/, "");
+
+      const state = {
+        messages: [],
+        // The active listbox option. -1 = none chosen yet, which is what lets
+        // focusing the list land on the newest message rather than the oldest.
+        activeIdx: -1,
+        nick: "",
+        // The name the server has actually accepted for us, and whether it is
+        // currently held. The server is the authority -- it has to be, or a
+        // second browser tab would be a second identity -- and these two only
+        // keep the page honest about what it already decided.
+        boundNick: "",
+        nameHeld: false,
+        // Where the show can be heard, as the broadcaster's app published it.
+        // Null until they say, and null again when they go off air.
+        stream: null,
+        maxChars: 2000,
+        limit: { messages: 5, windowMs: 10000 },
+        // The one-time "Alt+1..0 reads messages back" hint is appended to the
+        // first announcement rather than spoken on load, where it would be
+        // talked over by the page finishing loading.
+        hintGiven: false,
+        // Which digit was last read back, and when, so a quick second press of
+        // the same one copies instead of re-reading.
+        lastDigit: null,
+        lastDigitAt: 0,
+      };
+
+      const DOUBLE_PRESS_MS = 1200;
+
+      const els = {
+        list: document.getElementById("list"),
+        empty: document.getElementById("empty"),
+        text: document.getElementById("text"),
+        send: document.getElementById("send"),
+        nick: document.getElementById("nick"),
+        rename: document.getElementById("rename"),
+        player: document.getElementById("player"),
+        play: document.getElementById("play"),
+        nowPlaying: document.getElementById("now-playing"),
+        volume: document.getElementById("volume"),
+        nickHint: document.getElementById("nick-hint"),
+        composer: document.getElementById("composer"),
+        stateLine: document.getElementById("state"),
+        listeners: document.getElementById("listeners"),
+        live: document.getElementById("sr-live"),
+      };
+
+      // Storage can throw outright (a locked-down browser, a private window
+      // with site data blocked), so every read and write is guarded and the
+      // page works with none of it.
+      const store = {
+        get(key, fallback) {
+          try {
+            const value = localStorage.getItem(`pubsplash-chat:${key}`);
+            return value === null ? fallback : value;
+          } catch {
+            return fallback;
+          }
+        },
+        set(key, value) {
+          try {
+            localStorage.setItem(`pubsplash-chat:${key}`, value);
+          } catch {
+            /* nothing to do -- the preference just will not persist */
+          }
+        },
+      };
+
+      // This browser's own id, generated once and kept. It is NOT a credential
+      // and it buys nothing: the server uses it only to tell one person from
+      // another *within* a network, so that a household -- or everybody behind
+      // a mobile carrier's shared address -- can hold separate nicknames. The
+      // spam budget is counted against the address, which is the part nobody
+      // can regenerate, so clearing this gets a troll a new name and no extra
+      // messages at all.
+      function clientId() {
+        let id = store.get("client", "");
+        if (!/^[A-Za-z0-9_-]{1,64}$/.test(id)) {
+          id =
+            crypto.randomUUID?.() ??
+            `c${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`;
+          store.set("client", id);
+        }
+        return id;
+      }
+      const CLIENT = clientId();
+
+      // ------------------------------------------------------------ formatting
+
+      // Separates a message from its trailing time. A spaced em dash so the two
+      // never run together when the text has no end punctuation -- visually,
+      // and as a pause for a screen reader.
+      const META_SEP = " — ";
+
+      const rtf = new Intl.RelativeTimeFormat(LOCALE, { numeric: "auto" });
+
+      function relativeTime(ts, now) {
+        const seconds = Math.round((ts - now) / 1000); // negative = in the past
+        if (Math.abs(seconds) < 30) return T.just_now;
+        const minutes = Math.round(seconds / 60);
+        if (Math.abs(minutes) < 60) return rtf.format(minutes, "minute");
+        const hours = Math.round(seconds / 3600);
+        if (Math.abs(hours) < 24) return rtf.format(hours, "hour");
+        return rtf.format(Math.round(seconds / 86400), "day");
+      }
+
+      // Who a message is from, as it is both shown and read. The broadcaster is
+      // named in the TEXT rather than only by colour, because a listener who
+      // cannot see the styling still has to know who is talking -- and this is
+      // the string both the row and the announcement are built from.
+      function speaker(message) {
+        return message.host ? T.broadcaster(message.nick) : message.nick;
+      }
+
+      // The single source of truth for how a message reads. Used verbatim by
+      // the announcement, and assembled from the same pieces by the row, so the
+      // two can never drift.
+      function formatMessage(message, now) {
+        const when = relativeTime(message.ts, now);
+        if (message.system) return T.event(message.text, when);
+        return T.said(speaker(message), message.text, when);
+      }
+
+      // What "copy" puts on the clipboard: the body alone, with no name and no
+      // trailing time. Shared by the list's Control+C and the Alt+number
+      // double-press, so both copy exactly the same thing.
+      function messageBody(message) {
+        return message.text;
+      }
+
+      // ---------------------------------------------------------- announcements
+
+      // A live region announces a NEW NODE, so each announcement gets a fresh
+      // span rather than an assignment to an existing one: writing the same
+      // string to the same node is not a mutation, and an identical repeated
+      // message -- "yes" answered by "yes" -- would be silently dropped.
+      //
+      // The region holds exactly ONE span, and `aria-atomic="false"` in the
+      // markup is what makes that safe. `role="status"` is implicitly ATOMIC,
+      // meaning a screen reader re-reads the whole region on every change: with
+      // a backlog of spans left in place, one press of Alt+1 read out every
+      // announcement still sitting there. Both halves are needed -- one span
+      // without the attribute still re-reads that span's whole region, and the
+      // attribute without the pruning re-reads the backlog on any assistive
+      // tech that ignores it.
+      //
+      // Removals are not announced: `aria-relevant` defaults to additions and
+      // text, so swapping the node in speaks only the new line.
+      function announce(text) {
+        const span = document.createElement("span");
+        span.textContent = text;
+        els.live.replaceChildren(span);
+      }
+
+      // ------------------------------------------------------------------ cues
+
+      // Two short WebAudio cues, the same two SonicRoom uses: an ascending
+      // glassy chime for an arriving message and a dull thunk for a send the
+      // spam guard refused. Synthesised rather than fetched, so the page stays
+      // one file and a cue costs no request.
+      let audio = null;
+      function audioContext() {
+        if (!audio) {
+          const Ctor = window.AudioContext || window.webkitAudioContext;
+          if (!Ctor) return null;
+          audio = new Ctor();
+        }
+        if (audio.state === "suspended") void audio.resume();
+        return audio;
+      }
+
+      // Two-operator FM bell: a sine carrier whose pitch is modulated by a
+      // second sine, with the modulation depth decaying fast -- a bright strike
+      // that settles into a pure tone.
+      function bell(ctx, freq, dur, gain, delay) {
+        const t0 = ctx.currentTime + delay;
+        const carrier = ctx.createOscillator();
+        carrier.type = "sine";
+        carrier.frequency.setValueAtTime(freq, t0);
+        const mod = ctx.createOscillator();
+        mod.type = "sine";
+        mod.frequency.setValueAtTime(freq * 2, t0);
+        const modGain = ctx.createGain();
+        const depth = freq * 2 * 2;
+        modGain.gain.setValueAtTime(depth, t0);
+        modGain.gain.exponentialRampToValueAtTime(depth * 0.02, t0 + dur * 0.5);
+        mod.connect(modGain);
+        modGain.connect(carrier.frequency);
+        const g = ctx.createGain();
+        g.gain.setValueAtTime(0.0001, t0);
+        g.gain.exponentialRampToValueAtTime(gain, t0 + 0.006);
+        g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+        carrier.connect(g);
+        g.connect(ctx.destination);
+        carrier.start(t0);
+        mod.start(t0);
+        carrier.stop(t0 + dur + 0.02);
+        mod.stop(t0 + dur + 0.02);
+      }
+
+      function playCue(name) {
+        const ctx = audioContext();
+        if (!ctx) return;
+        try {
+          if (name === "message") {
+            bell(ctx, 880, 0.32, 0.18, 0);
+            bell(ctx, 1320, 0.42, 0.18, 0.1);
+            return;
+          }
+          // "thunk" -- one low, short, dull "nope".
+          const t0 = ctx.currentTime;
+          const osc = ctx.createOscillator();
+          osc.type = "square";
+          osc.frequency.setValueAtTime(170, t0);
+          osc.frequency.exponentialRampToValueAtTime(120, t0 + 0.13);
+          const g = ctx.createGain();
+          g.gain.setValueAtTime(0.0001, t0);
+          g.gain.exponentialRampToValueAtTime(0.1, t0 + 0.012);
+          g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.13);
+          osc.connect(g);
+          g.connect(ctx.destination);
+          osc.start(t0);
+          osc.stop(t0 + 0.15);
+        } catch {
+          /* a cue is never worth an exception */
+        }
+      }
+
+      // ---------------------------------------------------------------- radio
+      //
+      // The show itself, in the same page as the chat about it. One `<audio>`
+      // element pointed at whatever listen URL the broadcaster published -- an
+      // Icecast mount, usually -- with no library and no controls of its own:
+      // a plain button and a volume slider are both more accessible than the
+      // native player chrome and the only two controls a live stream has.
+
+      const radio = new Audio();
+      radio.preload = "none";
+
+      function volumeOf() {
+        const stored = Number(store.get("volume", "50"));
+        return Number.isFinite(stored) ? Math.min(100, Math.max(0, stored)) : 50;
+      }
+
+      function applyVolume(percent) {
+        radio.volume = percent / 100;
+        // The native range announces its number; this says what the number
+        // means. Set on every change, because the value it describes changed.
+        els.volume.setAttribute("aria-valuetext", `${percent}%`);
+        store.set("volume", String(percent));
+      }
+
+      els.volume.addEventListener("input", () => applyVolume(Number(els.volume.value)));
+
+      function playing() {
+        return !radio.paused && radio.src !== "";
+      }
+
+      function stopRadio() {
+        radio.pause();
+        // The source is dropped, not just paused. A paused `<audio>` on a live
+        // stream goes on downloading it, and resuming would then play however
+        // many minutes of it had piled up -- behind live, and never catching up.
+        radio.removeAttribute("src");
+        radio.load();
+        els.play.textContent = T.listen;
+      }
+
+      function startRadio() {
+        if (!state.stream) return;
+        // A page served over https cannot load an http stream, and the browser
+        // blocks it with nothing in the interface to explain why. Say so.
+        if (location.protocol === "https:" && state.stream.url.startsWith("http://")) {
+          announce(T.insecure);
+          return;
+        }
+        // A fresh src each time, so pressing Listen joins the broadcast where
+        // it is now rather than where it was when the page loaded.
+        radio.src = state.stream.url;
+        radio.volume = Number(els.volume.value) / 100;
+        els.play.textContent = T.stop;
+        radio.play().then(
+          () => announce(T.playing(state.stream?.name ?? "")),
+          () => {
+            stopRadio();
+            announce(T.play_failed);
+          },
+        );
+      }
+
+      els.play.addEventListener("click", () => {
+        if (playing()) {
+          stopRadio();
+          announce(T.stopped);
+        } else {
+          startRadio();
+        }
+      });
+
+      // A live stream that dies mid-listen otherwise leaves a Stop button that
+      // stops nothing, and silence with no explanation.
+      radio.addEventListener("error", () => {
+        if (radio.src === "") return;
+        stopRadio();
+        announce(T.play_failed);
+      });
+
+      // What the broadcaster published, or null when they go off air. Announced
+      // on a change but not on the first one: arriving at a room where the show
+      // is already on is not news.
+      function setStream(stream, { announceIt }) {
+        const wasPlaying = playing();
+        const changed = (state.stream?.url ?? null) !== (stream?.url ?? null);
+        state.stream = stream ?? null;
+        els.player.hidden = !state.stream;
+        els.nowPlaying.textContent = state.stream?.name ?? "";
+        if (!state.stream) {
+          if (wasPlaying) stopRadio();
+          if (announceIt) announce(T.off_air);
+          return;
+        }
+        if (changed && wasPlaying) {
+          // The mount moved under us; follow it rather than leaving a Stop
+          // button attached to a stream that no longer exists.
+          startRadio();
+        }
+        if (announceIt && changed) announce(T.on_air(state.stream.name));
+      }
+
+      // ------------------------------------------------------------------ list
+
+      // The trailing "— sent 5 minutes ago" of a row, taken from the SAME
+      // formatted string the announcement uses: the row prints the sender and
+      // body itself, so the tail is whatever `formatMessage` puts after them.
+      // Deriving it rather than re-assembling it is what keeps the two from
+      // drifting in one language and not another.
+      function whenSuffix(message, now) {
+        const full = formatMessage(message, now);
+        const head = message.system ? message.text : `${speaker(message)}: ${message.text}`;
+        return full.startsWith(head) ? full.slice(head.length) : full;
+      }
+
+      function optionId(message) {
+        return `opt-${message.id}`;
+      }
+
+      // The rows currently in the widget, by message id. Kept because the list
+      // is synced in place rather than rebuilt -- see `renderList`.
+      const rows = new Map();
+
+      function buildRow(message) {
+        const li = document.createElement("li");
+        li.id = optionId(message);
+        li.setAttribute("role", "option");
+        li.setAttribute("aria-selected", "false");
+        if (message.system) {
+          li.className = "system-row";
+          li.append(message.text);
+        } else {
+          if (message.host) li.className = "host-row";
+          const who = document.createElement("span");
+          who.className = "nick";
+          // `textContent`, never `innerHTML`: this is the one place a
+          // stranger's text reaches the DOM, and it is text.
+          who.textContent = `${speaker(message)}:`;
+          li.append(who, " ", message.text);
+        }
+        const when = document.createElement("span");
+        when.className = "when";
+        li.append(when);
+        return li;
+      }
+
+      // Syncs the list IN PLACE: new rows are appended, departed rows removed,
+      // and surviving rows keep the exact nodes they had.
+      //
+      // This runs every thirty seconds to keep "5 minutes ago" true, and that
+      // is the whole reason it is not a rebuild. Tearing the options out from
+      // under a listbox somebody is reading makes a screen reader re-announce
+      // the row they are standing on, twice a minute, forever. The active row's
+      // time is deliberately left stale for the same reason -- it is refreshed
+      // when the active row changes, which is the moment before it is read.
+      function renderList(now) {
+        // Only the notice comes and goes. The list itself is always present --
+        // see the markup for why.
+        els.empty.hidden = state.messages.length > 0;
+
+        const live = new Set(state.messages.map((m) => m.id));
+        for (const [id, li] of rows) {
+          if (!live.has(id)) {
+            li.remove();
+            rows.delete(id);
+          }
+        }
+
+        const active = state.messages[state.activeIdx];
+        for (const message of state.messages) {
+          let li = rows.get(message.id);
+          if (!li) {
+            li = buildRow(message);
+            rows.set(message.id, li);
+            els.list.append(li);
+          } else if (active && message.id === active.id) {
+            continue; // leave the row being read alone
+          }
+          li.lastChild.textContent = whenSuffix(message, now);
+        }
+
+        syncActive({ scroll: false });
+      }
+
+      // Points `aria-activedescendant` at the active row and keeps it in view.
+      // With nothing active, the list is pinned to the newest message -- a room
+      // that is being watched rather than read back.
+      let activeRow = null;
+      function syncActive({ scroll }) {
+        const message = state.messages[state.activeIdx];
+        const li = message ? rows.get(message.id) : null;
+        if (activeRow && activeRow !== li) {
+          activeRow.setAttribute("aria-selected", "false");
+          // The row just stepped off is refreshed at once, so stepping away
+          // and back reads the current time rather than the one it froze at.
+          const left = state.messages.find((m) => optionId(m) === activeRow.id);
+          if (left) {
+            activeRow.lastChild.textContent = whenSuffix(left, Date.now());
+          }
+        }
+        activeRow = li ?? null;
+        if (!li) {
+          els.list.removeAttribute("aria-activedescendant");
+          els.list.scrollTop = els.list.scrollHeight;
+          return;
+        }
+        li.setAttribute("aria-selected", "true");
+        els.list.setAttribute("aria-activedescendant", li.id);
+        if (scroll) li.scrollIntoView({ block: "nearest" });
+      }
+
+      function moveActive(next) {
+        const last = state.messages.length - 1;
+        state.activeIdx = Math.max(0, Math.min(next, last));
+        syncActive({ scroll: true });
+      }
+
+      els.list.addEventListener("keydown", (event) => {
+        if (state.messages.length === 0) return;
+        const last = state.messages.length - 1;
+
+        // Control+C copies the active row's body. A real mouse selection wins:
+        // overriding it would be the one case where the shortcut copies
+        // something other than what the user just highlighted.
+        if ((event.ctrlKey || event.metaKey) && (event.key === "c" || event.key === "C")) {
+          const selection = window.getSelection();
+          if (selection && !selection.isCollapsed) return;
+          const message = state.messages[state.activeIdx];
+          if (!message) return;
+          event.preventDefault();
+          copy(messageBody(message));
+          return;
+        }
+
+        switch (event.key) {
+          case "ArrowDown":
+            event.preventDefault();
+            moveActive((state.activeIdx < 0 ? -1 : state.activeIdx) + 1);
+            break;
+          case "ArrowUp":
+            event.preventDefault();
+            moveActive((state.activeIdx < 0 ? state.messages.length : state.activeIdx) - 1);
+            break;
+          case "Home":
+            event.preventDefault();
+            moveActive(0);
+            break;
+          case "End":
+            event.preventDefault();
+            moveActive(last);
+            break;
+        }
+      });
+
+      // Landing on the list starts at the newest message, which is what anyone
+      // tabbing in to catch up actually wants.
+      els.list.addEventListener("focus", () => {
+        if (state.activeIdx < 0 && state.messages.length > 0) {
+          moveActive(state.messages.length - 1);
+        }
+      });
+
+      function copy(text) {
+        if (!navigator.clipboard) {
+          announce(T.copy_unavailable);
+          return;
+        }
+        navigator.clipboard.writeText(text).then(
+          () => announce(T.copied),
+          () => announce(T.copy_failed),
+        );
+      }
+
+      // --------------------------------------------------------------- arrival
+
+      function addMessage(message) {
+        // The sender gets their own message back off the feed, and a reconnect
+        // replays history that may overlap what is already here, so the id is
+        // what keeps either from showing twice.
+        if (state.messages.some((m) => m.id === message.id)) return false;
+        state.messages.push(message);
+        if (state.messages.length > 200) {
+          const dropped = state.messages.length - 200;
+          state.messages.splice(0, dropped);
+          if (state.activeIdx >= 0) state.activeIdx = Math.max(0, state.activeIdx - dropped);
+        }
+        return true;
+      }
+
+      function onChat(message) {
+        if (!addMessage(message)) return;
+        renderList(Date.now());
+        let line = formatMessage(message, Date.now());
+        if (!state.hintGiven) {
+          state.hintGiven = true;
+          line += `${META_SEP}${T.alt_hint}`;
+        }
+        announce(line);
+        playCue("message");
+      }
+
+      // -------------------------------------------------------------- the feed
+
+      // `EventSource` rather than a hand-rolled fetch loop: it reconnects on its
+      // own, honours the server's retry interval, and is the one thing in the
+      // browser that already knows this protocol. The server replays history on
+      // every connect, and `addMessage` de-duplicates, so a reconnect is a
+      // catch-up rather than a reset.
+      let feed = null;
+      function connect() {
+        feed?.close();
+        feed = new EventSource(`${API}/events`);
+
+        feed.addEventListener("open", () => setConnection("live"));
+        feed.addEventListener("error", () => setConnection("down"));
+
+        feed.addEventListener("hello", (event) => {
+          const data = JSON.parse(event.data);
+          state.maxChars = data.maxChars ?? state.maxChars;
+          state.limit = data.limit ?? state.limit;
+          els.text.maxLength = state.maxChars;
+          setListeners(data.listeners);
+          setStream(data.stream, { announceIt: false });
+          let added = false;
+          for (const message of data.history ?? []) added = addMessage(message) || added;
+          if (added) renderList(Date.now());
+          setConnection("live");
+        });
+
+        feed.addEventListener("chat", (event) => onChat(JSON.parse(event.data)));
+
+        // The show came on or went off while the page was open.
+        feed.addEventListener("stream", (event) => {
+          setStream(JSON.parse(event.data).stream, { announceIt: true });
+        });
+
+        feed.addEventListener("listeners", (event) => {
+          setListeners(JSON.parse(event.data).count);
+        });
+
+        // The room got busier than this connection could keep up with. Say so
+        // rather than pretending the gap did not happen: a listener who is
+        // following a conversation needs to know they missed part of it.
+        feed.addEventListener("lagged", (event) => {
+          announce(T.missed(JSON.parse(event.data).missed));
+        });
+      }
+
+      function setConnection(kind) {
+        const was = els.stateLine.dataset.state;
+        if (was === kind) return;
+        els.stateLine.dataset.state = kind;
+        // A glyph as well as a colour, so the state does not depend on being
+        // able to see the difference between green and grey.
+        els.stateLine.textContent = kind === "live" ? T.connected : T.reconnecting;
+        // Silent on the very first connect: the page has just loaded and the
+        // listener knows they opened it. Every change after that is news.
+        if (was && was !== "idle") {
+          announce(kind === "live" ? T.reconnected : T.lost);
+        }
+      }
+
+      function setListeners(count) {
+        if (typeof count !== "number") return;
+        els.listeners.textContent = T.listeners(count);
+      }
+
+      // --------------------------------------------------------------- sending
+
+      // The client's own copy of the server's budget, so a refused send is
+      // instant and local. The server enforces it authoritatively; this only
+      // saves a round trip. Blocked attempts do not count, exactly as on the
+      // server, so the sender recovers as soon as the window clears.
+      const localLimiter = {
+        hits: [],
+        tryConsume(now) {
+          this.hits = this.hits.filter((t) => now - t < state.limit.windowMs);
+          if (this.hits.length >= state.limit.messages) return false;
+          this.hits.push(now);
+          return true;
+        },
+      };
+
+      async function submit() {
+        const text = els.text.value.trim();
+        // The text is never cleared on a failed send. Retyping a message that
+        // the spam guard ate is the fastest way to make somebody give up.
+        if (!text) return;
+
+        if (!localLimiter.tryConsume(Date.now())) {
+          playCue("thunk");
+          announce(T.too_fast);
+          return;
+        }
+
+        els.send.disabled = true;
+        try {
+          const response = await fetch(`${API}/messages`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ nick: state.nick, text, client: CLIENT }),
+          });
+          const body = await response.json().catch(() => ({}));
+          if (response.ok) {
+            els.text.value = "";
+            // The server decides what we are called; take its answer as the
+            // truth and stop offering the field until it is asked for.
+            if (body.message?.nick) holdName(body.message.nick);
+            return;
+          }
+          playCue("thunk");
+          if (body.error === "name_locked" && state.boundNick) {
+            // Put the held name back in the box, so the field never shows a
+            // name that is not the one the room would see.
+            els.nick.value = state.boundNick;
+            state.nick = state.boundNick;
+            holdName(state.boundNick);
+          }
+          if (body.error === "name_taken") {
+            releaseName();
+            els.nick.focus();
+          }
+          announce(sendError(body.error, body.retryAfterMs));
+        } catch {
+          playCue("thunk");
+          announce(T.unreachable);
+        } finally {
+          els.send.disabled = false;
+        }
+      }
+
+      function sendError(code, retryAfterMs) {
+        switch (code) {
+          case "rate_limited":
+            return T.too_fast_in(Math.max(1, Math.round((retryAfterMs ?? 0) / 1000)));
+          case "name_taken":
+            return T.name_taken;
+          case "name_locked":
+            return T.name_locked(
+              state.boundNick,
+              Math.max(1, Math.round((retryAfterMs ?? 0) / 60000)),
+            );
+          case "too_long":
+            return T.too_long(state.maxChars);
+          case "empty":
+            return T.nothing;
+          default:
+            return T.refused;
+        }
+      }
+
+      els.composer.addEventListener("submit", (event) => {
+        event.preventDefault();
+        void submit();
+      });
+
+      els.text.addEventListener("keydown", (event) => {
+        // Enter sends; Shift+Enter is a newline, because this is a multiline
+        // editor and people paste into it.
+        if (event.key === "Enter" && !event.shiftKey) {
+          event.preventDefault();
+          void submit();
+        }
+      });
+
+      // ------------------------------------------------------------ preferences
+
+      // Holding a name is what makes it mean anything: the server binds it to
+      // the sender for a few minutes, so nobody can answer themselves under a
+      // second name or borrow whoever spoke last. The field follows that rule
+      // rather than pretending the name is free to retype on every message.
+      function holdName(nick) {
+        state.boundNick = nick;
+        state.nameHeld = true;
+        els.nick.value = nick;
+        els.nick.readOnly = true;
+        els.rename.hidden = false;
+        els.nickHint.textContent = T.nick_hint_held;
+      }
+
+      function releaseName() {
+        state.nameHeld = false;
+        els.nick.readOnly = false;
+        els.rename.hidden = true;
+        els.nickHint.textContent = T.nick_hint_free;
+      }
+
+      els.rename.addEventListener("click", () => {
+        releaseName();
+        els.nick.focus();
+        els.nick.select();
+        announce(T.rename_prompt);
+      });
+
+      state.nick = store.get("nick", "");
+      els.nick.value = state.nick;
+      els.nick.addEventListener("input", () => {
+        state.nick = els.nick.value;
+        store.set("nick", state.nick);
+      });
+
+      // ------------------------------------------------------ Alt+number readback
+
+      // Alt+1..9 and Alt+0 read the last ten messages: 1 is the newest, 0 the
+      // tenth. A second press of the same digit inside DOUBLE_PRESS_MS copies
+      // it instead. Bound to the window, and checked before anything else, so
+      // it works while the composer has focus -- which is where a listener
+      // typing a reply actually is.
+      //
+      // Matched on the PHYSICAL key (`event.code`) rather than `event.key`:
+      // on AZERTY, and on a Mac where Alt is Option, Alt+1 produces a character
+      // that is not a digit at all, and matching `key` alone made the whole
+      // feature look broken on those keyboards.
+      window.addEventListener("keydown", (event) => {
+        if (!event.altKey || event.ctrlKey || event.metaKey) return;
+        const match = /^(?:Digit|Numpad)([0-9])$/.exec(event.code);
+        const digit = match ? match[1] : /^[0-9]$/.test(event.key) ? event.key : null;
+        if (digit === null) return;
+        event.preventDefault();
+
+        const n = digit === "0" ? 10 : Number(digit);
+        const message = state.messages[state.messages.length - n];
+        const now = Date.now();
+        if (
+          message &&
+          state.lastDigit === digit &&
+          now - state.lastDigitAt < DOUBLE_PRESS_MS
+        ) {
+          state.lastDigit = null;
+          copy(messageBody(message));
+          return;
+        }
+        state.lastDigit = digit;
+        state.lastDigitAt = now;
+        announce(message ? formatMessage(message, now) : T.no_message(n));
+      });
+
+      // ---------------------------------------------------------------- startup
+
+      // "5 minutes ago" has to stay roughly true without a timer per message.
+      // Half a minute is under the resolution of every string `relativeTime`
+      // produces, so nothing is ever visibly stale.
+      setInterval(() => renderList(Date.now()), 30_000);
+
+      applyStrings();
+      els.volume.value = String(volumeOf());
+      applyVolume(Number(els.volume.value));
+      els.play.textContent = T.listen;
+      renderList(Date.now());
+      connect();
+
+      // Somebody who has not said who they are gets the name field; everybody
+      // else gets the composer, which is what they opened the page to use.
+      if (state.nick.trim()) els.text.focus();
+      else els.nick.focus();
+    </script>
+  </body>
+</html>

@@ -1,0 +1,53 @@
+# Its own workspace, deliberately. Pubsplash's manifest has no `[workspace]`
+# table, so a package in a subdirectory would otherwise be pulled in as a member
+# and put axum, hyper and tower into the app's dependency graph -- a Windows
+# desktop binary that never serves HTTP. This table cuts that: `cargo build` at
+# the repo root builds Pubsplash and nothing here, and `cargo build` in this
+# directory builds the chat server and nothing there.
+[workspace]
+
+[package]
+name = "pubsplash-chat"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "Drop-in chat server for Icecast broadcasters: one binary, no database, no registration"
+
+[[bin]]
+name = "pubsplash-chat"
+path = "src/main.rs"
+
+[dependencies]
+# The whole HTTP surface: four routes, a path parameter, JSON in and out, and
+# SSE. `macros` is for `#[derive(FromRef)]`-free state extraction sugar and the
+# debug_handler attribute used while developing a handler.
+axum = { version = "0.8", features = ["macros", "json"] }
+# `net` and `rt-multi-thread` because this one *is* a server: unlike Pubsplash's
+# single current-thread runtime, an SSE fan-out wants more than one core when a
+# popular room has a few hundred listeners on it.
+tokio = { version = "1", features = ["rt-multi-thread", "net", "macros", "signal", "time", "sync"] }
+# SSE responses are a `Stream`; `BroadcastStream` adapts the per-room
+# `tokio::sync::broadcast` receiver into one.
+tokio-stream = { version = "0.1", features = ["sync"] }
+futures-util = { version = "0.3", default-features = false, features = ["std"] }
+
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# The host key is HMAC-SHA256(server secret, room name), which is what lets one
+# deployment serve any number of rooms without a database or a registration step.
+hmac = "0.12"
+sha2 = "0.10"
+# Generating the server secret on first run.
+rand = "0.9"
+
+# Timestamps are epoch milliseconds on the wire (the browser renders them
+# relative), so nothing here needs a calendar -- `SystemTime` is enough.
+
+[profile.release]
+# A drop-in binary is copied to a server by hand, so size is worth a little
+# build time. Not `lto = "fat"`: this is not a hot path and thin is within a
+# rounding error of it here.
+lto = "thin"
+codegen-units = 1
+strip = true

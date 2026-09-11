@@ -209,6 +209,44 @@ pub fn show(app: &Rc<App>, frame: &Frame) {
         "Icecast password for the selected service",
     );
 
+    // Chat for a direct Icecast mount. Icecast is one-way and carries no chat
+    // of its own, so these point the service at a Pubsplash Chat server running
+    // alongside it (`chat/` in this repository). All three are optional: leaving
+    // the first two empty is a mount with no chat, which is what every Icecast
+    // service was before this existed.
+    let chat_url_label = StaticText::builder(&panel)
+        .with_label(&t!("Chat server (optional)"))
+        .build();
+    let chat_url_input = TextCtrl::builder(&panel).build();
+    super::set_accessible_name(&chat_url_input, &t!("Chat server (optional)"));
+    super::help::tag(
+        &chat_url_input,
+        "dialog.connect.chatUrl",
+        "Pubsplash Chat server address for the selected Icecast service",
+    );
+    let chat_room_label = StaticText::builder(&panel)
+        .with_label(&t!("Chat room"))
+        .build();
+    let chat_room_input = TextCtrl::builder(&panel).build();
+    super::set_accessible_name(&chat_room_input, &t!("Chat room"));
+    super::help::tag(
+        &chat_room_input,
+        "dialog.connect.chatRoom",
+        "Chat room name on the chat server",
+    );
+    let chat_key_label = StaticText::builder(&panel)
+        .with_label(&t!("Chat host key"))
+        .build();
+    let chat_key_input = TextCtrl::builder(&panel)
+        .with_style(TextCtrlStyle::Password)
+        .build();
+    super::set_accessible_name(&chat_key_input, &t!("Chat host key"));
+    super::help::tag(
+        &chat_key_input,
+        "dialog.connect.chatHostKey",
+        "Host key that marks our chat messages as the broadcaster's",
+    );
+
     let rtmp_url_label = StaticText::builder(&panel).with_label(&t!("Ingest URL")).build();
     let rtmp_url_input = TextCtrl::builder(&panel).build();
     super::set_accessible_name(&rtmp_url_input, &t!("Ingest URL"));
@@ -310,6 +348,12 @@ pub fn show(app: &Rc<App>, frame: &Frame) {
         SizerFlag::Expand | SizerFlag::All,
         4,
     );
+    sizer.add(&chat_url_label, 0, SizerFlag::All, 4);
+    sizer.add(&chat_url_input, 0, SizerFlag::Expand | SizerFlag::All, 4);
+    sizer.add(&chat_room_label, 0, SizerFlag::All, 4);
+    sizer.add(&chat_room_input, 0, SizerFlag::Expand | SizerFlag::All, 4);
+    sizer.add(&chat_key_label, 0, SizerFlag::All, 4);
+    sizer.add(&chat_key_input, 0, SizerFlag::Expand | SizerFlag::All, 4);
     sizer.add(&rtmp_url_label, 0, SizerFlag::All, 4);
     sizer.add(&rtmp_url_input, 0, SizerFlag::Expand | SizerFlag::All, 4);
     sizer.add(&rtmp_key_label, 0, SizerFlag::All, 4);
@@ -376,6 +420,15 @@ pub fn show(app: &Rc<App>, frame: &Frame) {
             username_input.show(icecast);
             icecast_password_label.show(icecast);
             icecast_password_input.show(icecast);
+            // Chat belongs to a direct Icecast mount alone: Audiopub carries
+            // its own over the live-events feed, and a YouTube service reads
+            // chat from the broadcast.
+            chat_url_label.show(icecast);
+            chat_url_input.show(icecast);
+            chat_room_label.show(icecast);
+            chat_room_input.show(icecast);
+            chat_key_label.show(icecast);
+            chat_key_input.show(icecast);
             rtmp_url_label.show(youtube);
             rtmp_url_input.show(youtube);
             rtmp_key_label.show(youtube);
@@ -473,6 +526,9 @@ pub fn show(app: &Rc<App>, frame: &Frame) {
             listeners_input.set_value("");
             username_input.set_value("");
             icecast_password_input.set_value("");
+            chat_url_input.set_value("");
+            chat_room_input.set_value("");
+            chat_key_input.set_value("");
             rtmp_url_input.set_value("");
             rtmp_key_input.set_value("");
             channel_input.set_value("");
@@ -508,6 +564,9 @@ pub fn show(app: &Rc<App>, frame: &Frame) {
                 listeners_input.set_value(&service.icecast_listener_url);
                 username_input.set_value(&service.icecast_username);
                 icecast_password_input.set_value(service.icecast_password.as_str());
+                chat_url_input.set_value(&service.chat_url);
+                chat_room_input.set_value(&service.chat_room);
+                chat_key_input.set_value(service.chat_host_key.as_str());
                 rtmp_url_input.set_value(&service.rtmp_url);
                 rtmp_key_input.set_value(service.rtmp_key.as_str());
                 channel_input.set_value(&service.youtube_channel);
@@ -619,6 +678,15 @@ pub fn show(app: &Rc<App>, frame: &Frame) {
             service.icecast_listener_url = listeners_input.get_value().trim().to_string();
             service.icecast_username = username_input.get_value().trim().to_string();
             service.icecast_password = Secret::new(icecast_password_input.get_value());
+            service.chat_url = chat_url_input.get_value().trim().to_string();
+            // Lowercased on the way in, the way the chat server lowercases it,
+            // so what is stored and what the dialog shows next time is the room
+            // that will actually be joined.
+            service.chat_room = chat_room_input.get_value().trim().to_lowercase();
+            // Trimmed for the same reason the RTMP key below is: a host key
+            // copied off a terminal very often brings a newline with it, and a
+            // key with one on the end is simply a wrong key.
+            service.chat_host_key = Secret::new(chat_key_input.get_value().trim());
             service.rtmp_url = rtmp_url_input.get_value().trim().to_string();
             // Trimmed, because a stream key copied out of YouTube Studio very
             // often brings a trailing space or newline with it, and RTMP answers
