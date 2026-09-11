@@ -67,6 +67,12 @@ file = "src/ui/connect_dialog.rs"
 message = "The room's host key, which marks your messages as the broadcaster's and lets you take your own name back from anyone who claimed it. Run pubsplash-chat key followed by the room name on the server to print it. Optional: without it your messages appear as an ordinary listener's, and the listen URL is not published, so listeners get chat but no play button."
 
 [[control]]
+id = "dialog.connect.chatNick"
+label = "Name the broadcaster appears under in the chat room"
+file = "src/ui/connect_dialog.rs"
+message = "What listeners see against everything you say in the chat room, and what your messages are announced as. Leave it empty to use this service's nickname, which is what Pubsplash did before this field existed. Up to thirty-two characters; the chat server holds the name for you while you are connected, so nobody else in the room can answer as the broadcaster."
+
+[[control]]
 id = "dialog.connect.chatRoom"
 label = "Chat room name on the chat server"
 file = "src/ui/connect_dialog.rs"

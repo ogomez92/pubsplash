@@ -55,7 +55,14 @@ If you say no to one and change your mind, they are all in **System Settings > P
 
 For Audiopub, you need the site address, your email, and your password. You do not need to know where the instance publishes: the Icecast server and port boxes start out holding the usual guess (the `live.` host of the site address, on port 8000), and when you connect, Pubsplash asks the instance itself and uses whatever it says instead. Fill the two boxes in yourself only if you want to override that — a typed-in server and port are always used as they stand.
 
-For Icecast, you normally need the server, port, mount point, username, and source password. The username defaults to source; the mount point may be `/` for the server root. Icecast does not provide Audiopub chat, listener counts, archiving, or an Audiopub stream page.
+For Icecast, you normally need the server, port, mount point, username, and source password. The username defaults to source; the mount point may be `/` for the server root. Icecast does not provide Audiopub archiving or an Audiopub stream page. Listener counts come from the Icecast server's own status page, which Pubsplash works out from the server and mount; fill in **Listener count URL** only if your listeners reach the stream at a different address, such as through a relay.
+
+Icecast carries audio one way and has no chat of its own, so an Icecast service can point at a Pubsplash Chat server running alongside the stream (`chat/` in this repository). Four boxes set it up, and all four are optional:
+
+- **Chat server** - the address, such as `https://chat.example.com`. Leave this and the room empty for a mount with no chat.
+- **Chat room** - the room your listeners open, as in `/r/nightowl`. Letters, digits, hyphens, and underscores; stored in lower case because that is how the server reads it.
+- **Your name in chat** - what listeners see against everything you say. Leave it empty to use the service's nickname.
+- **Chat host key** - marks your messages as the broadcaster's and lets you take your own name back from anyone who claimed it. Run `pubsplash-chat key <room>` on the server to print it. Without a key your messages appear as an ordinary listener's, and the listen URL is not published, so listeners get chat but no play button.
 
 ### 2. Add audio
 
@@ -121,7 +128,7 @@ The transport is on the media player's mixer strip. Open the volume slider's con
 **Open file** plays one file of your choosing from anywhere on your computer; it does not have to be in the source's folder, and nothing about it is remembered. It interrupts what is playing exactly as a skip does, and when it ends the folder carries on with the track it was going to play next. There is a button for it on the strip beside the mute box, and the first media player you add is given `Ctrl+O` for it.
 ## Chat and text-to-speech
 
-The **Chat** tab shows incoming Audiopub messages and lets you send replies. The feed reconnects automatically if it drops. **Reconnect chat** forces an immediate reconnect without interrupting your stream.
+The **Chat** tab shows incoming messages and lets you send replies - from Audiopub, from a YouTube broadcast, or from the Pubsplash Chat room an Icecast service is pointed at. The feed reconnects automatically if it drops. **Reconnect chat** forces an immediate reconnect without interrupting your stream.
 
 Note: The reconnect chat button is there as a means of trying to work around a server-side issue we have no control over. It may not work in all instances.
 

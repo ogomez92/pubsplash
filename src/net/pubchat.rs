@@ -34,11 +34,14 @@ pub struct ChatTarget {
     room: String,
     /// What the broadcaster is called in the room.
     ///
-    /// Taken from the service's own nickname rather than asked for separately:
-    /// the user has already named this service, that name is what the Home tab
-    /// and the log call it, and a second field for the same idea is a second
-    /// thing to get wrong. The chat server holds it against us for the session,
-    /// so nobody else in the room can answer as the host.
+    /// Its own setting (`SiteConfig::chat_nick`, resolved by
+    /// `chat_display_name`), not the service nickname it was taken from at
+    /// first. The two names are read by different people: a nickname names the
+    /// service to the user, in the Connect dialog and the log, while this is
+    /// what every listener sees against every line the broadcaster says -- and
+    /// a name chosen to sit in a service list is rarely one to be introduced by.
+    /// The chat server holds it against us for the session, so nobody else in
+    /// the room can answer as the host.
     nick: String,
     /// The room's host key, which marks our messages as the broadcaster's.
     /// Empty is allowed: chat then works and our own messages simply appear as

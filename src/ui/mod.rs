@@ -2250,12 +2250,17 @@ fn validate_site_url(raw: &str) -> Result<String, String> {
 /// ordinary listener's, which is a fair way to run a room where the operator
 /// has not handed one out.
 ///
-/// The broadcaster's name in the room is the service's own nickname. The user
-/// has already named this service, and a second field for the same idea is a
-/// second thing to keep in step.
+/// The broadcaster's name in the room is [`SiteConfig::chat_display_name`] --
+/// the service's own `chat_nick` field, falling back to its nickname. It was
+/// the nickname alone at first, on the reasoning that the user had already
+/// named this service and a second field for the same idea was a second thing
+/// to keep in step; that was wrong, because the two names are read by different
+/// people. A nickname is how the user refers to this service to themselves in
+/// the Connect dialog and the log, where something like "ice" is a fine answer,
+/// while this is what every listener sees against every line the broadcaster
+/// says.
 fn icecast_chat_target(
     site: &SiteConfig,
-    nickname: &str,
 ) -> Result<Option<crate::net::pubchat::ChatTarget>, String> {
     let url = site.chat_url.trim();
     let room = site.chat_room.trim();
@@ -2272,7 +2277,13 @@ fn icecast_chat_target(
             "Enter the chat room name, or clear the chat server to turn chat off."
         ));
     }
-    crate::net::pubchat::ChatTarget::new(url, room, nickname, site.chat_host_key.clone()).map(Some)
+    crate::net::pubchat::ChatTarget::new(
+        url,
+        room,
+        &site.chat_display_name(),
+        site.chat_host_key.clone(),
+    )
+    .map(Some)
 }
 
 /// Turns a stored service into the snapshot the network thread runs on.
@@ -2353,7 +2364,7 @@ pub fn service_profile_from(
             // Checked here, with the dialog still open, for the same reason
             // the listener URL above is: a chat server typed wrong is otherwise
             // a stream that starts fine and silently has no chat.
-            let chat = icecast_chat_target(site, &nickname)?;
+            let chat = icecast_chat_target(site)?;
             Ok(ServiceProfile::Icecast {
                 id: site.id.clone(),
                 nickname,

@@ -25,13 +25,13 @@ msgstr ""
 "Language: en\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-#: src/ui/mod.rs:2586
+#: src/ui/mod.rs:2597
 msgid ""
 "\n\n"
 "Details: {detail}"
 msgstr ""
 
-#: src/ui/mod.rs:2584
+#: src/ui/mod.rs:2595
 msgid ""
 "\n\n"
 "The stream itself is unaffected and is still live."
@@ -61,7 +61,7 @@ msgstr ""
 msgid "&Calibrate to my voice"
 msgstr ""
 
-#: src/ui/connect_dialog.rs:595
+#: src/ui/connect_dialog.rs:624
 msgid "&Connect"
 msgstr ""
 
@@ -123,7 +123,7 @@ msgstr ""
 msgid "A bus with that name already exists."
 msgstr ""
 
-#: src/net/pubchat.rs:80
+#: src/net/pubchat.rs:83
 msgid "A chat room name may only use letters, digits, hyphens and underscores."
 msgstr ""
 
@@ -151,7 +151,7 @@ msgid ""
 "scheduling another."
 msgstr ""
 
-#: src/ui/mod.rs:2820
+#: src/ui/mod.rs:2831
 msgid "A stream is scheduled to go live later. Exit and discard it?"
 msgstr ""
 
@@ -159,7 +159,7 @@ msgstr ""
 msgid "AM or PM"
 msgstr ""
 
-#: src/ui/mod.rs:2692
+#: src/ui/mod.rs:2703
 msgid "API"
 msgstr ""
 
@@ -184,8 +184,8 @@ msgstr ""
 msgid "AWS secret access key"
 msgstr ""
 
-#: src/ui/mod.rs:3096
-#: src/ui/mod.rs:3163
+#: src/ui/mod.rs:3107
+#: src/ui/mod.rs:3174
 msgid "About Pubsplash"
 msgstr ""
 
@@ -256,8 +256,8 @@ msgstr ""
 msgid "Add scheduled item"
 msgstr ""
 
-#: src/ui/connect_dialog.rs:86
-#: src/ui/connect_dialog.rs:976
+#: src/ui/connect_dialog.rs:89
+#: src/ui/connect_dialog.rs:1010
 msgid "Add service"
 msgstr ""
 
@@ -265,7 +265,7 @@ msgstr ""
 msgid "Add source"
 msgstr ""
 
-#: src/ui/connect_dialog.rs:920
+#: src/ui/connect_dialog.rs:954
 msgid "Add streaming service"
 msgstr ""
 
@@ -304,7 +304,7 @@ msgstr ""
 msgid "Application"
 msgstr ""
 
-#: src/ui/mod.rs:3071
+#: src/ui/mod.rs:3082
 msgid "Application preferences"
 msgstr ""
 
@@ -367,16 +367,16 @@ msgstr ""
 msgid "Audio files ({patterns})|{patterns}|All files (*.*)|*.*"
 msgstr ""
 
-#: src/ui/connect_dialog.rs:396
+#: src/ui/connect_dialog.rs:417
 msgid "Audiopub Icecast port"
 msgstr ""
 
-#: src/ui/connect_dialog.rs:391
+#: src/ui/connect_dialog.rs:412
 msgid "Audiopub Icecast server"
 msgstr ""
 
-#: src/ui/connect_dialog.rs:121
 #: src/ui/connect_dialog.rs:124
+#: src/ui/connect_dialog.rs:127
 msgid "Audiopub URL"
 msgstr ""
 
@@ -476,7 +476,7 @@ msgstr ""
 
 #: src/ui/buses.rs:34
 #: src/ui/buses.rs:36
-#: src/ui/mod.rs:2689
+#: src/ui/mod.rs:2700
 #: src/ui/sends.rs:322
 msgid "Buses"
 msgstr ""
@@ -501,7 +501,7 @@ msgstr ""
 #: src/ui/app_picker.rs:72
 #: src/ui/buses.rs:742
 #: src/ui/buses.rs:945
-#: src/ui/connect_dialog.rs:950
+#: src/ui/connect_dialog.rs:984
 #: src/ui/keybinds_ui.rs:308
 #: src/ui/mastodon_post.rs:313
 #: src/ui/mastodon_templates.rs:101
@@ -575,23 +575,23 @@ msgstr ""
 
 #: src/ui/chat.rs:197
 #: src/ui/chat.rs:214
-#: src/ui/mod.rs:2687
-#: src/ui/mod.rs:3718
+#: src/ui/mod.rs:2698
+#: src/ui/mod.rs:3729
 msgid "Chat"
 msgstr ""
 
-#: src/ui/connect_dialog.rs:238
-#: src/ui/connect_dialog.rs:243
+#: src/ui/connect_dialog.rs:257
+#: src/ui/connect_dialog.rs:262
 msgid "Chat host key"
 msgstr ""
 
-#: src/ui/connect_dialog.rs:228
 #: src/ui/connect_dialog.rs:231
+#: src/ui/connect_dialog.rs:234
 msgid "Chat room"
 msgstr ""
 
-#: src/ui/connect_dialog.rs:218
 #: src/ui/connect_dialog.rs:221
+#: src/ui/connect_dialog.rs:224
 msgid "Chat server (optional)"
 msgstr ""
 
@@ -664,7 +664,7 @@ msgstr ""
 msgid "Choose ffmpeg.exe"
 msgstr ""
 
-#: src/ui/connect_dialog.rs:290
+#: src/ui/connect_dialog.rs:309
 msgid "Choose image"
 msgstr ""
 
@@ -672,7 +672,7 @@ msgstr ""
 msgid "Choose or type the path of a sound file to test."
 msgstr ""
 
-#: src/ui/connect_dialog.rs:824
+#: src/ui/connect_dialog.rs:858
 msgid "Choose the still image to send as video"
 msgstr ""
 
@@ -693,7 +693,7 @@ msgid ""
 msgstr ""
 
 #: src/ui/chat.rs:254
-#: src/ui/connect_dialog.rs:322
+#: src/ui/connect_dialog.rs:341
 #: src/ui/fx_editor.rs:241
 #: src/ui/fx_params.rs:323
 #: src/ui/mastodon_service.rs:245
@@ -742,21 +742,21 @@ msgstr ""
 msgid "Compress logs..."
 msgstr ""
 
-#: src/ui/connect_dialog.rs:309
-#: src/ui/connect_dialog.rs:886
+#: src/ui/connect_dialog.rs:328
+#: src/ui/connect_dialog.rs:920
 msgid "Connect"
 msgstr ""
 
-#: src/ui/mod.rs:2447
+#: src/ui/mod.rs:2458
 #: src/ui/schedule_ui.rs:88
 msgid "Connect to a streaming service first (File > Setup streaming services)."
 msgstr ""
 
-#: src/ui/mod.rs:3501
+#: src/ui/mod.rs:3512
 msgid "Connected"
 msgstr ""
 
-#: src/ui/mod.rs:3502
+#: src/ui/mod.rs:3513
 msgid "Connected to {display_name}."
 msgstr ""
 
@@ -776,8 +776,8 @@ msgstr ""
 msgid "Connecting to the stream"
 msgstr ""
 
-#: src/ui/mod.rs:3513
-#: src/ui/mod.rs:3521
+#: src/ui/mod.rs:3524
+#: src/ui/mod.rs:3532
 msgid "Connection failed"
 msgstr ""
 
@@ -787,12 +787,12 @@ msgid ""
 "approve Pubsplash."
 msgstr ""
 
-#: src/ui/mod.rs:3510
+#: src/ui/mod.rs:3521
 msgid "Could not connect: {message}"
 msgstr ""
 
 #: src/ui/logging_ui.rs:112
-#: src/ui/mod.rs:3234
+#: src/ui/mod.rs:3245
 #: src/ui/update.rs:443
 msgid "Could not create {path}: {e}"
 msgstr ""
@@ -805,15 +805,15 @@ msgid ""
 msgstr ""
 
 #: src/ui/logging_ui.rs:120
-#: src/ui/mod.rs:3236
+#: src/ui/mod.rs:3247
 msgid "Could not open {path}: {e}"
 msgstr ""
 
-#: src/ui/mod.rs:3222
+#: src/ui/mod.rs:3233
 msgid "Could not open {url}: {e}"
 msgstr ""
 
-#: src/ui/mod.rs:3142
+#: src/ui/mod.rs:3153
 msgid "Could not open {url}: {message}"
 msgstr ""
 
@@ -825,7 +825,7 @@ msgstr ""
 msgid "Could not start the updater ({path}): {e}. Nothing has been changed."
 msgstr ""
 
-#: src/ui/mod.rs:3203
+#: src/ui/mod.rs:3214
 msgid "Could not start {path}: {e}"
 msgstr ""
 
@@ -833,7 +833,7 @@ msgstr ""
 msgid "Could not work out where Pubsplash is installed, so nothing was changed."
 msgstr ""
 
-#: src/ui/mod.rs:3080
+#: src/ui/mod.rs:3091
 msgid "Create and compile Pubsplash sound packs"
 msgstr ""
 
@@ -906,7 +906,7 @@ msgstr ""
 msgid "Diagnostics"
 msgstr ""
 
-#: src/ui/connect_dialog.rs:593
+#: src/ui/connect_dialog.rs:622
 msgid "Dis&connect"
 msgstr ""
 
@@ -923,15 +923,15 @@ msgid ""
 "media player?"
 msgstr ""
 
-#: src/ui/mod.rs:3548
+#: src/ui/mod.rs:3559
 msgid "Disconnected"
 msgstr ""
 
-#: src/ui/mod.rs:3550
+#: src/ui/mod.rs:3561
 msgid "Disconnected from {name}."
 msgstr ""
 
-#: src/ui/mod.rs:3551
+#: src/ui/mod.rs:3562
 msgid "Disconnected."
 msgstr ""
 
@@ -1056,8 +1056,8 @@ msgstr ""
 msgid "ElevenLabs voice settings"
 msgstr ""
 
-#: src/ui/connect_dialog.rs:130
-#: src/ui/connect_dialog.rs:132
+#: src/ui/connect_dialog.rs:133
+#: src/ui/connect_dialog.rs:135
 msgid "Email"
 msgstr ""
 
@@ -1086,50 +1086,50 @@ msgstr ""
 msgid "Enter a full Audiopub URL starting with https://"
 msgstr ""
 
-#: src/ui/connect_dialog.rs:775
-#: src/ui/connect_dialog.rs:976
+#: src/ui/connect_dialog.rs:809
+#: src/ui/connect_dialog.rs:1010
 msgid "Enter a nickname."
 msgstr ""
 
-#: src/ui/mod.rs:2337
+#: src/ui/mod.rs:2348
 msgid "Enter a valid Icecast port."
 msgstr ""
 
-#: src/ui/mod.rs:2340
+#: src/ui/mod.rs:2351
 msgid "Enter the Icecast mount point."
 msgstr ""
 
-#: src/ui/mod.rs:2343
+#: src/ui/mod.rs:2354
 msgid "Enter the Icecast password."
 msgstr ""
 
-#: src/ui/mod.rs:2372
+#: src/ui/mod.rs:2383
 msgid "Enter the RTMP ingest URL."
 msgstr ""
 
-#: src/ui/mod.rs:2271
+#: src/ui/mod.rs:2276
 msgid "Enter the chat room name, or clear the chat server to turn chat off."
 msgstr ""
 
-#: src/net/pubchat.rs:73
+#: src/net/pubchat.rs:76
 msgid "Enter the chat room name."
 msgstr ""
 
-#: src/ui/mod.rs:2266
+#: src/ui/mod.rs:2271
 msgid "Enter the chat server address, or clear the chat room to turn chat off."
 msgstr ""
 
-#: src/net/pubchat.rs:61
+#: src/net/pubchat.rs:64
 msgid "Enter the chat server address."
 msgstr ""
 
-#: src/ui/mod.rs:2383
+#: src/ui/mod.rs:2394
 msgid ""
 "Enter the stream key. YouTube shows it in Studio, under Go live, beside "
 "the stream URL."
 msgstr ""
 
-#: src/ui/mod.rs:2308
+#: src/ui/mod.rs:2319
 msgid "Enter your email and password first."
 msgstr ""
 
@@ -1145,7 +1145,7 @@ msgstr ""
 msgid "Every day"
 msgstr ""
 
-#: src/config.rs:2644
+#: src/config.rs:2712
 msgid "Every day at {time}"
 msgstr ""
 
@@ -1153,17 +1153,17 @@ msgstr ""
 msgid "Every hour"
 msgstr ""
 
-#: src/config.rs:2637
+#: src/config.rs:2705
 msgid "Every hour, on the hour"
 msgstr ""
 
-#: src/config.rs:2638
+#: src/config.rs:2706
 msgid "Every hour, {n} minute past"
 msgid_plural "Every hour, {n} minutes past"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/config.rs:2633
+#: src/config.rs:2701
 msgid "Every minute"
 msgstr ""
 
@@ -1171,7 +1171,7 @@ msgstr ""
 msgid "Every so many minutes"
 msgstr ""
 
-#: src/config.rs:2634
+#: src/config.rs:2702
 msgid "Every {n} minute"
 msgid_plural "Every {n} minutes"
 msgstr[0] ""
@@ -1183,13 +1183,13 @@ msgid ""
 "sources, text-to-speech, and sound cues. It is not what listeners hear."
 msgstr ""
 
-#: src/ui/mod.rs:3074
+#: src/ui/mod.rs:3085
 msgid "Exit\tAlt+F4"
 msgstr ""
 
-#: src/ui/mod.rs:2801
-#: src/ui/mod.rs:2821
-#: src/ui/mod.rs:3074
+#: src/ui/mod.rs:2812
+#: src/ui/mod.rs:2832
+#: src/ui/mod.rs:3085
 msgid "Exit Pubsplash"
 msgstr ""
 
@@ -1243,7 +1243,7 @@ msgstr ""
 msgid "February"
 msgstr ""
 
-#: src/ui/mod.rs:3109
+#: src/ui/mod.rs:3120
 #: src/ui/scheduler_ui.rs:287
 #: src/ui/scheduler_ui.rs:291
 msgid "File"
@@ -1286,22 +1286,22 @@ msgstr ""
 msgid "Global"
 msgstr ""
 
-#: src/ui/mod.rs:3066
+#: src/ui/mod.rs:3077
 msgid "Go live automatically at a set time"
 msgstr ""
 
-#: src/ui/mod.rs:3111
+#: src/ui/mod.rs:3122
 msgid "Go to"
 msgstr ""
 
-#: src/ui/mod.rs:3091
-#: src/ui/mod.rs:3157
+#: src/ui/mod.rs:3102
+#: src/ui/mod.rs:3168
 msgid "Go to Pubsplash data directory"
 msgstr ""
 
-#: src/ui/mod.rs:3086
-#: src/ui/mod.rs:3141
-#: src/ui/mod.rs:3151
+#: src/ui/mod.rs:3097
+#: src/ui/mod.rs:3152
+#: src/ui/mod.rs:3162
 msgid "Go to stream page"
 msgstr ""
 
@@ -1335,12 +1335,12 @@ msgstr ""
 
 #: src/ui/mastodon_templates.rs:91
 #: src/ui/mastodon_templates.rs:221
-#: src/ui/mod.rs:3112
+#: src/ui/mod.rs:3123
 msgid "Help"
 msgstr ""
 
 #: src/keybind.rs:128
-#: src/ui/mod.rs:2686
+#: src/ui/mod.rs:2697
 msgid "Home"
 msgstr ""
 
@@ -1361,34 +1361,34 @@ msgstr ""
 msgid "I've resumed my stream! Tune in at {url}"
 msgstr ""
 
-#: src/ui/connect_dialog.rs:170
 #: src/ui/connect_dialog.rs:173
+#: src/ui/connect_dialog.rs:176
 msgid "Icecast mount point"
 msgstr ""
 
-#: src/ui/connect_dialog.rs:200
-#: src/ui/connect_dialog.rs:205
+#: src/ui/connect_dialog.rs:203
+#: src/ui/connect_dialog.rs:208
 msgid "Icecast password"
 msgstr ""
 
-#: src/ui/connect_dialog.rs:160
 #: src/ui/connect_dialog.rs:163
-#: src/ui/connect_dialog.rs:398
+#: src/ui/connect_dialog.rs:166
+#: src/ui/connect_dialog.rs:419
 msgid "Icecast port"
 msgstr ""
 
-#: src/ui/connect_dialog.rs:150
 #: src/ui/connect_dialog.rs:153
-#: src/ui/connect_dialog.rs:393
+#: src/ui/connect_dialog.rs:156
+#: src/ui/connect_dialog.rs:414
 msgid "Icecast server"
 msgstr ""
 
-#: src/ui/connect_dialog.rs:190
 #: src/ui/connect_dialog.rs:193
+#: src/ui/connect_dialog.rs:196
 msgid "Icecast username"
 msgstr ""
 
-#: src/ui/connect_dialog.rs:825
+#: src/ui/connect_dialog.rs:859
 msgid ""
 "Images "
 "(*.png;*.jpg;*.jpeg;*.bmp;*.gif)|*.png;*.jpg;*.jpeg;*.bmp;*.gif|All "
@@ -1426,8 +1426,8 @@ msgstr ""
 msgid "Incoming chat message"
 msgstr ""
 
-#: src/ui/connect_dialog.rs:250
-#: src/ui/connect_dialog.rs:252
+#: src/ui/connect_dialog.rs:269
+#: src/ui/connect_dialog.rs:271
 msgid "Ingest URL"
 msgstr ""
 
@@ -1516,8 +1516,8 @@ msgstr ""
 msgid "Linked account, {text}"
 msgstr ""
 
-#: src/ui/connect_dialog.rs:180
 #: src/ui/connect_dialog.rs:183
+#: src/ui/connect_dialog.rs:186
 msgid "Listener count URL (optional)"
 msgstr ""
 
@@ -1580,7 +1580,7 @@ msgstr ""
 msgid "Make periodic still-streaming Mastodon posts"
 msgstr ""
 
-#: src/ui/mod.rs:3056
+#: src/ui/mod.rs:3067
 msgid "Manage Audiopub and Icecast streaming services"
 msgstr ""
 
@@ -1602,7 +1602,7 @@ msgstr ""
 msgid "Mastodon"
 msgstr ""
 
-#: src/ui/connect_dialog.rs:301
+#: src/ui/connect_dialog.rs:320
 msgid "Mastodon announcements"
 msgstr ""
 
@@ -1690,7 +1690,7 @@ msgstr ""
 msgid "Message from {user}"
 msgstr ""
 
-#: src/ui/mod.rs:3718
+#: src/ui/mod.rs:3729
 msgid "Message not sent: {message}"
 msgstr ""
 
@@ -1844,7 +1844,7 @@ msgstr ""
 msgid "New name for the scene:"
 msgstr ""
 
-#: src/ui/connect_dialog.rs:765
+#: src/ui/connect_dialog.rs:799
 msgid "New service nickname:"
 msgstr ""
 
@@ -1860,8 +1860,8 @@ msgstr ""
 msgid "Next Track"
 msgstr ""
 
-#: src/ui/connect_dialog.rs:926
-#: src/ui/connect_dialog.rs:928
+#: src/ui/connect_dialog.rs:960
+#: src/ui/connect_dialog.rs:962
 msgid "Nickname"
 msgstr ""
 
@@ -1965,7 +1965,7 @@ msgstr ""
 msgid "None of the chain's plugins are available, so it cannot be applied."
 msgstr ""
 
-#: src/ui/mod.rs:2446
+#: src/ui/mod.rs:2457
 msgid "Not connected"
 msgstr ""
 
@@ -2018,7 +2018,7 @@ msgstr ""
 
 #: src/bin/soundpack_manager.rs:479
 #: src/ui/buses.rs:968
-#: src/ui/connect_dialog.rs:947
+#: src/ui/connect_dialog.rs:981
 #: src/ui/keybinds_ui.rs:304
 #: src/ui/mastodon_templates.rs:97
 #: src/ui/mastodon_templates.rs:227
@@ -2046,8 +2046,8 @@ msgstr ""
 msgid "Open &interface"
 msgstr ""
 
-#: src/ui/mod.rs:3099
-#: src/ui/mod.rs:3172
+#: src/ui/mod.rs:3110
+#: src/ui/mod.rs:3183
 msgid "Open Readme"
 msgstr ""
 
@@ -2087,19 +2087,19 @@ msgstr ""
 msgid "Open or create a sound pack project first."
 msgstr ""
 
-#: src/ui/mod.rs:3087
+#: src/ui/mod.rs:3098
 msgid "Open the current stream's page in your browser"
 msgstr ""
 
-#: src/ui/mod.rs:3100
+#: src/ui/mod.rs:3111
 msgid "Open the documentation in your browser"
 msgstr ""
 
-#: src/ui/mod.rs:3092
+#: src/ui/mod.rs:3103
 msgid "Open the folder holding settings, logs, and crash dumps"
 msgstr ""
 
-#: src/ui/mod.rs:3105
+#: src/ui/mod.rs:3116
 msgid "Open the list of changes in your browser"
 msgstr ""
 
@@ -2172,8 +2172,8 @@ msgstr ""
 msgid "Parent folder"
 msgstr ""
 
-#: src/ui/connect_dialog.rs:138
-#: src/ui/connect_dialog.rs:142
+#: src/ui/connect_dialog.rs:141
+#: src/ui/connect_dialog.rs:145
 msgid "Password"
 msgstr ""
 
@@ -2253,7 +2253,7 @@ msgstr ""
 msgid "Plugin parameters"
 msgstr ""
 
-#: src/ui/mod.rs:2781
+#: src/ui/mod.rs:2792
 msgid "Plugins skipped"
 msgstr ""
 
@@ -2303,7 +2303,7 @@ msgstr ""
 msgid "Preferences"
 msgstr ""
 
-#: src/ui/mod.rs:3070
+#: src/ui/mod.rs:3081
 msgid "Preferences...\tCtrl+,"
 msgstr ""
 
@@ -2356,7 +2356,7 @@ msgstr ""
 msgid "Provider default"
 msgstr ""
 
-#: src/ui/mod.rs:2676
+#: src/ui/mod.rs:2687
 msgid "Pubsplash"
 msgstr ""
 
@@ -2379,7 +2379,7 @@ msgid ""
 "streaming to."
 msgstr ""
 
-#: src/ui/mod.rs:3192
+#: src/ui/mod.rs:3203
 #: src/ui/update.rs:433
 msgid "Pubsplash could not find its own program file: {e}"
 msgstr ""
@@ -2408,7 +2408,7 @@ msgstr ""
 msgid "Pubsplash is no longer connected to a streaming service"
 msgstr ""
 
-#: src/ui/mod.rs:2572
+#: src/ui/mod.rs:2583
 msgid ""
 "Pubsplash is not allowed to write to {folder}.\n\n"
 "Choose a different folder under Recording folder in Preferences."
@@ -2452,7 +2452,7 @@ msgid ""
 "start again."
 msgstr ""
 
-#: src/ui/mod.rs:3164
+#: src/ui/mod.rs:3175
 msgid ""
 "Pubsplash {version}\n\n"
 "An accessibility-first streaming app for Audio Pub."
@@ -2509,7 +2509,7 @@ msgid "Record this stream"
 msgstr ""
 
 #: src/ui/home.rs:371
-#: src/ui/mod.rs:3911
+#: src/ui/mod.rs:3922
 #: src/ui/preferences.rs:277
 msgid "Recording"
 msgstr ""
@@ -2563,8 +2563,8 @@ msgstr ""
 msgid "Remove plugin"
 msgstr ""
 
-#: src/ui/connect_dialog.rs:91
-#: src/ui/connect_dialog.rs:807
+#: src/ui/connect_dialog.rs:94
+#: src/ui/connect_dialog.rs:841
 msgid "Remove service"
 msgstr ""
 
@@ -2602,10 +2602,10 @@ msgstr ""
 msgid "Rename scene"
 msgstr ""
 
-#: src/ui/connect_dialog.rs:88
-#: src/ui/connect_dialog.rs:756
-#: src/ui/connect_dialog.rs:766
-#: src/ui/connect_dialog.rs:775
+#: src/ui/connect_dialog.rs:91
+#: src/ui/connect_dialog.rs:790
+#: src/ui/connect_dialog.rs:800
+#: src/ui/connect_dialog.rs:809
 msgid "Rename service"
 msgstr ""
 
@@ -2672,15 +2672,15 @@ msgid_plural "Saved {n} sounds to the project."
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/ui/mod.rs:4005
+#: src/ui/mod.rs:4016
 msgid "Scan cancelled"
 msgstr ""
 
-#: src/ui/mod.rs:3995
+#: src/ui/mod.rs:4006
 msgid "Scan complete"
 msgstr ""
 
-#: src/ui/mod.rs:3981
+#: src/ui/mod.rs:3992
 msgid "Scan complete. {found} new plugins found ({total_known} known in total)."
 msgstr ""
 
@@ -2727,7 +2727,7 @@ msgstr ""
 msgid "Scenes"
 msgstr ""
 
-#: src/ui/mod.rs:2688
+#: src/ui/mod.rs:2699
 msgid "Scenes and Sources"
 msgstr ""
 
@@ -2735,7 +2735,7 @@ msgstr ""
 msgid "Schedule stream"
 msgstr ""
 
-#: src/ui/mod.rs:3065
+#: src/ui/mod.rs:3076
 msgid "Schedule stream..."
 msgstr ""
 
@@ -2831,10 +2831,10 @@ msgstr ""
 msgid "Server"
 msgstr ""
 
-#: src/ui/connect_dialog.rs:109
-#: src/ui/connect_dialog.rs:113
-#: src/ui/connect_dialog.rs:935
-#: src/ui/connect_dialog.rs:940
+#: src/ui/connect_dialog.rs:112
+#: src/ui/connect_dialog.rs:116
+#: src/ui/connect_dialog.rs:969
+#: src/ui/connect_dialog.rs:974
 msgid "Service type"
 msgstr ""
 
@@ -2842,7 +2842,7 @@ msgstr ""
 msgid "Set stream info"
 msgstr ""
 
-#: src/ui/mod.rs:3060
+#: src/ui/mod.rs:3071
 msgid "Set stream info..."
 msgstr ""
 
@@ -2874,11 +2874,11 @@ msgstr ""
 msgid "Setup streaming services"
 msgstr ""
 
-#: src/ui/mod.rs:3055
+#: src/ui/mod.rs:3066
 msgid "Setup streaming services..."
 msgstr ""
 
-#: src/ui/mod.rs:3304
+#: src/ui/mod.rs:3315
 msgid "ShellExecute failed with code {code}"
 msgstr ""
 
@@ -2948,7 +2948,7 @@ msgstr ""
 msgid "Slash"
 msgstr ""
 
-#: src/ui/mod.rs:2763
+#: src/ui/mod.rs:2774
 msgid ""
 "Some plugins used by your buses are not installed on this machine and "
 "will be skipped until you install them and rescan:\n"
@@ -2966,11 +2966,11 @@ msgstr ""
 
 #: src/bin/soundpack_manager.rs:688
 #: src/bin/soundpack_manager.rs:695
-#: src/ui/mod.rs:3132
+#: src/ui/mod.rs:3143
 msgid "Sound Pack Manager"
 msgstr ""
 
-#: src/ui/mod.rs:3079
+#: src/ui/mod.rs:3090
 msgid "Sound Pack Manager..."
 msgstr ""
 
@@ -3128,8 +3128,8 @@ msgstr ""
 msgid "Status: {status}"
 msgstr ""
 
-#: src/ui/connect_dialog.rs:281
-#: src/ui/connect_dialog.rs:284
+#: src/ui/connect_dialog.rs:300
+#: src/ui/connect_dialog.rs:303
 msgid "Still image (optional)"
 msgstr ""
 
@@ -3179,8 +3179,8 @@ msgstr ""
 msgid "Stream events"
 msgstr ""
 
-#: src/ui/connect_dialog.rs:258
-#: src/ui/connect_dialog.rs:264
+#: src/ui/connect_dialog.rs:277
+#: src/ui/connect_dialog.rs:283
 msgid "Stream key"
 msgstr ""
 
@@ -3202,12 +3202,12 @@ msgstr ""
 msgid "Streaming"
 msgstr ""
 
-#: src/ui/mod.rs:3611
+#: src/ui/mod.rs:3622
 msgid "Streaming problem"
 msgstr ""
 
-#: src/ui/connect_dialog.rs:76
 #: src/ui/connect_dialog.rs:79
+#: src/ui/connect_dialog.rs:82
 msgid "Streaming services"
 msgstr ""
 
@@ -3341,13 +3341,13 @@ msgstr ""
 msgid "That strip is not in the mixer right now"
 msgstr ""
 
-#: src/ui/mod.rs:2577
+#: src/ui/mod.rs:2588
 msgid ""
 "The MP3 encoder for the recording could not be created, so nothing "
 "could be written."
 msgstr ""
 
-#: src/ui/mod.rs:3195
+#: src/ui/mod.rs:3206
 msgid ""
 "The Sound Pack Manager ({path}) is missing. Reinstall Pubsplash to "
 "restore it."
@@ -3373,7 +3373,7 @@ msgstr ""
 msgid "The engine returned no audio."
 msgstr ""
 
-#: src/ui/mod.rs:2569
+#: src/ui/mod.rs:2580
 msgid ""
 "The folder {folder} does not exist.\n\n"
 "Choose a folder that does exist under Recording folder in Preferences, "
@@ -3386,11 +3386,11 @@ msgid ""
 "variable, which overrides this setting."
 msgstr ""
 
-#: src/ui/connect_dialog.rs:808
+#: src/ui/connect_dialog.rs:842
 msgid "The main Audiopub service cannot be removed."
 msgstr ""
 
-#: src/ui/connect_dialog.rs:757
+#: src/ui/connect_dialog.rs:791
 msgid "The main Audiopub service cannot be renamed."
 msgstr ""
 
@@ -3398,20 +3398,20 @@ msgstr ""
 msgid "The parent folder does not exist."
 msgstr ""
 
-#: src/ui/mod.rs:2582
+#: src/ui/mod.rs:2593
 msgid ""
 "The recording did not start.\n\n"
 "{cause}"
 msgstr ""
 
-#: src/ui/mod.rs:2574
+#: src/ui/mod.rs:2585
 msgid ""
 "The recording file could not be created in {folder}.\n\n"
 "Check that the folder exists and can be written to, or choose another "
 "one under Recording folder in Preferences."
 msgstr ""
 
-#: src/ui/mod.rs:4006
+#: src/ui/mod.rs:4017
 msgid "The scan was cancelled. Nothing was saved."
 msgstr ""
 
@@ -3419,7 +3419,7 @@ msgstr ""
 msgid "The sound pack could not be loaded."
 msgstr ""
 
-#: src/ui/mod.rs:2401
+#: src/ui/mod.rs:2412
 msgid ""
 "The still image {path} could not be found. Choose another, or clear the "
 "box to send a plain frame instead."
@@ -3454,7 +3454,7 @@ msgstr ""
 msgid "There is no media player called {source_name} in this scene"
 msgstr ""
 
-#: src/ui/mod.rs:2774
+#: src/ui/mod.rs:2785
 msgid ""
 "These plugins are installed but could not be loaded, so they will be "
 "skipped:\n"
@@ -3532,11 +3532,11 @@ msgstr ""
 msgid "Title"
 msgstr ""
 
-#: src/ui/mod.rs:3061
+#: src/ui/mod.rs:3072
 msgid "Title, description, and archiving for the stream"
 msgstr ""
 
-#: src/ui/mod.rs:3110
+#: src/ui/mod.rs:3121
 msgid "Tools"
 msgstr ""
 
@@ -3620,12 +3620,12 @@ msgstr ""
 msgid "Value entry"
 msgstr ""
 
-#: src/ui/mod.rs:3096
+#: src/ui/mod.rs:3107
 msgid "Version information"
 msgstr ""
 
-#: src/ui/mod.rs:3104
-#: src/ui/mod.rs:3177
+#: src/ui/mod.rs:3115
+#: src/ui/mod.rs:3188
 msgid "View Changelog"
 msgstr ""
 
@@ -3710,7 +3710,7 @@ msgstr ""
 msgid "Which microphone should this source use?"
 msgstr ""
 
-#: src/ui/mod.rs:2800
+#: src/ui/mod.rs:2811
 msgid "You are currently streaming. Stop the stream and exit?"
 msgstr ""
 
@@ -3726,8 +3726,8 @@ msgstr ""
 msgid "You can only send chat messages while streaming."
 msgstr ""
 
-#: src/ui/connect_dialog.rs:271
-#: src/ui/connect_dialog.rs:274
+#: src/ui/connect_dialog.rs:290
+#: src/ui/connect_dialog.rs:293
 msgid "YouTube channel for chat (optional)"
 msgstr ""
 
@@ -3735,6 +3735,11 @@ msgstr ""
 msgid ""
 "Your browser is showing an authorization code. Copy it and paste it "
 "into the box that just opened."
+msgstr ""
+
+#: src/ui/connect_dialog.rs:247
+#: src/ui/connect_dialog.rs:250
+msgid "Your name in chat"
 msgstr ""
 
 #: src/ui/logging_ui.rs:155
@@ -3793,7 +3798,7 @@ msgstr ""
 msgid "second"
 msgstr ""
 
-#: src/net/pubchat.rs:240
+#: src/net/pubchat.rs:243
 msgid "somebody else in the room is already using that name"
 msgstr ""
 
@@ -3801,39 +3806,39 @@ msgstr ""
 msgid "synthesis engine"
 msgstr ""
 
-#: src/net/pubchat.rs:242
+#: src/net/pubchat.rs:245
 msgid "that message is too long for the chat server"
 msgstr ""
 
-#: src/net/pubchat.rs:239
-#: src/net/pubchat.rs:271
+#: src/net/pubchat.rs:242
+#: src/net/pubchat.rs:274
 msgid "the chat host key is wrong for this room"
 msgstr ""
 
-#: src/net/pubchat.rs:272
+#: src/net/pubchat.rs:275
 msgid "the chat server answered {status}"
 msgstr ""
 
-#: src/net/pubchat.rs:244
-#: src/net/pubchat.rs:270
+#: src/net/pubchat.rs:247
+#: src/net/pubchat.rs:273
 msgid "the chat server has no room by that name"
 msgstr ""
 
-#: src/net/pubchat.rs:234
+#: src/net/pubchat.rs:237
 msgid ""
 "the chat server is rate limiting us; try again in about {seconds} "
 "seconds"
 msgstr ""
 
-#: src/net/pubchat.rs:241
+#: src/net/pubchat.rs:244
 msgid "the chat server is still holding our previous name"
 msgstr ""
 
-#: src/net/pubchat.rs:246
+#: src/net/pubchat.rs:249
 msgid "the chat server refused the message"
 msgstr ""
 
-#: src/net/pubchat.rs:243
+#: src/net/pubchat.rs:246
 msgid "there is nothing to send"
 msgstr ""
 
@@ -4006,7 +4011,7 @@ msgid ""
 "{reason}"
 msgstr ""
 
-#: src/net/pubchat.rs:314
+#: src/net/pubchat.rs:317
 msgid "{nick} (broadcaster)"
 msgstr ""
 
@@ -4052,7 +4057,7 @@ msgstr ""
 msgid "{url} is not a valid URL. It should look like https://audiopub.site"
 msgstr ""
 
-#: src/ui/mod.rs:2375
+#: src/ui/mod.rs:2386
 msgid ""
 "{url} is not an RTMP address. It should begin with rtmp:// or rtmps://; "
 "YouTube's is {youtube}."
@@ -4143,6 +4148,18 @@ msgid ""
 "Optional: without it your messages appear as an ordinary listener's, "
 "and the listen URL is not published, so listeners get chat but no play "
 "button."
+msgstr ""
+
+#. Context help for the Name the broadcaster appears under in the chat room.
+#: help.toml
+msgctxt "dialog.connect.chatNick"
+msgid ""
+"What listeners see against everything you say in the chat room, and "
+"what your messages are announced as. Leave it empty to use this "
+"service's nickname, which is what Pubsplash did before this field "
+"existed. Up to thirty-two characters; the chat server holds the name "
+"for you while you are connected, so nobody else in the room can answer "
+"as the broadcaster."
 msgstr ""
 
 #. Context help for the Chat room name on the chat server.

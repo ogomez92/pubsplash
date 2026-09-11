@@ -4,7 +4,9 @@
 
 ### Additions
 
-- **Chat for Icecast services.** A direct Icecast mount can now have chat: a new `chat/` server ships in this repository as a single self-contained binary, and an Icecast service points at it with a Chat server, Chat room and Chat host key in Setup streaming services. The Chat tab then reads and sends exactly as it does for an Audio Pub stream, and messages are spoken by whichever speech engine is configured.
+- **Chat for Icecast services.** A direct Icecast mount can now have chat: a new `chat/` server ships in this repository as a single self-contained binary, and an Icecast service points at it with a Chat server, Chat room, Your name in chat and Chat host key in Setup streaming services. The Chat tab then reads and sends exactly as it does for an Audio Pub stream, and messages are spoken by whichever speech engine is configured.
+
+- **Your name in chat** is what listeners see against everything you say in the room. It is its own box beside the room and the host key, because the name a service is given in the services list is chosen to be recognised at a glance by you, and is rarely the name to be introduced by to an audience. Leave it empty and the service's nickname is used, as before.
 
 - Listeners open the chat room's own web page and write with no account and no registration.
 

@@ -437,6 +437,15 @@ pub struct SiteConfig {
     /// The room on that server. Lowercased, letters/digits/`-`/`_`; the same
     /// name that appears in the listener URL as `/r/<room>`.
     pub chat_room: String,
+    /// What the broadcaster is called in that room.
+    ///
+    /// Its own field rather than the service nickname, because the two are
+    /// addressed to different people: the nickname names this service in the
+    /// Connect dialog and the log, where it is the user talking to themselves
+    /// and "ice" is a fine answer, while this is the name every listener sees
+    /// against every line the broadcaster speaks. Empty falls back to the
+    /// nickname, which is what every service carried before this field existed.
+    pub chat_nick: String,
     /// The room's host key, which marks our messages as the broadcaster's and
     /// lets us take our own name back from anyone who claimed it.
     ///
@@ -487,6 +496,7 @@ impl Default for SiteConfig {
             rtmp_video_bitrate_kbps: DEFAULT_RTMP_VIDEO_KBPS,
             chat_url: String::new(),
             chat_room: String::new(),
+            chat_nick: String::new(),
             chat_host_key: Secret::default(),
             mastodon: MastodonConfig::default(),
         }
@@ -537,6 +547,22 @@ impl SiteConfig {
 
     pub fn is_main(&self) -> bool {
         self.url == MAIN_SITE_URL
+    }
+
+    /// What this service calls the broadcaster in its chat room.
+    ///
+    /// The [`chat_nick`](Self::chat_nick) field, or the service's own display
+    /// name when it is blank. The fallback is what keeps a service configured
+    /// before the field existed working unchanged, and it is also the right
+    /// answer for a user who never fills it in: a name in the room is better
+    /// than the chat server's anonymous one.
+    pub fn chat_display_name(&self) -> String {
+        let nick = self.chat_nick.trim();
+        if nick.is_empty() {
+            self.display_name()
+        } else {
+            nick.to_string()
+        }
     }
 
     pub fn display_name(&self) -> String {
@@ -2033,6 +2059,48 @@ mod tests {
         let loaded = load_from(&path);
         let service = loaded.connection.site("audiopub-2").unwrap();
         assert_eq!(service.icecast_endpoint(), ("ice.example.org".into(), 9000));
+    }
+
+    #[test]
+    fn a_blank_chat_name_falls_back_to_the_service_nickname() {
+        // The fallback is what every service configured before the field
+        // existed relies on, and it is also what a user who never fills it in
+        // gets -- which has to be a name, not the chat server's anonymous one.
+        let mut service = SiteConfig::icecast("ice-1".into(), "ice".into());
+        assert_eq!(service.chat_display_name(), "ice");
+        service.chat_nick = "   ".into();
+        assert_eq!(service.chat_display_name(), "ice");
+        service.chat_nick = "  Night Owl Radio  ".into();
+        assert_eq!(service.chat_display_name(), "Night Owl Radio");
+    }
+
+    #[test]
+    fn a_chat_name_survives_a_settings_file_written_without_one() {
+        // `#[serde(default)]` on the struct is what makes an older file load,
+        // and the round trip is what proves a new one keeps the name: this is
+        // the only field in the service whose absence has to read as "use the
+        // nickname" rather than as "the user cleared it".
+        let path = temp_path("chat_nick_roundtrip.json");
+        let mut config = Config::default();
+        config.connection.sites.push(SiteConfig {
+            chat_url: "https://chat.example.com".into(),
+            chat_room: "nightowl".into(),
+            chat_nick: "Night Owl".into(),
+            ..SiteConfig::icecast("ice-1".into(), "ice".into())
+        });
+        save_to(&config, &path);
+        let loaded = load_from(&path);
+        let service = loaded.connection.site("ice-1").unwrap();
+        assert_eq!(service.chat_nick, "Night Owl");
+        assert_eq!(service.chat_display_name(), "Night Owl");
+
+        let older = serde_json::to_string(&loaded)
+            .unwrap()
+            .replace(r#""chat_nick":"Night Owl","#, "");
+        let older: Config = serde_json::from_str(&older).unwrap();
+        let service = older.connection.site("ice-1").unwrap();
+        assert!(service.chat_nick.is_empty());
+        assert_eq!(service.chat_display_name(), "ice");
     }
 
     #[test]

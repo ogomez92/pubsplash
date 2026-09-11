@@ -65,9 +65,12 @@ pub fn show(app: &Rc<App>, frame: &Frame) {
     let dialog = Dialog::builder(frame, &t!("Setup streaming services"))
         .with_style(DialogStyle::DefaultDialogStyle | DialogStyle::ResizeBorder)
         // Grown by one label-and-field row when the listener count URL was
-        // added: the services list is the only thing here with a proportion, so
-        // anything else that appears comes straight out of it.
-        .with_size(560, 700)
+        // added, and by another when the chat name was: the services list is the
+        // only thing here with a proportion, so anything else that appears comes
+        // straight out of it. A direct Icecast service is the tallest of the
+        // three - it is the one with the chat fields - so it is the one this
+        // height has to hold.
+        .with_size(560, 756)
         .build();
     let panel = Panel::builder(&dialog).build();
     let sizer = BoxSizer::builder(Orientation::Vertical).build();
@@ -234,6 +237,22 @@ pub fn show(app: &Rc<App>, frame: &Frame) {
         "dialog.connect.chatRoom",
         "Chat room name on the chat server",
     );
+    // Its own field rather than the service nickname, which is what this used
+    // to be: the nickname is how the user refers to this service to themselves,
+    // and it lands in the Connect dialog and the log, where "ice" is a perfectly
+    // good answer. This is the name every listener reads against every line the
+    // broadcaster says. Blank falls back to the nickname, so a service
+    // configured before this existed reads exactly as it did.
+    let chat_nick_label = StaticText::builder(&panel)
+        .with_label(&t!("Your name in chat"))
+        .build();
+    let chat_nick_input = TextCtrl::builder(&panel).build();
+    super::set_accessible_name(&chat_nick_input, &t!("Your name in chat"));
+    super::help::tag(
+        &chat_nick_input,
+        "dialog.connect.chatNick",
+        "Name the broadcaster appears under in the chat room",
+    );
     let chat_key_label = StaticText::builder(&panel)
         .with_label(&t!("Chat host key"))
         .build();
@@ -352,6 +371,8 @@ pub fn show(app: &Rc<App>, frame: &Frame) {
     sizer.add(&chat_url_input, 0, SizerFlag::Expand | SizerFlag::All, 4);
     sizer.add(&chat_room_label, 0, SizerFlag::All, 4);
     sizer.add(&chat_room_input, 0, SizerFlag::Expand | SizerFlag::All, 4);
+    sizer.add(&chat_nick_label, 0, SizerFlag::All, 4);
+    sizer.add(&chat_nick_input, 0, SizerFlag::Expand | SizerFlag::All, 4);
     sizer.add(&chat_key_label, 0, SizerFlag::All, 4);
     sizer.add(&chat_key_input, 0, SizerFlag::Expand | SizerFlag::All, 4);
     sizer.add(&rtmp_url_label, 0, SizerFlag::All, 4);
@@ -427,6 +448,8 @@ pub fn show(app: &Rc<App>, frame: &Frame) {
             chat_url_input.show(icecast);
             chat_room_label.show(icecast);
             chat_room_input.show(icecast);
+            chat_nick_label.show(icecast);
+            chat_nick_input.show(icecast);
             chat_key_label.show(icecast);
             chat_key_input.show(icecast);
             rtmp_url_label.show(youtube);
@@ -528,6 +551,7 @@ pub fn show(app: &Rc<App>, frame: &Frame) {
             icecast_password_input.set_value("");
             chat_url_input.set_value("");
             chat_room_input.set_value("");
+            chat_nick_input.set_value("");
             chat_key_input.set_value("");
             rtmp_url_input.set_value("");
             rtmp_key_input.set_value("");
@@ -566,6 +590,11 @@ pub fn show(app: &Rc<App>, frame: &Frame) {
                 icecast_password_input.set_value(service.icecast_password.as_str());
                 chat_url_input.set_value(&service.chat_url);
                 chat_room_input.set_value(&service.chat_room);
+                // The stored field, not the effective name: showing the
+                // nickname the fallback would produce makes a blank field look
+                // filled in, and the next save would write it back as a typed
+                // value the fallback could never take over from again.
+                chat_nick_input.set_value(&service.chat_nick);
                 chat_key_input.set_value(service.chat_host_key.as_str());
                 rtmp_url_input.set_value(&service.rtmp_url);
                 rtmp_key_input.set_value(service.rtmp_key.as_str());
@@ -683,6 +712,11 @@ pub fn show(app: &Rc<App>, frame: &Frame) {
             // so what is stored and what the dialog shows next time is the room
             // that will actually be joined.
             service.chat_room = chat_room_input.get_value().trim().to_lowercase();
+            // Kept as typed apart from the trim - this is a display name, and
+            // the chat server collapses and truncates it the same way it does
+            // every listener's. Blank is a real answer and means the service
+            // nickname, which is what `chat_display_name` resolves.
+            service.chat_nick = chat_nick_input.get_value().trim().to_string();
             // Trimmed for the same reason the RTMP key below is: a host key
             // copied off a terminal very often brings a newline with it, and a
             // key with one on the end is simply a wrong key.
