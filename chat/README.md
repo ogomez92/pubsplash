@@ -139,6 +139,12 @@ WantedBy=multi-user.target
 The working directory is where the secret file lives, so it must be writable and
 must persist — a new secret means every host key you handed out stops working.
 
+That file is the host identity of **every room on the deployment**: anyone who
+can read it can derive every host key and post as any broadcaster. It is created
+`0600`, and the server warns on startup if it finds one that anybody else can
+read (a deployment made before that was added). Back it up somewhere equally
+private.
+
 ## Options
 
 ```

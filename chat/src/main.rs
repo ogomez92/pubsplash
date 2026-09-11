@@ -281,18 +281,81 @@ fn load_secret(inline: Option<&str>, path: &str) -> Result<Secret, String> {
         return Ok(Secret::new(value.as_bytes().to_vec()));
     }
     match std::fs::read(path) {
-        Ok(bytes) if !bytes.is_empty() => Ok(Secret::new(bytes)),
+        Ok(bytes) if !bytes.is_empty() => {
+            warn_if_readable(path);
+            Ok(Secret::new(bytes))
+        }
         _ => {
             let mut bytes = [0u8; 32];
             rand::rng().fill_bytes(&mut bytes);
             let encoded = bytes.iter().map(|b| format!("{b:02x}")).collect::<String>();
-            std::fs::write(path, &encoded)
+            write_secret(path, &encoded)
                 .map_err(|e| format!("could not write the secret to {path}: {e}"))?;
             println!("pubsplash-chat: wrote a new server secret to {path}");
             Ok(Secret::new(encoded.into_bytes()))
         }
     }
 }
+
+/// Writes the secret so that only its owner can read it.
+///
+/// This file is the host identity of **every room on the deployment** -- anyone
+/// holding it can derive every host key and post as any broadcaster. A default
+/// `fs::write` leaves it 0644, so on a shared box any local account could read
+/// it; found in review of the first real deployment.
+///
+/// The mode is set at *creation*, not afterwards, so there is no window in
+/// which the file exists and is world-readable.
+fn write_secret(path: &str, encoded: &str) -> std::io::Result<()> {
+    #[cfg(unix)]
+    {
+        use std::io::Write;
+        use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
+        let mut file = std::fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .mode(0o600)
+            .open(path)?;
+        file.write_all(encoded.as_bytes())?;
+        // `mode` above applies only when the file is created, and this path is
+        // also reached for an existing-but-empty file. Setting it again costs
+        // nothing and covers that case.
+        std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))
+    }
+    // Windows has no mode bits; the file inherits the directory's ACL, which is
+    // the platform's own answer to the same question.
+    #[cfg(not(unix))]
+    {
+        std::fs::write(path, encoded)
+    }
+}
+
+/// Says so, once, when the secret on disk is readable by anyone else.
+///
+/// A deployment made before `write_secret` existed still has a 0644 file, and
+/// nothing about it looks wrong from the outside -- so the server is the only
+/// thing in a position to point it out. A warning rather than a refusal: taking
+/// a running station's chat offline over a file mode would be the worse failure.
+#[cfg(unix)]
+fn warn_if_readable(path: &str) {
+    use std::os::unix::fs::PermissionsExt;
+    let Ok(metadata) = std::fs::metadata(path) else {
+        return;
+    };
+    let mode = metadata.permissions().mode() & 0o077;
+    if mode != 0 {
+        eprintln!(
+            "pubsplash-chat: warning: {path} is readable by other users \
+             (mode {:o}). Anyone who can read it can post as the host in every \
+             room. Fix with: chmod 600 {path}",
+            metadata.permissions().mode() & 0o777
+        );
+    }
+}
+
+#[cfg(not(unix))]
+fn warn_if_readable(_path: &str) {}
 
 /// Permissive CORS, and the preflight answer.
 ///
