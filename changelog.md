@@ -90,6 +90,8 @@
 
 - The 30-second gap Pubsplash keeps between two Mastodon posts is now counted per account, so starting a stream on one service shortly after ending one on another no longer swallows the first announcement.
 
+- Google Translate TTS voices now populate the voice picker.
+
 ### Changes
 
 - Preferences no longer has a Mastodon tab; the settings moved into Setup streaming services, beside the service they belong to.
