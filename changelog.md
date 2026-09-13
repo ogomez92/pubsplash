@@ -72,6 +72,8 @@
 
 ### Fixes
 
+- **The interface language could follow a setting that has nothing to do with what language you read.** "Follow Windows" asked Windows for the regional format — the setting that says how dates, numbers and currency are written — rather than the language Windows is displayed in, and Windows lets you set those separately. An English Windows with Spanish regional formats came up in Spanish, unasked. Pubsplash now reads the display languages, and where you list several it takes the first one it has an interface for, so a French-then-Spanish machine comes up in Spanish rather than English.
+
 - **F1 context help was read out in English on a Spanish install.** All 228 help messages were translated, shipped inside the program and never used: the help text was looked up without the control's help-id, and that is the one key the catalogue files them under. Nothing about it looked wrong — the rest of the interface was translated, and the messages were sitting in `es.po` fully done.
 
 - **Microphones and application audio captured nothing at all on macOS.** Any input device not already running at exactly 48 kHz in stereo — which is every built-in Mac microphone, every headset, and every Bluetooth earbud — opened, started, reported itself running and then delivered silence, with nothing in the log to say why. Sources are now captured at whatever rate and channel count the device actually has and converted to what the mixer needs, so a mono microphone reaches both ears and a 24 kHz Bluetooth headset streams and records normally. macOS also never asked for microphone permission, because the app never got as far as really opening the device; it asks now.
