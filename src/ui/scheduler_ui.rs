@@ -706,7 +706,15 @@ mod tests {
 
     #[test]
     fn a_file_picker_opens_in_the_folder_the_current_file_is_in() {
-        assert_eq!(parent_folder(r"O:\radio\hours\09.mp3"), r"O:\radio\hours");
+        // Built rather than written out: `parent_folder` goes through
+        // `std::path::Path`, so a backslash is a separator on Windows and an ordinary
+        // character everywhere else. A literal Windows path here has no parent at all
+        // on a Mac, which is what made this pass only on Windows.
+        let separator = std::path::MAIN_SEPARATOR;
+        let folder = format!("{separator}radio{separator}hours");
+        let file = format!("{folder}{separator}09.mp3");
+        assert_eq!(parent_folder(&file), folder);
+        // No parent at all, which wx reads as "wherever you were last".
         assert_eq!(parent_folder("   "), "");
     }
 }

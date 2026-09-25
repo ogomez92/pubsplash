@@ -72,6 +72,10 @@
 
 ### Fixes
 
+- **Three media-scheduler tests only ever passed on Windows.** They wrote their scheduled files out as Windows path literals — `C:\nine.mp3`, `O:\hours\01.mp3` — and both functions they exercise go through `std::path::Path`, where a backslash is a separator on Windows and an ordinary character everywhere else. On a Mac those paths have no stem and no parent, so `track_title` answered `C:\nine` instead of `nine` and the file picker was handed an empty folder to open in. The tests now build a path the way the host spells one, so they check the same behaviour on both platforms. The shipping code was correct throughout; only the tests were wrong, which is why this went unnoticed — `cargo test` was green on Windows and had three failures on macOS.
+
+- A `mut` that only the Windows branch of `ffmpeg::command` uses no longer warns on every other platform.
+
 - **The interface language could follow a setting that has nothing to do with what language you read.** "Follow Windows" asked Windows for the regional format — the setting that says how dates, numbers and currency are written — rather than the language Windows is displayed in, and Windows lets you set those separately. An English Windows with Spanish regional formats came up in Spanish, unasked. Pubsplash now reads the display languages, and where you list several it takes the first one it has an interface for, so a French-then-Spanish machine comes up in Spanish rather than English.
 
 - **F1 context help was read out in English on a Spanish install.** All 228 help messages were translated, shipped inside the program and never used: the help text was looked up without the control's help-id, and that is the one key the catalogue files them under. Nothing about it looked wrong — the rest of the interface was translated, and the messages were sitting in `es.po` fully done.

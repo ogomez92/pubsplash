@@ -593,6 +593,22 @@ mod tests {
         }
     }
 
+    /// An absolute path spelled the way the host spells one.
+    ///
+    /// These tests are about what [`track_title`](crate::media::track_title) and the
+    /// picker make of a scheduled file, and both go through `std::path::Path`, which is
+    /// platform-dependent: a backslash is a separator on Windows and an ordinary
+    /// character everywhere else. A literal `C:\hours\01.mp3` therefore has no stem
+    /// and no parent on a Mac, so tests written with one passed only on Windows and
+    /// failed here on everything they were meant to check.
+    fn native_path(parts: &[&str]) -> String {
+        let mut path = std::path::PathBuf::from(if cfg!(windows) { r"C:\" } else { "/" });
+        for part in parts {
+            path.push(part);
+        }
+        path.to_string_lossy().into_owned()
+    }
+
     /// A fixed moment to reason from, so nothing here depends on when the tests
     /// happen to run.
     fn at(hour: u32, minute: u32, second: u32) -> LocalTime {
@@ -747,7 +763,7 @@ mod tests {
             .flat_map(|chime| {
                 [chime, (chime + 12) % 24].map(move |hour| {
                     item(
-                        &format!(r"O:\hours\{chime:02}.mp3"),
+                        &native_path(&["hours", &format!("{chime:02}.mp3")]),
                         ScheduleTrigger::DailyAt { hour, minute: 0 },
                     )
                 })
@@ -865,7 +881,7 @@ mod tests {
     fn the_next_item_is_named_with_its_time() {
         let mut worker = worker(
             vec![item(
-                r"C:\nine.mp3",
+                &native_path(&["nine.mp3"]),
                 ScheduleTrigger::DailyAt { hour: 9, minute: 0 },
             )],
             LocalTime::now(),

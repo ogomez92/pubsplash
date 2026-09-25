@@ -186,6 +186,9 @@ fn run(exe: &Path, args: &[&str]) -> Result<String, String> {
 pub fn command(exe: &Path) -> Command {
     #[cfg(windows)]
     use std::os::windows::process::CommandExt;
+    // Only the Windows arm below mutates it, so every other platform sees a `mut`
+    // that nothing uses.
+    #[cfg_attr(not(windows), allow(unused_mut))]
     let mut command = Command::new(exe);
     #[cfg(windows)]
     command.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
