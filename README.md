@@ -16,13 +16,13 @@ Two things are Windows-only for now, and each says so where it comes up: updatin
 
 ## Install
 
-Download the newest release from the [GitHub releases page](https://github.com/ironcross32/pubsplash/releases).
+Download the newest release from the [GitHub releases page](https://github.com/cha0t1cnu3tral/pubsplash/releases).
 
 These links always point at the newest release, so they never go stale:
 
-- [**Installer**](https://github.com/ironcross32/pubsplash/releases/latest/download/pubsplash-setup.exe) (Windows)
-- [**Portable ZIP**](https://github.com/ironcross32/pubsplash/releases/latest/download/pubsplash-portable.zip) (Windows)
-- [**Disk image**](https://github.com/ironcross32/pubsplash/releases/latest/download/pubsplash-macos-arm64.dmg) (macOS)
+- [**Installer**](https://github.com/cha0t1cnu3tral/pubsplash/releases/latest/download/pubsplash-setup.exe) (Windows)
+- [**Portable ZIP**](https://github.com/cha0t1cnu3tral/pubsplash/releases/latest/download/pubsplash-portable.zip) (Windows)
+- [**Disk image**](https://github.com/cha0t1cnu3tral/pubsplash/releases/latest/download/pubsplash-macos-arm64.dmg) (macOS)
 
 ### Windows
 
@@ -30,7 +30,7 @@ The installer and the portable ZIP keep their data in different places. The inst
 
 One thing does not travel with a portable copy: saved passwords and API keys are encrypted for the Windows account that entered them, so on a different machine or a different user account they read as blank and have to be entered again. Everything else will still work.
 
-Both kinds keep themselves up to date — see [Automatic updates](#automatic-updates). Every release is also on the [releases page](https://github.com/ironcross32/pubsplash/releases) under its version number, along with debug symbols.
+Both kinds keep themselves up to date — see [Automatic updates](#automatic-updates). Every release is also on the [releases page](https://github.com/cha0t1cnu3tral/pubsplash/releases) under its version number, along with debug symbols.
 
 ### macOS
 

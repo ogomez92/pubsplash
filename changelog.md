@@ -96,6 +96,8 @@
 
 ### Changes
 
+- The project has moved to github.com/cha0t1cnu3tral/pubsplash. Automatic updates, the download links in the README, the Help menu's online readme and changelog, and the website Pubsplash registers with Mastodon now point at the new home.
+
 - Preferences no longer has a Mastodon tab; the settings moved into Setup streaming services, beside the service they belong to.
 
 - Settings files written by earlier versions are migrated on the first load: the linked account moves onto the service you were last connected to, and the templates and announcement defaults are copied to every service so nothing is lost.
