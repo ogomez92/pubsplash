@@ -299,11 +299,15 @@ jobs:
   # CLAUDE.md), no updater, and a signing and notarization dance Windows has no
   # equivalent of.
   #
-  # `macos-14` is the first arm64 runner, and arm64 is what Pubsplash needs: the
-  # Core Audio process taps an Application source is built on arrived in 14.4.
+  # An arm64 runner on macOS 14.4 or later is what Pubsplash needs: the Core
+  # Audio process taps an Application source is built on arrived in 14.4.
+  # `macos-14` was the first such runner and GitHub has since retired it -- the
+  # job is then cancelled before its first step with "The configuration
+  # 'macos-14-arm64-us-default' is not supported", while the Windows half goes
+  # on to publish alone. When this one is retired, take the next arm64 label.
   macos:
     needs: validate
-    runs-on: macos-14
+    runs-on: macos-15
     # At job level, not per step. A step's own `env:` is not yet in scope when
     # its `if:` is evaluated, so `if: env.APPLE_CERTIFICATE != ''` on a step that
     # defines it would always be false -- signing would silently never run.

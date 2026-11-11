@@ -8,6 +8,8 @@
 
 ### Changes
 
+- The macOS build now runs on a current GitHub build machine. The one it used was retired, which is why 2.1.0 was released without a Mac download.
+
 ## 2.1.0
 
 ### Additions
