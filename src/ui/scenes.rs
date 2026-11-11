@@ -1,5 +1,7 @@
 //! Scenes and Sources tab: two lists with move/add/rename/delete controls
-//! and per-type source edit dialogs.
+//! and per-type source edit dialogs, and under them the FX chain of whichever
+//! source is selected ([`super::chain_ui`], the same editor the Buses tab
+//! shows for a bus).
 
 use crate::t;
 use super::home::on_sources_changed;
@@ -26,7 +28,10 @@ fn no_sources() -> String {
     t!("No sources")
 }
 
-pub fn build(app: &Rc<App>, panel: &Panel) -> (ListBox, ListBox) {
+pub fn build(
+    app: &Rc<App>,
+    panel: &Panel,
+) -> (ListBox, ListBox, super::chain_ui::ChainWidgets) {
     let sizer = BoxSizer::builder(Orientation::Vertical).build();
 
     // --- Scenes ---
@@ -109,6 +114,10 @@ pub fn build(app: &Rc<App>, panel: &Panel) -> (ListBox, ListBox) {
     sizer.add(&sources_label, 0, SizerFlag::All, 4);
     sizer.add(&sources_list, 1, SizerFlag::Expand | SizerFlag::All, 4);
     sizer.add_sizer(&sources_buttons, 0, SizerFlag::Expand, 0);
+
+    // --- FX chain for the selected source ---
+    let source_fx =
+        super::chain_ui::build(app, panel, &sizer, super::chain_ui::ChainHost::Sources);
     panel.set_sizer(sizer, true);
 
     // Scene list selection drives the sources list.
@@ -117,6 +126,13 @@ pub fn build(app: &Rc<App>, panel: &Panel) -> (ListBox, ListBox) {
         scenes_list
             .clone()
             .on_selection_changed(move |_| refresh_sources_list(&app));
+    }
+    // And the source selected there drives the effects list under it.
+    {
+        let app = app.clone();
+        sources_list
+            .clone()
+            .on_selection_changed(move |_| refresh_source_fx(&app));
     }
 
     // Scene buttons.
@@ -205,7 +221,29 @@ pub fn build(app: &Rc<App>, panel: &Panel) -> (ListBox, ListBox) {
             });
     }
 
-    (scenes_list, sources_list)
+    (scenes_list, sources_list, source_fx)
+}
+
+/// The chain of the source selected on this tab, for the effects editor under
+/// the Sources list. `None` when the selected scene has no source selected —
+/// an empty scene, whose list holds only its placeholder row.
+pub(super) fn selected_source_target(app: &Rc<App>) -> Option<super::fx::ChainTarget> {
+    let scene = selected_scene_index(app);
+    let count = source_count(app, scene);
+    let source = app
+        .widgets(|w| super::list::selection(&w.sources_list, count))
+        .flatten()?;
+    Some(super::fx::ChainTarget::Source { scene, source })
+}
+
+/// Points the effects list at whatever source is selected now.
+///
+/// Called on a selection change, and also by hand after every
+/// `set_selection` on the Sources list: wx raises no event for a selection made
+/// from code, so the editor would otherwise go on showing — and editing — the
+/// chain of the source that used to be selected.
+fn refresh_source_fx(app: &Rc<App>) {
+    super::chain_ui::refresh(app, super::chain_ui::ChainHost::Sources);
 }
 
 /// How many sources the scene at `scene_index` has, for the bounds check in
@@ -297,6 +335,10 @@ pub fn refresh_sources_list(app: &Rc<App>) {
             w.sources_list.set_selection(index, true);
         }
     });
+    // Whichever way that went. The same rows can belong to a different scene —
+    // two scenes that each hold one microphone look identical here — so "the
+    // list did not change" does not mean the selected source did not.
+    refresh_source_fx(app);
 }
 
 fn active_sources(app: &Rc<App>) -> Option<Vec<SourceConfig>> {
@@ -330,6 +372,12 @@ fn move_scene(app: &Rc<App>, list: &ListBox, up: bool) {
     let Some(index) = super::list::selection(list, count) else {
         return;
     };
+    // An open plugin interface addresses its source by scene and source index,
+    // and writes its state back by them when it closes. So it closes now, while
+    // the indices still mean what they did when it opened — the same rule, for
+    // the same reason, as `buses::remove_bus`. Every edit below that shifts a
+    // scene or a source does this first.
+    super::fx_editor::close_all(app);
     let changed = {
         let mut config = app.config.borrow_mut();
         let scenes = &mut config.scenes.scenes;
@@ -343,6 +391,9 @@ fn move_scene(app: &Rc<App>, list: &ListBox, up: bool) {
         let new_index = if up { index - 1 } else { index + 1 };
         after_scene_edit(app);
         app.widgets(|w| w.scenes_list.set_selection(new_index as u32, true));
+        // The lists below were refreshed against the row that was selected a
+        // moment ago, which is now a different scene.
+        refresh_sources_list(app);
     }
 }
 
@@ -351,6 +402,7 @@ fn delete_scene(app: &Rc<App>, list: &ListBox) {
     let Some(index) = super::list::selection(list, count) else {
         return;
     };
+    super::fx_editor::close_all(app);
     let changed = app.config.borrow_mut().scenes.delete_scene(index);
     if changed == ListEdit::Changed {
         after_scene_edit(app);
@@ -401,6 +453,9 @@ fn rename_scene(app: &Rc<App>, list: &ListBox) {
     {
         let changed = app.config.borrow_mut().scenes.rename_scene(index, &name);
         if changed == ListEdit::Changed {
+            // The source chains are filed under the scene's name. `name` is as
+            // typed; what was stored is trimmed.
+            super::fx::on_scene_renamed(app, &current, name.trim());
             after_scene_edit(app);
         }
     }
@@ -411,6 +466,7 @@ fn move_source(app: &Rc<App>, list: &ListBox, up: bool) {
     let Some(index) = super::list::selection(list, source_count(app, scene_index)) else {
         return;
     };
+    super::fx_editor::close_all(app);
     let previous_sources = active_sources(app);
     let changed = {
         let mut config = app.config.borrow_mut();
@@ -427,6 +483,7 @@ fn move_source(app: &Rc<App>, list: &ListBox, up: bool) {
         let new_index = if up { index - 1 } else { index + 1 };
         after_source_edit(app, previous_sources);
         app.widgets(|w| w.sources_list.set_selection(new_index as u32, true));
+        refresh_source_fx(app);
     }
 }
 
@@ -435,6 +492,7 @@ fn remove_source(app: &Rc<App>, list: &ListBox) {
     let Some(index) = super::list::selection(list, source_count(app, scene_index)) else {
         return;
     };
+    super::fx_editor::close_all(app);
     let previous_sources = active_sources(app);
     {
         let mut config = app.config.borrow_mut();
@@ -531,6 +589,7 @@ fn add_source(app: &Rc<App>) {
     };
     after_source_edit(app, previous_sources);
     app.widgets(|w| w.sources_list.set_selection(new_index as u32, true));
+    refresh_source_fx(app);
     // Open the parameter dialog right away for types that need setup.
     if let Some(w) = app.widgets(|w| w.sources_list) {
         edit_source(app, &w);

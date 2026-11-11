@@ -315,19 +315,19 @@ message = "Which scene, source, bus or media player the action applies to. This 
 [[control]]
 id = "dialog.loadChain.delete"
 label = "Delete selected chain button"
-file = "src/ui/buses.rs"
+file = "src/ui/chain_ui.rs"
 message = "Remove the selected FX chain."
 
 [[control]]
 id = "dialog.loadChain.list"
 label = "Saved FX chains list"
-file = "src/ui/buses.rs"
+file = "src/ui/chain_ui.rs"
 message = "A list of saved FX chains you can apply to the selected bus."
 
 [[control]]
 id = "dialog.loadChain.load"
 label = "Load selected chain button"
-file = "src/ui/buses.rs"
+file = "src/ui/chain_ui.rs"
 message = "Load the selected FX chain and apply it to the bus you're working with."
 
 [[control]]
@@ -477,13 +477,13 @@ message = "When checked, the folder is played in a random order, and every file 
 [[control]]
 id = "dialog.missingPlugins.apply"
 label = "Apply chain with available plugins button"
-file = "src/ui/buses.rs"
+file = "src/ui/chain_ui.rs"
 message = "If Pubsplash determines that you don't have all of the plugins this chain uses, you can still apply the chain, minus those plugins."
 
 [[control]]
 id = "dialog.missingPlugins.list"
 label = "Missing plugins list"
-file = "src/ui/buses.rs"
+file = "src/ui/chain_ui.rs"
 message = "Shows the list of plugins you lack to apply this FX chain in full."
 
 [[control]]
@@ -1215,73 +1215,73 @@ message = "Move the selected bus up in the list. CTRL+up will also work as long 
 [[control]]
 id = "tab.buses.chainExport"
 label = "Export FX chain file button"
-file = "src/ui/buses.rs"
+file = "src/ui/chain_ui.rs"
 message = "Export the selected FX chain to a file where it can be imported for use on another machine."
 
 [[control]]
 id = "tab.buses.chainImport"
 label = "Import FX chain file button"
-file = "src/ui/buses.rs"
+file = "src/ui/chain_ui.rs"
 message = "Select an FX chain file to add to your master list of chains. It will then become usable."
 
 [[control]]
 id = "tab.buses.chainLoad"
 label = "Load FX chain from library button"
-file = "src/ui/buses.rs"
+file = "src/ui/chain_ui.rs"
 message = ""
 
 [[control]]
 id = "tab.buses.chainSave"
 label = "Save FX chain to library button"
-file = "src/ui/buses.rs"
+file = "src/ui/chain_ui.rs"
 message = ""
 
 [[control]]
 id = "tab.buses.fxAdd"
 label = "Add plugin to chain button"
-file = "src/ui/buses.rs"
+file = "src/ui/chain_ui.rs"
 message = "Add a plugin to the FX chain for the selected bus. Plugins are processed from the top down, so order matters."
 
 [[control]]
 id = "tab.buses.fxBypass"
 label = "Bypass selected plugin checkbox"
-file = "src/ui/buses.rs"
+file = "src/ui/chain_ui.rs"
 message = ""
 
 [[control]]
 id = "tab.buses.fxDown"
 label = "Move plugin down in chain button"
-file = "src/ui/buses.rs"
+file = "src/ui/chain_ui.rs"
 message = "Move the selected plugin down in the selected chain. CTRL+Down will also work as long as focus is on the list of plugins."
 
 [[control]]
 id = "tab.buses.fxEditParams"
 label = "Edit plugin parameters button"
-file = "src/ui/buses.rs"
+file = "src/ui/chain_ui.rs"
 message = ""
 
 [[control]]
 id = "tab.buses.fxList"
 label = "Effects chain on the selected bus"
-file = "src/ui/buses.rs"
+file = "src/ui/chain_ui.rs"
 message = "This is the list of effects on the selected bus. Use arrow keys, page up, page down, home, and end to select an effect. CTRL+Up and CTRL+Down move the selected effect. Since effects process from top to bottom, order matters!."
 
 [[control]]
 id = "tab.buses.fxOpenInterface"
 label = "Open plugin interface button"
-file = "src/ui/buses.rs"
+file = "src/ui/chain_ui.rs"
 message = "If a plugin has an accessible interface, pressing this button will open it. From there, you can press F6 to try to focus the window and use standard controls to work with it. If you know the plugin doesn't have an accessible interface, it's better to use the edit parameters button instead."
 
 [[control]]
 id = "tab.buses.fxRemove"
 label = "Remove plugin from chain button"
-file = "src/ui/buses.rs"
+file = "src/ui/chain_ui.rs"
 message = "Remove the selected plugin from the FX chain."
 
 [[control]]
 id = "tab.buses.fxUp"
 label = "Move plugin up in chain button"
-file = "src/ui/buses.rs"
+file = "src/ui/chain_ui.rs"
 message = "Move the selected plugin up in the chain. CTRL+Up will also work as long as focus is on the list of plugins."
 
 [[control]]
@@ -1361,6 +1361,78 @@ id = "tab.home.switchScene"
 label = "Switch to scene button"
 file = "src/ui/home.rs"
 message = "Transition to the selected scene."
+
+[[control]]
+id = "tab.scenes.chainExport"
+label = "Export source FX chain file button"
+file = "src/ui/chain_ui.rs"
+message = "Saves the selected source's effects, with their current settings, as an FX chain file you can share or move to another computer."
+
+[[control]]
+id = "tab.scenes.chainImport"
+label = "Import FX chain file for source button"
+file = "src/ui/chain_ui.rs"
+message = "Select an FX chain file to add to your library of chains. You are then asked whether to apply it to the selected source."
+
+[[control]]
+id = "tab.scenes.chainLoad"
+label = "Load FX chain from library onto source button"
+file = "src/ui/chain_ui.rs"
+message = "Replaces the selected source's effects with a chain from your library."
+
+[[control]]
+id = "tab.scenes.chainSave"
+label = "Save source FX chain to library button"
+file = "src/ui/chain_ui.rs"
+message = "Saves the selected source's effects, with their current settings, to your library of FX chains under a name you choose."
+
+[[control]]
+id = "tab.scenes.fxAdd"
+label = "Add plugin to source button"
+file = "src/ui/chain_ui.rs"
+message = "Add a plugin to the selected source's effects. It processes that source only, so a plugin added to the microphone changes the microphone and nothing else. Plugins are processed from the top down, so order matters."
+
+[[control]]
+id = "tab.scenes.fxBypass"
+label = "Bypass selected source plugin checkbox"
+file = "src/ui/chain_ui.rs"
+message = "When checked, the selected plugin is skipped and the source passes through it unchanged. The plugin stays in the list with its settings."
+
+[[control]]
+id = "tab.scenes.fxDown"
+label = "Move source plugin down button"
+file = "src/ui/chain_ui.rs"
+message = "Move the selected plugin down in the selected source's effects. CTRL+Down will also work as long as focus is on the list of effects."
+
+[[control]]
+id = "tab.scenes.fxEditParams"
+label = "Edit source plugin parameters button"
+file = "src/ui/chain_ui.rs"
+message = "Opens a dialog with a slider for each of the selected plugin's parameters, one at a time. The slider announces the plugin's own text for each value. Use this for a plugin that has no interface of its own, or one whose interface a screen reader cannot read."
+
+[[control]]
+id = "tab.scenes.fxList"
+label = "Effects chain on the selected source"
+file = "src/ui/chain_ui.rs"
+message = "This is the list of effects on the source selected in the Sources list above. They process that source alone, before its volume and mute. Use arrow keys, page up, page down, home, and end to select an effect. CTRL+Up and CTRL+Down move the selected effect, and delete removes it. Effects process from top to bottom, so order matters."
+
+[[control]]
+id = "tab.scenes.fxOpenInterface"
+label = "Open source plugin interface button"
+file = "src/ui/chain_ui.rs"
+message = "If the selected plugin has an accessible interface, pressing this button will open it. From there, you can press F6 to try to focus the window and use standard controls to work with it. If you know the plugin doesn't have an accessible interface, it's better to use the edit parameters button instead."
+
+[[control]]
+id = "tab.scenes.fxRemove"
+label = "Remove plugin from source button"
+file = "src/ui/chain_ui.rs"
+message = "Remove the selected plugin from the selected source's effects."
+
+[[control]]
+id = "tab.scenes.fxUp"
+label = "Move source plugin up button"
+file = "src/ui/chain_ui.rs"
+message = "Move the selected plugin up in the selected source's effects. CTRL+Up will also work as long as focus is on the list of effects."
 
 [[control]]
 id = "tab.scenes.sceneAdd"

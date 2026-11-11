@@ -7,8 +7,12 @@
 
 use crate::t;
 use super::fx::{self, ChainTarget};
+use super::slider_keys::key_step;
 use super::slider_uia::{self, SliderAnnouncer};
-use super::{App, WXK_END, WXK_ESCAPE, WXK_HOME, WXK_PAGEDOWN, WXK_PAGEUP, WXK_TAB};
+use super::{
+    App, WXK_DOWN, WXK_END, WXK_ESCAPE, WXK_HOME, WXK_LEFT, WXK_PAGEDOWN, WXK_PAGEUP, WXK_RIGHT,
+    WXK_TAB, WXK_UP,
+};
 use crate::vst::PluginInstance;
 use std::rc::Rc;
 use std::sync::Arc;
@@ -22,23 +26,51 @@ use wxdragon::prelude::*;
 /// UIA provider ([`SliderAnnouncer`]), which exposes it as the slider's value
 /// and raises a value-change event so a screen reader speaks it on each keyboard
 /// step. The read-only value text mirrors it as a tab-to-read fallback.
+///
+/// The slider is re-ranged every time, not only when the parameter changes:
+/// the range *is* the parameter's shape (see [`slider_range`]), and setting it
+/// to what it already is costs nothing.
 fn announce_value(
     announcer: &SliderAnnouncer,
     slider: &Slider,
     value_text: &TextCtrl,
-    name: &str,
-    norm: f32,
-    text: &str,
+    src: &dyn ParamSource,
+    index: i32,
 ) {
-    slider.set_value((norm * 1000.0).round() as i32);
-    value_text.set_value(text);
-    announcer.update(name, text);
+    let text = sync_value(announcer, slider, value_text, src, index);
+    announcer.update(&src.name(index), &text);
+}
+
+/// Brings the slider, its accessible value and the value text into line with
+/// the parameter, raising no event, and returns the value's text.
+///
+/// The silent half of [`announce_value`], for a change made from somewhere
+/// other than the slider: a value-change event is only spoken for the control
+/// that has focus, so raising one on the slider from the value-entry field
+/// says nothing and the caller has to speak by another route.
+fn sync_value(
+    announcer: &SliderAnnouncer,
+    slider: &Slider,
+    value_text: &TextCtrl,
+    src: &dyn ParamSource,
+    index: i32,
+) -> String {
+    let range = slider_range(src.steps(index));
+    let text = formatted_value(src, index);
+    slider.set_range(0, range);
+    slider.set_value(slider_position(src.get(index), range));
+    value_text.set_value(&text);
+    announcer.set_text(&src.name(index), &text);
+    text
 }
 
 /// Keyboard step sizes as fractions of the normalized 0..1 range (OSARA uses
 /// 1/1000 for arrows, 1/50 for page keys).
 const SMALL_STEP: f32 = 0.001;
 const LARGE_STEP: f32 = 0.02;
+/// The value slider's top position for a continuous parameter, and the most
+/// steps a parameter may have and still get a position of its own for each.
+const SLIDER_RANGE: i32 = 1000;
 /// How many extra steps to try before giving up on finding a value whose
 /// formatted text differs (so discrete parameters move one detent per press).
 const MAX_SNAP_TRIES: u32 = 10;
@@ -54,8 +86,17 @@ pub trait ParamSource {
     fn label(&self, index: i32) -> String;
     fn automatable(&self, index: i32) -> bool;
     /// Parses `text` in the parameter's own display units (e.g. "-6 dB") and
-    /// applies it, returning whether the plugin supported the conversion. VST2 exposes this as an optional opcode; VST3 typed entry is disabled until a parse API is available.
+    /// applies it, returning whether the plugin supported the conversion. VST2
+    /// exposes this as an optional opcode; VST3 has no way to be asked, which
+    /// is what [`find_step`] makes up for where it can.
     fn set_from_string(&self, index: i32, text: &str) -> bool;
+    /// How many steps the parameter has above its lowest position, or 0 when
+    /// it is continuous (or the format cannot say). A switch is 1; a list of
+    /// twenty names is 19.
+    fn steps(&self, index: i32) -> u32;
+    /// The text the plugin would show at `value`, without moving the parameter
+    /// there. `None` when the format can only describe the current value.
+    fn display_at(&self, index: i32, value: f32) -> Option<String>;
 }
 
 impl ParamSource for Arc<PluginInstance> {
@@ -83,35 +124,173 @@ impl ParamSource for Arc<PluginInstance> {
     fn set_from_string(&self, index: i32, text: &str) -> bool {
         self.string_to_parameter(index, text)
     }
+    fn steps(&self, index: i32) -> u32 {
+        self.param_steps(index)
+    }
+    fn display_at(&self, index: i32, value: f32) -> Option<String> {
+        self.param_display_at(index, value)
+    }
+}
+
+/// The value slider's top position for a parameter with `steps` steps.
+///
+/// A stepped parameter gets exactly one position per value, so the slider *is*
+/// the parameter: a list of 53 voices is a slider of 53 positions, each one a
+/// name, and one arrow press is one voice. It used to be 1000 positions
+/// whatever the parameter was, which left nineteen dead positions between each
+/// pair of voices for a mouse to land on and made every arrow press a search
+/// for the next one.
+///
+/// A continuous parameter, or one with more steps than a slider can usefully
+/// have, keeps the 1000.
+pub fn slider_range(steps: u32) -> i32 {
+    if is_stepped(steps) {
+        steps as i32
+    } else {
+        SLIDER_RANGE
+    }
+}
+
+/// Whether a parameter is moved one of its own steps at a time, rather than by
+/// a fraction of its range.
+pub fn is_stepped(steps: u32) -> bool {
+    (1..=SLIDER_RANGE as u32).contains(&steps)
+}
+
+/// Where the slider sits for a normalized value.
+pub fn slider_position(value: f32, range: i32) -> i32 {
+    (value.clamp(0.0, 1.0) * range as f32).round() as i32
+}
+
+/// The normalized value of a slider position — `k / n`, which is what VST3
+/// defines step `k` of `n` to be.
+pub fn slider_value(position: i32, range: i32) -> f32 {
+    position.clamp(0, range) as f32 / range.max(1) as f32
+}
+
+/// How far Page Up and Page Down move a stepped parameter: a tenth of the way,
+/// and never nothing.
+fn page_step(range: i32) -> i32 {
+    (range / 10).max(1)
+}
+
+/// Applies one movement key to a parameter and returns its new normalized
+/// value, or `None` when `code` is not a movement key — the caller must then
+/// let the event through.
+///
+/// Every movement key is owned here, Left and Right included. Leaving any of
+/// them to the native trackbar moves the thumb without telling the plugin, so
+/// the slider shows one value while the plugin holds another and nothing is
+/// announced at all.
+///
+/// The directions and the Home/End mapping are [`key_step`]'s, like every
+/// other slider in the app. A continuous parameter keeps OSARA's fractional
+/// steps and its search for the next value that reads differently
+/// ([`step_param`]); a stepped one has no need of a search.
+pub fn key_param(src: &dyn ParamSource, index: i32, code: i32) -> Option<f32> {
+    let steps = src.steps(index);
+    if is_stepped(steps) {
+        let range = slider_range(steps);
+        let position = slider_position(src.get(index), range);
+        let next = key_step(code, position, 0, range, page_step(range))?;
+        return Some(set_param(src, index, slider_value(next, range)));
+    }
+    Some(match code {
+        WXK_UP | WXK_RIGHT => step_param(src, index, SMALL_STEP),
+        WXK_DOWN | WXK_LEFT => step_param(src, index, -SMALL_STEP),
+        WXK_PAGEUP => step_param(src, index, LARGE_STEP),
+        WXK_PAGEDOWN => step_param(src, index, -LARGE_STEP),
+        WXK_HOME => set_param(src, index, 1.0),
+        WXK_END => set_param(src, index, 0.0),
+        _ => return None,
+    })
 }
 
 /// What happened to a typed value.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum TypedValue {
-    /// The plugin parsed the text; the new normalized value is attached.
+    /// The text was understood; the new normalized value is attached.
     Applied(f32),
     /// The field was blank, so there was nothing to apply.
     Blank,
+    /// The parameter's values could all be read, and none of them is this.
+    NoSuchValue,
     /// The plugin cannot convert display text back to a value.
     Unsupported,
 }
 
-/// Applies `text` (in the parameter's display units) via the plugin's optional
-/// string-to-parameter conversion.
+/// What became of looking a typed name up among a stepped parameter's values.
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum StepSearch {
+    Found(f32),
+    /// Every value was read and none matched.
+    NotThere,
+    /// Not a stepped parameter, or the plugin would not name its values.
+    CannotSearch,
+}
+
+/// Finds the step of a stepped parameter whose text is `typed`.
 ///
-/// The three outcomes are deliberately distinct: silently reverting the field
-/// is indistinguishable from success to a screen-reader user, and for VST3 —
-/// where no parameter supports this — that would make the field a dead control
-/// that swallows everything typed into it.
+/// This is what makes typing "Chipmunk" work for a format that cannot be asked
+/// to parse text: a stepped parameter has few enough values to ask for each
+/// one's text and compare. A whole match wins; failing that, a prefix that
+/// only one value starts with, so "chip" is enough when nothing else begins
+/// that way. Case is ignored, and the unit may be typed or left off.
+fn find_step(src: &dyn ParamSource, index: i32, typed: &str) -> StepSearch {
+    let steps = src.steps(index);
+    if !is_stepped(steps) {
+        return StepSearch::CannotSearch;
+    }
+    let range = slider_range(steps);
+    let unit = src.label(index).trim().to_lowercase();
+    let mut wanted = typed.trim().to_lowercase();
+    if !unit.is_empty()
+        && let Some(bare) = wanted.strip_suffix(&unit)
+    {
+        wanted = bare.trim_end().to_string();
+    }
+    let mut texts = Vec::with_capacity(range as usize + 1);
+    for position in 0..=range {
+        match src.display_at(index, slider_value(position, range)) {
+            Some(text) => texts.push(text.trim().to_lowercase()),
+            None => return StepSearch::CannotSearch,
+        }
+    }
+    let position = texts.iter().position(|text| *text == wanted).or_else(|| {
+        let mut starting = texts
+            .iter()
+            .enumerate()
+            .filter(|(_, text)| text.starts_with(&wanted));
+        match (starting.next(), starting.next()) {
+            (Some((position, _)), None) => Some(position),
+            _ => None,
+        }
+    });
+    match position {
+        Some(position) => StepSearch::Found(slider_value(position as i32, range)),
+        None => StepSearch::NotThere,
+    }
+}
+
+/// Applies `text` (in the parameter's display units) via the plugin's optional
+/// string-to-parameter conversion, or failing that by finding the step of a
+/// stepped parameter that reads that way ([`find_step`]).
+///
+/// The outcomes are deliberately distinct: silently reverting the field is
+/// indistinguishable from success to a screen-reader user, and a field that
+/// swallows everything typed into it is a dead control.
 pub fn apply_typed_value(src: &dyn ParamSource, index: i32, text: &str) -> TypedValue {
     let text = text.trim();
     if text.is_empty() {
         return TypedValue::Blank;
     }
     if src.set_from_string(index, text) {
-        TypedValue::Applied(src.get(index))
-    } else {
-        TypedValue::Unsupported
+        return TypedValue::Applied(src.get(index));
+    }
+    match find_step(src, index, text) {
+        StepSearch::Found(value) => TypedValue::Applied(set_param(src, index, value)),
+        StepSearch::NotThere => TypedValue::NoSuchValue,
+        StepSearch::CannotSearch => TypedValue::Unsupported,
     }
 }
 
@@ -244,6 +423,7 @@ pub fn edit_parameters(
     // while an arrow key edits a different parameter, which a screen-reader
     // user has no way to notice.
     plugin.refresh_params();
+    let plugin_name = plugin.info().name.clone();
     let src: Rc<dyn ParamSource> = Rc::new(plugin);
     if src.count() == 0 {
         super::show_info(
@@ -254,7 +434,14 @@ pub fn edit_parameters(
         return;
     }
 
-    let dialog = Dialog::builder(&frame, &t!("Plugin parameters"))
+    // Named for the plugin: this dialog is reached from a list of several, and
+    // its title is the first thing read when it opens.
+    let title = if plugin_name.trim().is_empty() {
+        t!("Plugin parameters")
+    } else {
+        t!("{name} parameters", name = plugin_name)
+    };
+    let dialog = Dialog::builder(&frame, &title)
         .with_style(DialogStyle::DefaultDialogStyle)
         .with_size(460, 320)
         .build();
@@ -354,16 +541,7 @@ pub fn edit_parameters(
             let Some(&index) = visible.borrow().get(sel as usize) else {
                 return;
             };
-            let value = src.get(index);
-            let text = formatted_value(src.as_ref(), index);
-            announce_value(
-                &announcer,
-                &value_slider,
-                &value_text,
-                &src.name(index),
-                value,
-                &text,
-            );
+            announce_value(&announcer, &value_slider, &value_text, src.as_ref(), index);
         }
     };
 
@@ -464,28 +642,41 @@ pub fn edit_parameters(
                 event.skip(true);
                 return;
             };
-            let new_value = match code {
-                super::WXK_UP => step_param(src.as_ref(), index, SMALL_STEP),
-                super::WXK_DOWN => step_param(src.as_ref(), index, -SMALL_STEP),
-                WXK_PAGEUP => step_param(src.as_ref(), index, LARGE_STEP),
-                WXK_PAGEDOWN => step_param(src.as_ref(), index, -LARGE_STEP),
-                WXK_HOME => set_param(src.as_ref(), index, 1.0),
-                WXK_END => set_param(src.as_ref(), index, 0.0),
-                _ => {
-                    event.skip(true);
-                    return;
-                }
-            };
+            if key_param(src.as_ref(), index, code).is_none() {
+                event.skip(true);
+                return;
+            }
             event.skip(false);
-            let text = formatted_value(src.as_ref(), index);
-            announce_value(
-                &announcer,
-                &value_slider,
-                &value_text,
-                &src.name(index),
-                new_value,
-                &text,
+            // Announced even at the end of the range, where nothing moved, so
+            // the key always produces spoken feedback.
+            announce_value(&announcer, &value_slider, &value_text, src.as_ref(), index);
+        });
+    }
+
+    // The mouse, the wheel, and anything else that moves the thumb without a
+    // key we own. The thumb is already where the user put it, so the parameter
+    // follows the slider here rather than the other way round — and the slider
+    // is not repositioned, which would fight a drag in progress.
+    {
+        let src = src.clone();
+        let visible = visible.clone();
+        let announcer = announcer.clone();
+        value_slider.clone().on_slider(move |_| {
+            let Some(sel) = param_choice.get_selection() else {
+                return;
+            };
+            let Some(&index) = visible.borrow().get(sel as usize) else {
+                return;
+            };
+            let range = slider_range(src.steps(index));
+            set_param(
+                src.as_ref(),
+                index,
+                slider_value(value_slider.value(), range),
             );
+            let text = formatted_value(src.as_ref(), index);
+            value_text.set_value(&text);
+            announcer.update(&src.name(index), &text);
         });
     }
 
@@ -493,10 +684,11 @@ pub fn edit_parameters(
     // `announce_value`), and on tab-away or Enter parses what was typed, in the
     // parameter's own display units, and applies it.
     //
-    // A plugin that can't convert the text gets *said so*. `set_value` alone
-    // announces nothing, so reverting the field in silence is indistinguishable
-    // from the edit having worked — and for VST3 that is every parameter, since
-    // `IEditController::getParamValueByString` has no wrapper in the crate.
+    // Every outcome is *said*, and through `help::announce` rather than the
+    // slider's own value event: focus is in this field, and a screen reader
+    // speaks a value change only for the control that has it. `set_value`
+    // alone announces nothing either, so reverting the field in silence would
+    // be indistinguishable from the edit having worked.
     let apply_typed = {
         let src = src.clone();
         let visible = visible.clone();
@@ -509,25 +701,39 @@ pub fn edit_parameters(
                 return;
             };
             let current = formatted_value(src.as_ref(), index);
-            match apply_typed_value(src.as_ref(), index, &value_text.get_value()) {
-                TypedValue::Applied(new_value) => {
-                    let text = formatted_value(src.as_ref(), index);
-                    announce_value(
-                        &announcer,
-                        &value_slider,
-                        &value_text,
-                        &src.name(index),
-                        new_value,
-                        &text,
-                    );
+            let typed = value_text.get_value();
+            // Tabbing through the field without touching it is not an edit.
+            // Re-applying its own text would be harmless for a parameter whose
+            // text parses back exactly, and a silent change of value for one
+            // whose text is rounded.
+            if typed.trim() == current.trim() {
+                return;
+            }
+            match apply_typed_value(src.as_ref(), index, &typed) {
+                TypedValue::Applied(_) => {
+                    let text =
+                        sync_value(&announcer, &value_slider, &value_text, src.as_ref(), index);
+                    super::help::announce(&t!(
+                        "{name}: {value}",
+                        name = src.name(index),
+                        value = text
+                    ));
                 }
                 TypedValue::Blank => value_text.set_value(&current),
+                TypedValue::NoSuchValue => {
+                    value_text.set_value(&current);
+                    super::help::announce(&t!(
+                        "No value called {typed}. Still {current}.",
+                        typed = typed.trim(),
+                        current = current
+                    ));
+                }
                 TypedValue::Unsupported => {
                     value_text.set_value(&current);
-                    announcer.update(
-                        &src.name(index),
-                        &t!("this plugin does not accept typed values, still {current}", current = current),
-                    );
+                    super::help::announce(&t!(
+                        "This plugin does not accept typed values. Still {current}.",
+                        current = current
+                    ));
                 }
             }
         }
@@ -580,6 +786,12 @@ pub fn edit_parameters(
         close.on_click(move |_| dialog.end_modal(ID_OK));
     }
 
+    // A plugin with one parameter has nothing to filter and nothing to choose
+    // between, so the dialog opens on the control that changes it.
+    if visible.borrow().len() == 1 {
+        value_slider.set_focus();
+    }
+
     dialog.show_modal();
     // Remove the slider's UIA provider while its window still exists.
     announcer.uninstall();
@@ -613,6 +825,9 @@ mod tests {
         /// Parses display text into a normalized value; `None` means the plugin
         /// does not support string-to-parameter conversion.
         parse: Option<fn(&str) -> Option<f32>>,
+        /// Steps above the lowest position; 0 for a continuous parameter, or
+        /// for a format that does not say (VST2).
+        steps: u32,
     }
 
     struct FakeParams {
@@ -652,6 +867,35 @@ mod tests {
                 None => false,
             }
         }
+        fn steps(&self, index: i32) -> u32 {
+            self.params[index as usize].steps
+        }
+        fn display_at(&self, index: i32, value: f32) -> Option<String> {
+            let p = &self.params[index as usize];
+            // A format that reports steps can also format a value it has not
+            // been set to; one that reports none can do neither.
+            (p.steps > 0).then(|| (p.format)(value))
+        }
+    }
+
+    /// One stepped parameter whose every position has a name, which is the
+    /// whole interface of a plugin that offers a list of presets and nothing
+    /// else.
+    const VOICES: [&str; 5] = ["Normal", "Child", "Chipmunk", "Robot", "Dark Lord"];
+
+    fn voices() -> FakeParams {
+        FakeParams {
+            params: vec![FakeParam {
+                name: "Voice".into(),
+                value: RefCell::new(0.0),
+                automatable: true,
+                // VST3's own rule for a stepped parameter: `min(steps, v * (steps + 1))`.
+                format: |v| VOICES[((v * VOICES.len() as f32) as usize).min(VOICES.len() - 1)].to_string(),
+                label: String::new(),
+                parse: None,
+                steps: VOICES.len() as u32 - 1,
+            }],
+        }
     }
 
     fn sample() -> FakeParams {
@@ -666,8 +910,10 @@ mod tests {
                     label: "dB".into(),
                     // Inverse of the dB mapping above (-12..+12 dB → 0..1).
                     parse: Some(|s| s.trim().parse::<f32>().ok().map(|db| (db + 12.0) / 24.0)),
+                    steps: 0,
                 },
-                // Discrete 4-state, text changes only at quarter boundaries.
+                // Discrete 4-state, text changes only at quarter boundaries —
+                // and, as a VST2 plugin's would, without saying it is stepped.
                 FakeParam {
                     name: "Mode".into(),
                     value: RefCell::new(0.0),
@@ -678,6 +924,7 @@ mod tests {
                     },
                     label: String::new(),
                     parse: None,
+                    steps: 0,
                 },
                 // Unnamed / non-automatable.
                 FakeParam {
@@ -687,6 +934,7 @@ mod tests {
                     format: |_| String::new(),
                     label: String::new(),
                     parse: None,
+                    steps: 0,
                 },
                 FakeParam {
                     name: "Hidden".into(),
@@ -695,6 +943,7 @@ mod tests {
                     format: |_| String::new(),
                     label: String::new(),
                     parse: None,
+                    steps: 0,
                 },
             ],
         }
@@ -759,6 +1008,107 @@ mod tests {
         assert_eq!(formatted_value(&p, 1), "Off");
         step_param(&p, 1, SMALL_STEP);
         assert_eq!(formatted_value(&p, 1), "Low");
+    }
+
+    #[test]
+    fn a_stepped_parameter_gets_one_slider_position_per_value() {
+        // Five voices are four steps, and so a slider that runs 0 to 4.
+        assert_eq!(slider_range(4), 4);
+        // A switch is a slider with two ends and nothing between them.
+        assert_eq!(slider_range(1), 1);
+        // Continuous, and anything too finely stepped to be worth a position
+        // each, keep the full sweep.
+        assert_eq!(slider_range(0), SLIDER_RANGE);
+        assert_eq!(slider_range(100_000), SLIDER_RANGE);
+        assert!(!is_stepped(0) && is_stepped(1) && is_stepped(1000) && !is_stepped(1001));
+    }
+
+    #[test]
+    fn every_slider_position_is_the_value_it_names() {
+        // Out and back for every voice of a list as long as the real one: a
+        // position that came back as its neighbour would announce one voice
+        // and select another.
+        let range = 52;
+        for position in 0..=range {
+            let value = slider_value(position, range);
+            assert_eq!(slider_position(value, range), position);
+            // And VST3's own mapping agrees which step that is.
+            let step = ((value as f64 * (range + 1) as f64) as i32).min(range);
+            assert_eq!(step, position, "position {position} of {range}");
+        }
+    }
+
+    #[test]
+    fn each_arrow_moves_a_stepped_parameter_exactly_one_value() {
+        let p = voices();
+        for expected in &VOICES[1..] {
+            key_param(&p, 0, WXK_UP).expect("a movement key");
+            assert_eq!(formatted_value(&p, 0), *expected);
+        }
+        for expected in VOICES[..VOICES.len() - 1].iter().rev() {
+            key_param(&p, 0, WXK_DOWN).expect("a movement key");
+            assert_eq!(formatted_value(&p, 0), *expected);
+        }
+    }
+
+    #[test]
+    fn left_and_right_move_the_parameter_too() {
+        // These used to fall through to the native trackbar, which moved the
+        // thumb and told the plugin nothing.
+        let p = voices();
+        key_param(&p, 0, WXK_RIGHT);
+        assert_eq!(formatted_value(&p, 0), "Child");
+        key_param(&p, 0, WXK_LEFT);
+        assert_eq!(formatted_value(&p, 0), "Normal");
+
+        let continuous = sample();
+        let up = key_param(&continuous, 0, WXK_RIGHT).expect("a movement key");
+        assert!(up > 0.5, "got {up}");
+        let down = key_param(&continuous, 0, WXK_LEFT).expect("a movement key");
+        assert!(down < up, "got {down}");
+    }
+
+    #[test]
+    fn home_and_end_reach_both_ends_and_a_key_at_the_end_still_answers() {
+        let p = voices();
+        assert_eq!(key_param(&p, 0, WXK_HOME), Some(1.0));
+        assert_eq!(formatted_value(&p, 0), "Dark Lord");
+        // Already at the top: nothing moves, but it is still a movement key,
+        // so the dialog still announces where the parameter is.
+        assert_eq!(key_param(&p, 0, WXK_UP), Some(1.0));
+        assert_eq!(key_param(&p, 0, WXK_END), Some(0.0));
+        assert_eq!(formatted_value(&p, 0), "Normal");
+        // A page is never nothing, even on a list this short.
+        key_param(&p, 0, WXK_PAGEUP);
+        assert_eq!(formatted_value(&p, 0), "Child");
+    }
+
+    #[test]
+    fn a_key_that_does_not_move_a_slider_is_left_for_the_dialog() {
+        assert_eq!(key_param(&voices(), 0, WXK_TAB), None);
+        assert_eq!(key_param(&sample(), 0, WXK_TAB), None);
+    }
+
+    #[test]
+    fn a_stepped_value_can_be_typed_by_name() {
+        let p = voices();
+        // The plugin cannot parse text, so this is the dialog reading every
+        // step's name and finding the one that was typed.
+        assert!(matches!(
+            apply_typed_value(&p, 0, "  chipmunk "),
+            TypedValue::Applied(_)
+        ));
+        assert_eq!(formatted_value(&p, 0), "Chipmunk");
+        // A prefix only one value starts with is enough...
+        assert!(matches!(apply_typed_value(&p, 0, "dark"), TypedValue::Applied(_)));
+        assert_eq!(formatted_value(&p, 0), "Dark Lord");
+        // ...and one that two start with is not, and changes nothing.
+        assert_eq!(apply_typed_value(&p, 0, "chi"), TypedValue::NoSuchValue);
+        assert_eq!(apply_typed_value(&p, 0, "Gremlin"), TypedValue::NoSuchValue);
+        assert_eq!(formatted_value(&p, 0), "Dark Lord");
+        // A whole name wins over being a prefix of another.
+        assert!(matches!(apply_typed_value(&p, 0, "Child"), TypedValue::Applied(_)));
+        assert_eq!(formatted_value(&p, 0), "Child");
     }
 
     #[test]

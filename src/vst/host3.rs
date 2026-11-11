@@ -269,10 +269,32 @@ impl Vst3Plugin {
             .unwrap_or(false)
     }
 
+    /// How many steps the parameter has above its lowest position, or 0 for a
+    /// continuous one — VST3's `stepCount`, so a switch is 1 and a list of
+    /// twenty names is 19. Position `k` of `n` is the normalized value `k / n`.
+    pub fn param_steps(&self, index: i32) -> u32 {
+        self.params()
+            .get(index as usize)
+            .map(|p| p.step_count.max(0) as u32)
+            .unwrap_or(0)
+    }
+
+    /// The text the plugin would show for `value`, without setting it. `None`
+    /// when the plugin will not say.
+    pub fn param_display_at(&self, index: i32, value: f32) -> Option<String> {
+        let id = self.param_id(index)?;
+        self.lock()
+            .plugin
+            .format_parameter(id, value.clamp(0.0, 1.0) as f64)
+            .ok()
+    }
+
     /// `vst3-host` 0.7 wraps `IEditController::getParamStringByValue` but not
-    /// its inverse `getParamValueByString`, so typed entry cannot be supported
-    /// for any VST3 parameter. The parameters dialog says so out loud rather
-    /// than discarding what the user typed in silence.
+    /// its inverse `getParamValueByString`, so the plugin cannot be asked to
+    /// parse what the user typed. The parameters dialog makes up for it where
+    /// it can — a stepped parameter's values can all be asked for by
+    /// [`Self::param_display_at`] and matched against — and says so out loud
+    /// where it cannot, rather than discarding what was typed in silence.
     pub fn string_to_parameter(&self, _index: i32, _text: &str) -> bool {
         false
     }
@@ -774,7 +796,15 @@ mod tests {
         // only a bundle path.
         let bundle = std::path::Path::new(&bundle);
         let stem = bundle.file_stem().expect("a named bundle");
+        #[cfg(target_os = "macos")]
         let binary = bundle.join("Contents").join("MacOS").join(stem);
+        #[cfg(windows)]
+        let binary = bundle
+            .join("Contents")
+            .join("x86_64-win")
+            .join(bundle.file_name().expect("a named bundle"));
+        #[cfg(windows)]
+        let _ = stem;
         assert!(binary.is_file(), "no binary at {}", binary.display());
         println!("loading {}", binary.display());
 
@@ -785,6 +815,29 @@ mod tests {
         };
         let plugin = Vst3Plugin::load(&info, &FxSlotConfig::default()).expect("the plugin loads");
         println!("loaded, editor: {}", plugin.has_editor());
+
+        // What the parameters dialog will be working from: each parameter's
+        // name, how many steps it has, and the plugin's own text along its
+        // range. Printed rather than asserted, since it is the plugin's to say.
+        for index in 0..plugin.num_params().min(16) {
+            let before = plugin.get_parameter(index);
+            let steps = plugin.param_steps(index);
+            let points = steps.clamp(4, 8);
+            let texts: Vec<String> = (0..=points)
+                .map(|k| {
+                    plugin.set_parameter(index, k as f32 / points as f32);
+                    format!("{:?}", plugin.param_display(index))
+                })
+                .collect();
+            plugin.set_parameter(index, before);
+            println!(
+                "param {index} {:?} unit {:?} steps {steps} automatable {}: {}",
+                plugin.param_name(index),
+                plugin.param_label(index),
+                plugin.can_be_automated(index),
+                texts.join(", ")
+            );
+        }
 
         let instance = PluginInstance::Vst3(plugin);
         let frames = BLOCK_FRAMES;

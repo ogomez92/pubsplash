@@ -25,39 +25,39 @@ msgstr ""
 "Language: en\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-#: src/ui/mod.rs:2597
+#: src/ui/mod.rs:2622
 msgid ""
 "\n\n"
 "Details: {detail}"
 msgstr ""
 
-#: src/ui/mod.rs:2595
+#: src/ui/mod.rs:2620
 msgid ""
 "\n\n"
 "The stream itself is unaffected and is still live."
 msgstr ""
 
-#: src/ui/scenes.rs:2348
+#: src/ui/scenes.rs:2407
 msgid " (unavailable)"
 msgstr ""
 
-#: src/ui/buses.rs:43
+#: src/ui/buses.rs:39
 msgid "&Add bus"
 msgstr ""
 
-#: src/ui/scenes.rs:74
+#: src/ui/scenes.rs:79
 msgid "&Add source"
 msgstr ""
 
-#: src/ui/scenes.rs:2708
+#: src/ui/scenes.rs:2767
 msgid "&Browse..."
 msgstr ""
 
-#: src/ui/buses.rs:79
+#: src/ui/chain_ui.rs:161
 msgid "&Bypass"
 msgstr ""
 
-#: src/ui/scenes.rs:2774
+#: src/ui/scenes.rs:2833
 msgid "&Calibrate to my voice"
 msgstr ""
 
@@ -65,15 +65,15 @@ msgstr ""
 msgid "&Connect"
 msgstr ""
 
-#: src/ui/scenes.rs:75
+#: src/ui/scenes.rs:80
 msgid "&Edit"
 msgstr ""
 
-#: src/ui/buses.rs:82
+#: src/ui/chain_ui.rs:162
 msgid "&Edit parameters"
 msgstr ""
 
-#: src/ui/scenes.rs:2698
+#: src/ui/scenes.rs:2757
 msgid "&Folder"
 msgstr ""
 
@@ -93,19 +93,19 @@ msgstr ""
 msgid "&Play"
 msgstr ""
 
-#: src/ui/buses.rs:44
+#: src/ui/buses.rs:40
 msgid "&Rename bus"
 msgstr ""
 
-#: src/ui/scenes.rs:76
+#: src/ui/scenes.rs:81
 msgid "&Sends..."
 msgstr ""
 
-#: src/ui/scenes.rs:2711
+#: src/ui/scenes.rs:2770
 msgid "&Shuffle the folder"
 msgstr ""
 
-#: src/ui/scenes.rs:2722
+#: src/ui/scenes.rs:2781
 msgid "&Turn the music down while other sources are playing"
 msgstr ""
 
@@ -114,12 +114,12 @@ msgstr ""
 msgid "&Validate"
 msgstr ""
 
-#: src/ui/scenes.rs:2374
+#: src/ui/scenes.rs:2433
 msgid "1 voice available for {name}."
 msgstr ""
 
-#: src/ui/buses.rs:399
-#: src/ui/buses.rs:431
+#: src/ui/buses.rs:184
+#: src/ui/buses.rs:216
 msgid "A bus with that name already exists."
 msgstr ""
 
@@ -133,7 +133,7 @@ msgid ""
 "own that key would be swallowed in every application you type in."
 msgstr ""
 
-#: src/ui/scenes.rs:375
+#: src/ui/scenes.rs:427
 msgid "A scene with that name already exists."
 msgstr ""
 
@@ -151,7 +151,7 @@ msgid ""
 "scheduling another."
 msgstr ""
 
-#: src/ui/mod.rs:2831
+#: src/ui/mod.rs:2859
 msgid "A stream is scheduled to go live later. Exit and discard it?"
 msgstr ""
 
@@ -159,7 +159,7 @@ msgstr ""
 msgid "AM or PM"
 msgstr ""
 
-#: src/ui/mod.rs:2703
+#: src/ui/mod.rs:2728
 msgid "API"
 msgstr ""
 
@@ -168,7 +168,7 @@ msgstr ""
 msgid "API usage this session"
 msgstr ""
 
-#: src/ui/scenes.rs:1879
+#: src/ui/scenes.rs:1938
 msgid "AWS Polly voice settings"
 msgstr ""
 
@@ -184,12 +184,12 @@ msgstr ""
 msgid "AWS secret access key"
 msgstr ""
 
-#: src/ui/mod.rs:3107
-#: src/ui/mod.rs:3174
+#: src/ui/mod.rs:3135
+#: src/ui/mod.rs:3202
 msgid "About Pubsplash"
 msgstr ""
 
-#: src/ui/scenes.rs:1937
+#: src/ui/scenes.rs:1996
 msgid "Accent domain suffix, for example co.uk"
 msgstr ""
 
@@ -207,7 +207,7 @@ msgstr ""
 msgid "Add"
 msgstr ""
 
-#: src/ui/buses.rs:73
+#: src/ui/chain_ui.rs:160
 msgid "Add &plugin"
 msgstr ""
 
@@ -227,8 +227,8 @@ msgstr ""
 msgid "Add binding..."
 msgstr ""
 
-#: src/ui/buses.rs:381
-#: src/ui/buses.rs:399
+#: src/ui/buses.rs:166
+#: src/ui/buses.rs:184
 msgid "Add bus"
 msgstr ""
 
@@ -240,15 +240,17 @@ msgstr ""
 msgid "Add folder..."
 msgstr ""
 
-#: src/ui/buses.rs:500
-#: src/ui/buses.rs:507
-#: src/ui/buses.rs:526
+#: src/ui/chain_ui.rs:154
+#: src/ui/chain_ui.rs:474
+#: src/ui/chain_ui.rs:496
+#: src/ui/chain_ui.rs:503
+#: src/ui/chain_ui.rs:530
 msgid "Add plugin"
 msgstr ""
 
-#: src/ui/scenes.rs:40
-#: src/ui/scenes.rs:364
-#: src/ui/scenes.rs:374
+#: src/ui/scenes.rs:45
+#: src/ui/scenes.rs:416
+#: src/ui/scenes.rs:426
 msgid "Add scene"
 msgstr ""
 
@@ -261,7 +263,7 @@ msgstr ""
 msgid "Add service"
 msgstr ""
 
-#: src/ui/scenes.rs:491
+#: src/ui/scenes.rs:549
 msgid "Add source"
 msgstr ""
 
@@ -273,8 +275,8 @@ msgstr ""
 msgid "Add template"
 msgstr ""
 
-#: src/ui/buses.rs:507
-#: src/ui/buses.rs:508
+#: src/ui/chain_ui.rs:503
+#: src/ui/chain_ui.rs:504
 msgid "Add which plugin?"
 msgstr ""
 
@@ -282,7 +284,7 @@ msgstr ""
 msgid "Advanced"
 msgstr ""
 
-#: src/ui/scenes.rs:696
+#: src/ui/scenes.rs:755
 msgid "All output devices (Pubsplash excluded)"
 msgstr ""
 
@@ -300,17 +302,17 @@ msgid "Announcements"
 msgstr ""
 
 #: src/source_name.rs:232
-#: src/ui/scenes.rs:483
+#: src/ui/scenes.rs:541
 msgid "Application"
 msgstr ""
 
-#: src/ui/mod.rs:3082
+#: src/ui/mod.rs:3110
 msgid "Application preferences"
 msgstr ""
 
 #: src/ui/app_picker.rs:38
 #: src/ui/app_picker.rs:256
-#: src/ui/scenes.rs:803
+#: src/ui/scenes.rs:862
 msgid "Application source"
 msgstr ""
 
@@ -330,7 +332,7 @@ msgstr ""
 msgid "Applications"
 msgstr ""
 
-#: src/ui/buses.rs:936
+#: src/ui/chain_ui.rs:979
 msgid "Apply with {n} available plugin"
 msgid_plural "Apply with {n} available plugins"
 msgstr[0] ""
@@ -358,11 +360,11 @@ msgstr ""
 msgid "Audio"
 msgstr ""
 
-#: src/ui/scenes.rs:1869
+#: src/ui/scenes.rs:1928
 msgid "Audio effects profile"
 msgstr ""
 
-#: src/ui/mod.rs:1248
+#: src/ui/mod.rs:1262
 #: src/ui/scheduler_ui.rs:448
 msgid "Audio files ({patterns})|{patterns}|All files (*.*)|*.*"
 msgstr ""
@@ -415,15 +417,15 @@ msgstr ""
 msgid "Azure region, for example eastus"
 msgstr ""
 
-#: src/ui/scenes.rs:1814
+#: src/ui/scenes.rs:1873
 msgid "Azure speaking role"
 msgstr ""
 
-#: src/ui/scenes.rs:1781
+#: src/ui/scenes.rs:1840
 msgid "Azure speaking style"
 msgstr ""
 
-#: src/ui/scenes.rs:1797
+#: src/ui/scenes.rs:1856
 msgid "Azure style intensity, zero point zero one to two"
 msgstr ""
 
@@ -431,7 +433,7 @@ msgstr ""
 msgid "Azure subscription key"
 msgstr ""
 
-#: src/ui/scenes.rs:1779
+#: src/ui/scenes.rs:1838
 msgid "Azure voice settings"
 msgstr ""
 
@@ -470,22 +472,23 @@ msgstr ""
 msgid "Bus"
 msgstr ""
 
-#: src/ui/buses.rs:381
+#: src/ui/buses.rs:166
 msgid "Bus name:"
 msgstr ""
 
-#: src/ui/buses.rs:34
-#: src/ui/buses.rs:36
-#: src/ui/mod.rs:2700
+#: src/ui/buses.rs:30
+#: src/ui/buses.rs:32
+#: src/ui/mod.rs:2725
 #: src/ui/sends.rs:322
 msgid "Buses"
 msgstr ""
 
+#: src/ui/chain_ui.rs:155
 #: src/ui/fx_editor.rs:230
 msgid "Bypass"
 msgstr ""
 
-#: src/ui/buses.rs:80
+#: src/ui/chain_ui.rs:173
 msgid "Bypass selected plugin"
 msgstr ""
 
@@ -493,23 +496,23 @@ msgstr ""
 msgid "Bypass this plugin"
 msgstr ""
 
-#: src/ui/scenes.rs:2952
+#: src/ui/scenes.rs:3011
 msgid "Calibrated. The music will start turning down at {db} decibels."
 msgstr ""
 
 #: src/bin/soundpack_manager.rs:483
 #: src/ui/app_picker.rs:72
-#: src/ui/buses.rs:742
-#: src/ui/buses.rs:945
+#: src/ui/chain_ui.rs:765
+#: src/ui/chain_ui.rs:988
 #: src/ui/connect_dialog.rs:984
 #: src/ui/keybinds_ui.rs:308
 #: src/ui/mastodon_post.rs:313
 #: src/ui/mastodon_templates.rs:101
 #: src/ui/mastodon_templates.rs:230
-#: src/ui/scenes.rs:711
-#: src/ui/scenes.rs:955
-#: src/ui/scenes.rs:2629
-#: src/ui/scenes.rs:2802
+#: src/ui/scenes.rs:770
+#: src/ui/scenes.rs:1014
+#: src/ui/scenes.rs:2688
+#: src/ui/scenes.rs:2861
 #: src/ui/schedule_ui.rs:207
 #: src/ui/scheduler_ui.rs:131
 #: src/ui/scheduler_ui.rs:395
@@ -526,7 +529,7 @@ msgstr ""
 msgid "Cancel scan"
 msgstr ""
 
-#: src/ui/mod.rs:2105
+#: src/ui/mod.rs:2130
 msgid "Cancel scheduled stream"
 msgstr ""
 
@@ -554,7 +557,7 @@ msgstr ""
 msgid "Caps Lock"
 msgstr ""
 
-#: src/ui/scenes.rs:683
+#: src/ui/scenes.rs:742
 msgid "Capture from"
 msgstr ""
 
@@ -563,20 +566,30 @@ msgstr ""
 msgid "Category"
 msgstr ""
 
-#: src/ui/buses.rs:879
+#: src/ui/chain_ui.rs:918
 msgid "Chain exported."
 msgstr ""
 
-#: src/ui/buses.rs:835
+#: src/ui/chain_ui.rs:862
+msgid "Chain imported and added to your library."
+msgstr ""
+
+#: src/ui/chain_ui.rs:870
 msgid ""
 "Chain imported and added to your library. Apply it to the selected bus "
 "now?"
 msgstr ""
 
+#: src/ui/chain_ui.rs:867
+msgid ""
+"Chain imported and added to your library. Apply it to the selected "
+"source now?"
+msgstr ""
+
 #: src/ui/chat.rs:197
 #: src/ui/chat.rs:214
-#: src/ui/mod.rs:2698
-#: src/ui/mod.rs:3729
+#: src/ui/mod.rs:2723
+#: src/ui/mod.rs:3757
 msgid "Chat"
 msgstr ""
 
@@ -622,7 +635,7 @@ msgstr ""
 msgid "Choose a file for this item to play."
 msgstr ""
 
-#: src/ui/mod.rs:1244
+#: src/ui/mod.rs:1258
 msgid "Choose a file to play"
 msgstr ""
 
@@ -638,7 +651,7 @@ msgstr ""
 msgid "Choose a folder for stream recordings"
 msgstr ""
 
-#: src/ui/scenes.rs:2830
+#: src/ui/scenes.rs:2889
 msgid "Choose a folder of music for this source"
 msgstr ""
 
@@ -695,7 +708,7 @@ msgstr ""
 #: src/ui/chat.rs:254
 #: src/ui/connect_dialog.rs:341
 #: src/ui/fx_editor.rs:241
-#: src/ui/fx_params.rs:323
+#: src/ui/fx_params.rs:510
 #: src/ui/mastodon_service.rs:245
 #: src/ui/mastodon_templates.rs:177
 #: src/ui/preferences.rs:72
@@ -747,20 +760,20 @@ msgstr ""
 msgid "Connect"
 msgstr ""
 
-#: src/ui/mod.rs:2458
+#: src/ui/mod.rs:2483
 #: src/ui/schedule_ui.rs:88
 msgid "Connect to a streaming service first (File > Setup streaming services)."
 msgstr ""
 
-#: src/ui/mod.rs:3512
+#: src/ui/mod.rs:3540
 msgid "Connected"
 msgstr ""
 
-#: src/ui/mod.rs:3513
+#: src/ui/mod.rs:3541
 msgid "Connected to {display_name}."
 msgstr ""
 
-#: src/ui/mod.rs:484
+#: src/ui/mod.rs:485
 msgid "Connected, waiting for the server"
 msgstr ""
 
@@ -772,12 +785,12 @@ msgstr ""
 msgid "Connecting to GitHub..."
 msgstr ""
 
-#: src/ui/mod.rs:483
+#: src/ui/mod.rs:484
 msgid "Connecting to the stream"
 msgstr ""
 
-#: src/ui/mod.rs:3524
-#: src/ui/mod.rs:3532
+#: src/ui/mod.rs:3552
+#: src/ui/mod.rs:3560
 msgid "Connection failed"
 msgstr ""
 
@@ -787,12 +800,12 @@ msgid ""
 "approve Pubsplash."
 msgstr ""
 
-#: src/ui/mod.rs:3521
+#: src/ui/mod.rs:3549
 msgid "Could not connect: {message}"
 msgstr ""
 
 #: src/ui/logging_ui.rs:112
-#: src/ui/mod.rs:3245
+#: src/ui/mod.rs:3273
 #: src/ui/update.rs:443
 msgid "Could not create {path}: {e}"
 msgstr ""
@@ -805,15 +818,15 @@ msgid ""
 msgstr ""
 
 #: src/ui/logging_ui.rs:120
-#: src/ui/mod.rs:3247
+#: src/ui/mod.rs:3275
 msgid "Could not open {path}: {e}"
 msgstr ""
 
-#: src/ui/mod.rs:3233
+#: src/ui/mod.rs:3261
 msgid "Could not open {url}: {e}"
 msgstr ""
 
-#: src/ui/mod.rs:3153
+#: src/ui/mod.rs:3181
 msgid "Could not open {url}: {message}"
 msgstr ""
 
@@ -825,7 +838,7 @@ msgstr ""
 msgid "Could not start the updater ({path}): {e}. Nothing has been changed."
 msgstr ""
 
-#: src/ui/mod.rs:3214
+#: src/ui/mod.rs:3242
 msgid "Could not start {path}: {e}"
 msgstr ""
 
@@ -833,7 +846,7 @@ msgstr ""
 msgid "Could not work out where Pubsplash is installed, so nothing was changed."
 msgstr ""
 
-#: src/ui/mod.rs:3091
+#: src/ui/mod.rs:3119
 msgid "Create and compile Pubsplash sound packs"
 msgstr ""
 
@@ -846,7 +859,7 @@ msgstr ""
 msgid "December"
 msgstr ""
 
-#: src/ui/scenes.rs:616
+#: src/ui/scenes.rs:675
 msgid "Default microphone"
 msgstr ""
 
@@ -854,24 +867,24 @@ msgstr ""
 msgid "Default output device (follow system)"
 msgstr ""
 
-#: src/ui/scenes.rs:1815
-#: src/ui/scenes.rs:2064
-#: src/ui/scenes.rs:2124
+#: src/ui/scenes.rs:1874
+#: src/ui/scenes.rs:2123
+#: src/ui/scenes.rs:2183
 msgid "Default speaking role"
 msgstr ""
 
-#: src/ui/scenes.rs:1782
-#: src/ui/scenes.rs:2058
-#: src/ui/scenes.rs:2116
+#: src/ui/scenes.rs:1841
+#: src/ui/scenes.rs:2117
+#: src/ui/scenes.rs:2175
 msgid "Default speaking style"
 msgstr ""
 
-#: src/ui/scenes.rs:2408
+#: src/ui/scenes.rs:2467
 msgid "Default voice"
 msgstr ""
 
 #: src/keybind.rs:135
-#: src/ui/buses.rs:738
+#: src/ui/chain_ui.rs:761
 msgid "Delete"
 msgstr ""
 
@@ -881,8 +894,8 @@ msgid "Description"
 msgstr ""
 
 #: src/source_name.rs:223
-#: src/ui/scenes.rs:482
-#: src/ui/scenes.rs:750
+#: src/ui/scenes.rs:540
+#: src/ui/scenes.rs:809
 msgid "Desktop Audio"
 msgstr ""
 
@@ -898,7 +911,7 @@ msgstr ""
 msgid "Desktop Audio ({name})"
 msgstr ""
 
-#: src/ui/scenes.rs:675
+#: src/ui/scenes.rs:734
 msgid "Desktop Audio source"
 msgstr ""
 
@@ -923,15 +936,15 @@ msgid ""
 "media player?"
 msgstr ""
 
-#: src/ui/mod.rs:3559
+#: src/ui/mod.rs:3587
 msgid "Disconnected"
 msgstr ""
 
-#: src/ui/mod.rs:3561
+#: src/ui/mod.rs:3589
 msgid "Disconnected from {name}."
 msgstr ""
 
-#: src/ui/mod.rs:3562
+#: src/ui/mod.rs:3590
 msgid "Disconnected."
 msgstr ""
 
@@ -1006,8 +1019,9 @@ msgstr ""
 msgid "Edit binding..."
 msgstr ""
 
-#: src/ui/buses.rs:610
-#: src/ui/fx_params.rs:251
+#: src/ui/chain_ui.rs:156
+#: src/ui/chain_ui.rs:618
+#: src/ui/fx_params.rs:431
 msgid "Edit parameters"
 msgstr ""
 
@@ -1019,40 +1033,43 @@ msgstr ""
 msgid "Edit template"
 msgstr ""
 
-#: src/ui/buses.rs:63
-#: src/ui/buses.rs:66
+#: src/ui/chain_ui.rs:102
 msgid "Effects on selected bus"
+msgstr ""
+
+#: src/ui/chain_ui.rs:101
+msgid "Effects on selected source"
 msgstr ""
 
 #: src/ui/preferences.rs:564
 msgid "ElevenLabs API key"
 msgstr ""
 
-#: src/ui/scenes.rs:1613
+#: src/ui/scenes.rs:1672
 msgid "ElevenLabs language code; blank uses provider default"
 msgstr ""
 
-#: src/ui/scenes.rs:1592
+#: src/ui/scenes.rs:1651
 msgid "ElevenLabs model; blank uses provider default"
 msgstr ""
 
-#: src/ui/scenes.rs:1665
+#: src/ui/scenes.rs:1724
 msgid "ElevenLabs similarity boost, zero to one"
 msgstr ""
 
-#: src/ui/scenes.rs:1709
+#: src/ui/scenes.rs:1768
 msgid "ElevenLabs speaker boost"
 msgstr ""
 
-#: src/ui/scenes.rs:1642
+#: src/ui/scenes.rs:1701
 msgid "ElevenLabs stability, zero to one"
 msgstr ""
 
-#: src/ui/scenes.rs:1687
+#: src/ui/scenes.rs:1746
 msgid "ElevenLabs style exaggeration, zero to one"
 msgstr ""
 
-#: src/ui/scenes.rs:1583
+#: src/ui/scenes.rs:1642
 msgid "ElevenLabs voice settings"
 msgstr ""
 
@@ -1073,8 +1090,8 @@ msgstr ""
 msgid "End"
 msgstr ""
 
-#: src/ui/scenes.rs:835
-#: src/ui/scenes.rs:838
+#: src/ui/scenes.rs:894
+#: src/ui/scenes.rs:897
 msgid "Engine"
 msgstr ""
 
@@ -1082,7 +1099,7 @@ msgstr ""
 msgid "Enter"
 msgstr ""
 
-#: src/ui/mod.rs:2209
+#: src/ui/mod.rs:2234
 msgid "Enter a full Audiopub URL starting with https://"
 msgstr ""
 
@@ -1091,23 +1108,23 @@ msgstr ""
 msgid "Enter a nickname."
 msgstr ""
 
-#: src/ui/mod.rs:2348
+#: src/ui/mod.rs:2373
 msgid "Enter a valid Icecast port."
 msgstr ""
 
-#: src/ui/mod.rs:2351
+#: src/ui/mod.rs:2376
 msgid "Enter the Icecast mount point."
 msgstr ""
 
-#: src/ui/mod.rs:2354
+#: src/ui/mod.rs:2379
 msgid "Enter the Icecast password."
 msgstr ""
 
-#: src/ui/mod.rs:2383
+#: src/ui/mod.rs:2408
 msgid "Enter the RTMP ingest URL."
 msgstr ""
 
-#: src/ui/mod.rs:2276
+#: src/ui/mod.rs:2301
 msgid "Enter the chat room name, or clear the chat server to turn chat off."
 msgstr ""
 
@@ -1115,7 +1132,7 @@ msgstr ""
 msgid "Enter the chat room name."
 msgstr ""
 
-#: src/ui/mod.rs:2271
+#: src/ui/mod.rs:2296
 msgid "Enter the chat server address, or clear the chat room to turn chat off."
 msgstr ""
 
@@ -1123,13 +1140,13 @@ msgstr ""
 msgid "Enter the chat server address."
 msgstr ""
 
-#: src/ui/mod.rs:2394
+#: src/ui/mod.rs:2419
 msgid ""
 "Enter the stream key. YouTube shows it in Studio, under Go live, beside "
 "the stream URL."
 msgstr ""
 
-#: src/ui/mod.rs:2319
+#: src/ui/mod.rs:2344
 msgid "Enter your email and password first."
 msgstr ""
 
@@ -1145,7 +1162,7 @@ msgstr ""
 msgid "Every day"
 msgstr ""
 
-#: src/config.rs:2712
+#: src/config.rs:2717
 msgid "Every day at {time}"
 msgstr ""
 
@@ -1153,17 +1170,17 @@ msgstr ""
 msgid "Every hour"
 msgstr ""
 
-#: src/config.rs:2705
+#: src/config.rs:2710
 msgid "Every hour, on the hour"
 msgstr ""
 
-#: src/config.rs:2706
+#: src/config.rs:2711
 msgid "Every hour, {n} minute past"
 msgid_plural "Every hour, {n} minutes past"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/config.rs:2701
+#: src/config.rs:2706
 msgid "Every minute"
 msgstr ""
 
@@ -1171,7 +1188,7 @@ msgstr ""
 msgid "Every so many minutes"
 msgstr ""
 
-#: src/config.rs:2702
+#: src/config.rs:2707
 msgid "Every {n} minute"
 msgid_plural "Every {n} minutes"
 msgstr[0] ""
@@ -1183,27 +1200,28 @@ msgid ""
 "sources, text-to-speech, and sound cues. It is not what listeners hear."
 msgstr ""
 
-#: src/ui/mod.rs:3085
+#: src/ui/mod.rs:3113
 msgid "Exit\tAlt+F4"
 msgstr ""
 
-#: src/ui/mod.rs:2812
-#: src/ui/mod.rs:2832
-#: src/ui/mod.rs:3085
+#: src/ui/mod.rs:2840
+#: src/ui/mod.rs:2860
+#: src/ui/mod.rs:3113
 msgid "Exit Pubsplash"
 msgstr ""
 
-#: src/ui/buses.rs:866
+#: src/ui/chain_ui.rs:905
 msgid "Export FX chain"
 msgstr ""
 
-#: src/ui/buses.rs:859
-#: src/ui/buses.rs:879
-#: src/ui/buses.rs:880
+#: src/ui/chain_ui.rs:887
+#: src/ui/chain_ui.rs:898
+#: src/ui/chain_ui.rs:918
+#: src/ui/chain_ui.rs:919
 msgid "Export chain"
 msgstr ""
 
-#: src/ui/buses.rs:133
+#: src/ui/chain_ui.rs:197
 msgid "Export chain..."
 msgstr ""
 
@@ -1243,21 +1261,21 @@ msgstr ""
 msgid "February"
 msgstr ""
 
-#: src/ui/mod.rs:3120
+#: src/ui/mod.rs:3148
 #: src/ui/scheduler_ui.rs:287
 #: src/ui/scheduler_ui.rs:291
 msgid "File"
 msgstr ""
 
-#: src/ui/fx_params.rs:264
+#: src/ui/fx_params.rs:451
 msgid "Filter"
 msgstr ""
 
-#: src/ui/fx_params.rs:266
+#: src/ui/fx_params.rs:453
 msgid "Filter parameters"
 msgstr ""
 
-#: src/ui/scenes.rs:2702
+#: src/ui/scenes.rs:2761
 msgid "Folder"
 msgstr ""
 
@@ -1286,22 +1304,22 @@ msgstr ""
 msgid "Global"
 msgstr ""
 
-#: src/ui/mod.rs:3077
+#: src/ui/mod.rs:3105
 msgid "Go live automatically at a set time"
 msgstr ""
 
-#: src/ui/mod.rs:3122
+#: src/ui/mod.rs:3150
 msgid "Go to"
 msgstr ""
 
-#: src/ui/mod.rs:3102
-#: src/ui/mod.rs:3168
+#: src/ui/mod.rs:3130
+#: src/ui/mod.rs:3196
 msgid "Go to Pubsplash data directory"
 msgstr ""
 
-#: src/ui/mod.rs:3097
-#: src/ui/mod.rs:3152
-#: src/ui/mod.rs:3162
+#: src/ui/mod.rs:3125
+#: src/ui/mod.rs:3180
+#: src/ui/mod.rs:3190
 msgid "Go to stream page"
 msgstr ""
 
@@ -1309,38 +1327,38 @@ msgstr ""
 msgid "Google Cloud API key"
 msgstr ""
 
-#: src/ui/scenes.rs:1849
+#: src/ui/scenes.rs:1908
 msgid "Google Cloud audio effects profile"
 msgstr ""
 
-#: src/ui/scenes.rs:1832
+#: src/ui/scenes.rs:1891
 msgid "Google Cloud language code; blank infers it from the voice"
 msgstr ""
 
-#: src/ui/scenes.rs:1826
+#: src/ui/scenes.rs:1885
 msgid "Google Cloud voice settings"
 msgstr ""
 
-#: src/ui/scenes.rs:1928
+#: src/ui/scenes.rs:1987
 msgid "Google Translate accent domain suffix; blank uses com"
 msgstr ""
 
-#: src/ui/scenes.rs:1945
+#: src/ui/scenes.rs:2004
 msgid "Google Translate speed mode"
 msgstr ""
 
-#: src/ui/scenes.rs:1924
+#: src/ui/scenes.rs:1983
 msgid "Google Translate voice settings"
 msgstr ""
 
 #: src/ui/mastodon_templates.rs:91
 #: src/ui/mastodon_templates.rs:221
-#: src/ui/mod.rs:3123
+#: src/ui/mod.rs:3151
 msgid "Help"
 msgstr ""
 
 #: src/keybind.rs:128
-#: src/ui/mod.rs:2697
+#: src/ui/mod.rs:2722
 msgid "Home"
 msgstr ""
 
@@ -1395,7 +1413,7 @@ msgid ""
 "files (*.*)|*.*"
 msgstr ""
 
-#: src/ui/buses.rs:811
+#: src/ui/chain_ui.rs:833
 msgid "Import FX chain"
 msgstr ""
 
@@ -1403,12 +1421,13 @@ msgstr ""
 msgid "Import a sound pack"
 msgstr ""
 
-#: src/ui/buses.rs:836
-#: src/ui/buses.rs:844
+#: src/ui/chain_ui.rs:861
+#: src/ui/chain_ui.rs:874
+#: src/ui/chain_ui.rs:881
 msgid "Import chain"
 msgstr ""
 
-#: src/ui/buses.rs:130
+#: src/ui/chain_ui.rs:194
 msgid "Import chain..."
 msgstr ""
 
@@ -1486,12 +1505,12 @@ msgstr ""
 msgid "Language"
 msgstr ""
 
-#: src/ui/scenes.rs:1841
+#: src/ui/scenes.rs:1900
 msgid "Language code (blank infers from voice)"
 msgstr ""
 
-#: src/ui/scenes.rs:1622
-#: src/ui/scenes.rs:1913
+#: src/ui/scenes.rs:1681
+#: src/ui/scenes.rs:1972
 msgid "Language code (optional)"
 msgstr ""
 
@@ -1541,16 +1560,17 @@ msgstr ""
 msgid "Listeners: {count}"
 msgstr ""
 
-#: src/ui/buses.rs:737
+#: src/ui/chain_ui.rs:760
 msgid "Load"
 msgstr ""
 
-#: src/ui/buses.rs:706
-#: src/ui/buses.rs:720
+#: src/ui/chain_ui.rs:715
+#: src/ui/chain_ui.rs:729
+#: src/ui/chain_ui.rs:743
 msgid "Load chain"
 msgstr ""
 
-#: src/ui/buses.rs:128
+#: src/ui/chain_ui.rs:192
 msgid "Load chain..."
 msgstr ""
 
@@ -1580,7 +1600,7 @@ msgstr ""
 msgid "Make periodic still-streaming Mastodon posts"
 msgstr ""
 
-#: src/ui/mod.rs:3067
+#: src/ui/mod.rs:3095
 msgid "Manage Audiopub and Icecast streaming services"
 msgstr ""
 
@@ -1592,8 +1612,8 @@ msgstr ""
 msgid "Master"
 msgstr ""
 
-#: src/ui/buses.rs:319
-#: src/ui/buses.rs:642
+#: src/ui/buses.rs:140
+#: src/ui/chain_ui.rs:651
 #: src/ui/sends.rs:44
 msgid "Master output"
 msgstr ""
@@ -1615,7 +1635,7 @@ msgid "May"
 msgstr ""
 
 #: src/source_name.rs:255
-#: src/ui/scenes.rs:486
+#: src/ui/scenes.rs:544
 msgid "Media Player"
 msgstr ""
 
@@ -1623,7 +1643,7 @@ msgstr ""
 msgid "Media Player ({folder})"
 msgstr ""
 
-#: src/ui/scenes.rs:2689
+#: src/ui/scenes.rs:2748
 msgid "Media Player source"
 msgstr ""
 
@@ -1653,7 +1673,7 @@ msgid "Media Player: {folder}, playing {track}"
 msgstr ""
 
 #: src/source_name.rs:262
-#: src/ui/scenes.rs:487
+#: src/ui/scenes.rs:545
 msgid "Media Scheduler"
 msgstr ""
 
@@ -1690,7 +1710,7 @@ msgstr ""
 msgid "Message from {user}"
 msgstr ""
 
-#: src/ui/mod.rs:3729
+#: src/ui/mod.rs:3757
 msgid "Message not sent: {message}"
 msgstr ""
 
@@ -1700,9 +1720,9 @@ msgid "Messages"
 msgstr ""
 
 #: src/source_name.rs:216
-#: src/ui/scenes.rs:481
-#: src/ui/scenes.rs:613
-#: src/ui/scenes.rs:622
+#: src/ui/scenes.rs:539
+#: src/ui/scenes.rs:672
+#: src/ui/scenes.rs:681
 msgid "Microphone"
 msgstr ""
 
@@ -1723,8 +1743,8 @@ msgstr ""
 msgid "Minutes past the hour"
 msgstr ""
 
-#: src/ui/buses.rs:910
-#: src/ui/buses.rs:923
+#: src/ui/chain_ui.rs:953
+#: src/ui/chain_ui.rs:966
 msgid "Missing plugins"
 msgstr ""
 
@@ -1732,11 +1752,11 @@ msgstr ""
 msgid "Mixer"
 msgstr ""
 
-#: src/ui/scenes.rs:1747
+#: src/ui/scenes.rs:1806
 msgid "Model"
 msgstr ""
 
-#: src/ui/scenes.rs:1601
+#: src/ui/scenes.rs:1660
 msgid "Model (blank uses provider default)"
 msgstr ""
 
@@ -1772,23 +1792,23 @@ msgstr ""
 msgid "Monitoring"
 msgstr ""
 
-#: src/ui/buses.rs:47
-#: src/ui/scenes.rs:39
-#: src/ui/scenes.rs:79
+#: src/ui/buses.rs:43
+#: src/ui/scenes.rs:44
+#: src/ui/scenes.rs:84
 msgid "Move down"
 msgstr ""
 
-#: src/ui/buses.rs:77
+#: src/ui/chain_ui.rs:170
 msgid "Move plugin down"
 msgstr ""
 
-#: src/ui/buses.rs:75
+#: src/ui/chain_ui.rs:168
 msgid "Move plugin up"
 msgstr ""
 
-#: src/ui/buses.rs:46
-#: src/ui/scenes.rs:38
-#: src/ui/scenes.rs:78
+#: src/ui/buses.rs:42
+#: src/ui/scenes.rs:43
+#: src/ui/scenes.rs:83
 msgid "Move up"
 msgstr ""
 
@@ -1824,11 +1844,11 @@ msgstr ""
 msgid "Muting"
 msgstr ""
 
-#: src/ui/scenes.rs:364
+#: src/ui/scenes.rs:416
 msgid "Name for the new scene:"
 msgstr ""
 
-#: src/ui/buses.rs:671
+#: src/ui/chain_ui.rs:692
 msgid "Name for this chain:"
 msgstr ""
 
@@ -1836,11 +1856,11 @@ msgstr ""
 msgid "Name of the application to capture (for example: firefox):"
 msgstr ""
 
-#: src/ui/buses.rs:421
+#: src/ui/buses.rs:206
 msgid "New bus name:"
 msgstr ""
 
-#: src/ui/scenes.rs:396
+#: src/ui/scenes.rs:448
 msgid "New name for the scene:"
 msgstr ""
 
@@ -1881,13 +1901,13 @@ msgstr ""
 msgid "No chats"
 msgstr ""
 
-#: src/ui/buses.rs:501
+#: src/ui/chain_ui.rs:497
 msgid ""
 "No compatible VST plugins are available. Scan for plugins in "
 "Preferences first."
 msgstr ""
 
-#: src/ui/scenes.rs:1850
+#: src/ui/scenes.rs:1909
 msgid "No effects profile"
 msgstr ""
 
@@ -1907,7 +1927,7 @@ msgstr ""
 msgid "No help available for this control."
 msgstr ""
 
-#: src/ui/scenes.rs:613
+#: src/ui/scenes.rs:672
 msgid "No microphones were found."
 msgstr ""
 
@@ -1915,16 +1935,16 @@ msgstr ""
 msgid "No plugin folders"
 msgstr ""
 
-#: src/ui/buses.rs:24
+#: src/ui/chain_ui.rs:121
 msgid "No plugins"
 msgstr ""
 
-#: src/ui/buses.rs:27
+#: src/ui/chain_ui.rs:124
 msgid "No saved chains"
 msgstr ""
 
 #: src/ui/home.rs:20
-#: src/ui/scenes.rs:23
+#: src/ui/scenes.rs:25
 msgid "No scenes"
 msgstr ""
 
@@ -1945,7 +1965,7 @@ msgstr ""
 msgid "No sound pack project is open"
 msgstr ""
 
-#: src/ui/scenes.rs:26
+#: src/ui/scenes.rs:28
 msgid "No sources"
 msgstr ""
 
@@ -1957,15 +1977,19 @@ msgstr ""
 msgid "No templates"
 msgstr ""
 
+#: src/ui/fx_params.rs:725
+msgid "No value called {typed}. Still {current}."
+msgstr ""
+
 #: src/keybind.rs:70
 msgid "None"
 msgstr ""
 
-#: src/ui/buses.rs:962
+#: src/ui/chain_ui.rs:1005
 msgid "None of the chain's plugins are available, so it cannot be applied."
 msgstr ""
 
-#: src/ui/mod.rs:2457
+#: src/ui/mod.rs:2482
 msgid "Not connected"
 msgstr ""
 
@@ -1977,7 +2001,7 @@ msgstr ""
 msgid "Not streaming"
 msgstr ""
 
-#: src/ui/scenes.rs:2958
+#: src/ui/scenes.rs:3017
 msgid ""
 "Nothing loud enough to be a voice was heard, so the level was left "
 "alone. Check that your microphone is in this scene, unmuted, and turned "
@@ -2017,15 +2041,15 @@ msgid "Numpad {digit}"
 msgstr ""
 
 #: src/bin/soundpack_manager.rs:479
-#: src/ui/buses.rs:968
+#: src/ui/chain_ui.rs:1011
 #: src/ui/connect_dialog.rs:981
 #: src/ui/keybinds_ui.rs:304
 #: src/ui/mastodon_templates.rs:97
 #: src/ui/mastodon_templates.rs:227
-#: src/ui/scenes.rs:707
-#: src/ui/scenes.rs:951
-#: src/ui/scenes.rs:2625
-#: src/ui/scenes.rs:2798
+#: src/ui/scenes.rs:766
+#: src/ui/scenes.rs:1010
+#: src/ui/scenes.rs:2684
+#: src/ui/scenes.rs:2857
 #: src/ui/schedule_ui.rs:203
 #: src/ui/scheduler_ui.rs:127
 #: src/ui/scheduler_ui.rs:392
@@ -2042,12 +2066,12 @@ msgstr ""
 msgid "Only show apps that have played sound"
 msgstr ""
 
-#: src/ui/buses.rs:84
+#: src/ui/chain_ui.rs:163
 msgid "Open &interface"
 msgstr ""
 
-#: src/ui/mod.rs:3110
-#: src/ui/mod.rs:3183
+#: src/ui/mod.rs:3138
+#: src/ui/mod.rs:3211
 msgid "Open Readme"
 msgstr ""
 
@@ -2071,7 +2095,8 @@ msgstr ""
 msgid "Open file..."
 msgstr ""
 
-#: src/ui/buses.rs:628
+#: src/ui/chain_ui.rs:157
+#: src/ui/chain_ui.rs:635
 msgid "Open interface"
 msgstr ""
 
@@ -2087,19 +2112,19 @@ msgstr ""
 msgid "Open or create a sound pack project first."
 msgstr ""
 
-#: src/ui/mod.rs:3098
+#: src/ui/mod.rs:3126
 msgid "Open the current stream's page in your browser"
 msgstr ""
 
-#: src/ui/mod.rs:3111
+#: src/ui/mod.rs:3139
 msgid "Open the documentation in your browser"
 msgstr ""
 
-#: src/ui/mod.rs:3103
+#: src/ui/mod.rs:3131
 msgid "Open the folder holding settings, logs, and crash dumps"
 msgstr ""
 
-#: src/ui/mod.rs:3116
+#: src/ui/mod.rs:3144
 msgid "Open the list of changes in your browser"
 msgstr ""
 
@@ -2111,15 +2136,15 @@ msgstr ""
 msgid "OpenAI API key"
 msgstr ""
 
-#: src/ui/scenes.rs:1740
+#: src/ui/scenes.rs:1799
 msgid "OpenAI speech model"
 msgstr ""
 
-#: src/ui/scenes.rs:1756
+#: src/ui/scenes.rs:1815
 msgid "OpenAI voice instructions"
 msgstr ""
 
-#: src/ui/scenes.rs:1737
+#: src/ui/scenes.rs:1796
 msgid "OpenAI voice settings"
 msgstr ""
 
@@ -2132,18 +2157,18 @@ msgstr ""
 msgid "Output device"
 msgstr ""
 
-#: src/ui/scenes.rs:1652
-#: src/ui/scenes.rs:1654
+#: src/ui/scenes.rs:1711
+#: src/ui/scenes.rs:1713
 msgid "Override similarity boost"
 msgstr ""
 
-#: src/ui/scenes.rs:1631
-#: src/ui/scenes.rs:1633
+#: src/ui/scenes.rs:1690
+#: src/ui/scenes.rs:1692
 msgid "Override stability"
 msgstr ""
 
-#: src/ui/scenes.rs:1676
-#: src/ui/scenes.rs:1678
+#: src/ui/scenes.rs:1735
+#: src/ui/scenes.rs:1737
 msgid "Override style exaggeration"
 msgstr ""
 
@@ -2159,8 +2184,8 @@ msgstr ""
 msgid "Page Up"
 msgstr ""
 
-#: src/ui/fx_params.rs:273
-#: src/ui/fx_params.rs:275
+#: src/ui/fx_params.rs:460
+#: src/ui/fx_params.rs:462
 msgid "Parameter"
 msgstr ""
 
@@ -2249,15 +2274,15 @@ msgstr ""
 msgid "Plugin interface"
 msgstr ""
 
-#: src/ui/fx_params.rs:257
+#: src/ui/fx_params.rs:440
 msgid "Plugin parameters"
 msgstr ""
 
-#: src/ui/mod.rs:2792
+#: src/ui/mod.rs:2820
 msgid "Plugins skipped"
 msgstr ""
 
-#: src/ui/scenes.rs:1904
+#: src/ui/scenes.rs:1963
 msgid "Polly language code; blank uses the voice default"
 msgstr ""
 
@@ -2303,7 +2328,7 @@ msgstr ""
 msgid "Preferences"
 msgstr ""
 
-#: src/ui/mod.rs:3081
+#: src/ui/mod.rs:3109
 msgid "Preferences...\tCtrl+,"
 msgstr ""
 
@@ -2327,10 +2352,10 @@ msgstr ""
 msgid "Preview sounds..."
 msgstr ""
 
-#: src/ui/scenes.rs:936
-#: src/ui/scenes.rs:937
-#: src/ui/scenes.rs:2534
-#: src/ui/scenes.rs:2542
+#: src/ui/scenes.rs:995
+#: src/ui/scenes.rs:996
+#: src/ui/scenes.rs:2593
+#: src/ui/scenes.rs:2601
 msgid "Preview voice"
 msgstr ""
 
@@ -2352,19 +2377,19 @@ msgstr ""
 msgid "Project: {name} at {path} (revision {revision})"
 msgstr ""
 
-#: src/ui/scenes.rs:2303
+#: src/ui/scenes.rs:2362
 msgid "Provider default"
 msgstr ""
 
-#: src/ui/mod.rs:2687
+#: src/ui/mod.rs:2712
 msgid "Pubsplash"
 msgstr ""
 
-#: src/ui/buses.rs:868
+#: src/ui/chain_ui.rs:907
 msgid "Pubsplash FX chain (*.pubfx)|*.pubfx"
 msgstr ""
 
-#: src/ui/buses.rs:812
+#: src/ui/chain_ui.rs:834
 msgid "Pubsplash FX chain (*.pubfx)|*.pubfx|All files (*.*)|*.*"
 msgstr ""
 
@@ -2372,14 +2397,14 @@ msgstr ""
 msgid "Pubsplash Sound Pack Manager"
 msgstr ""
 
-#: src/ui/mod.rs:1058
+#: src/ui/mod.rs:1067
 msgid ""
 "Pubsplash cannot work out the address listeners use for this stream. "
 "Check the Icecast server and mount point of the service you are "
 "streaming to."
 msgstr ""
 
-#: src/ui/mod.rs:3203
+#: src/ui/mod.rs:3231
 #: src/ui/update.rs:433
 msgid "Pubsplash could not find its own program file: {e}"
 msgstr ""
@@ -2388,7 +2413,7 @@ msgstr ""
 msgid "Pubsplash could not play that file: {message}"
 msgstr ""
 
-#: src/ui/mod.rs:1064
+#: src/ui/mod.rs:1073
 msgid ""
 "Pubsplash does not have a page address for this stream. Check the site "
 "address of the service you are streaming to."
@@ -2408,13 +2433,13 @@ msgstr ""
 msgid "Pubsplash is no longer connected to a streaming service"
 msgstr ""
 
-#: src/ui/mod.rs:2583
+#: src/ui/mod.rs:2608
 msgid ""
 "Pubsplash is not allowed to write to {folder}.\n\n"
 "Choose a different folder under Recording folder in Preferences."
 msgstr ""
 
-#: src/ui/mod.rs:1061
+#: src/ui/mod.rs:1070
 msgid ""
 "Pubsplash only knows a YouTube stream's address when the service names "
 "the video itself. Put the watch address or the video id in the YouTube "
@@ -2426,7 +2451,7 @@ msgstr ""
 msgid "Pubsplash sound packs (*.pspack)|*.pspack"
 msgstr ""
 
-#: src/ui/scenes.rs:1300
+#: src/ui/scenes.rs:1359
 msgid "Pubsplash text to speech is working."
 msgstr ""
 
@@ -2452,7 +2477,7 @@ msgid ""
 "start again."
 msgstr ""
 
-#: src/ui/mod.rs:3175
+#: src/ui/mod.rs:3203
 msgid ""
 "Pubsplash {version}\n\n"
 "An accessibility-first streaming app for Audio Pub."
@@ -2509,7 +2534,7 @@ msgid "Record this stream"
 msgstr ""
 
 #: src/ui/home.rs:371
-#: src/ui/mod.rs:3922
+#: src/ui/mod.rs:3950
 #: src/ui/preferences.rs:277
 msgid "Recording"
 msgstr ""
@@ -2519,11 +2544,11 @@ msgstr ""
 msgid "Recording folder"
 msgstr ""
 
-#: src/ui/mod.rs:2173
+#: src/ui/mod.rs:2198
 msgid "Recording started"
 msgstr ""
 
-#: src/ui/mod.rs:2175
+#: src/ui/mod.rs:2200
 msgid "Recording stopped"
 msgstr ""
 
@@ -2545,7 +2570,7 @@ msgstr ""
 msgid "Remove binding"
 msgstr ""
 
-#: src/ui/buses.rs:45
+#: src/ui/buses.rs:41
 msgid "Remove bus"
 msgstr ""
 
@@ -2559,7 +2584,7 @@ msgstr ""
 msgid "Remove pack"
 msgstr ""
 
-#: src/ui/buses.rs:74
+#: src/ui/chain_ui.rs:167
 msgid "Remove plugin"
 msgstr ""
 
@@ -2568,11 +2593,11 @@ msgstr ""
 msgid "Remove service"
 msgstr ""
 
-#: src/ui/scenes.rs:77
+#: src/ui/scenes.rs:82
 msgid "Remove source"
 msgstr ""
 
-#: src/ui/mod.rs:2238
+#: src/ui/mod.rs:2263
 msgid "Remove the '#' and everything after it from the URL."
 msgstr ""
 
@@ -2586,19 +2611,19 @@ msgstr ""
 msgid "Remove the sound pack {name}?"
 msgstr ""
 
-#: src/ui/mod.rs:2233
+#: src/ui/mod.rs:2258
 msgid ""
 "Remove the user name and password from the URL; enter them in the "
 "fields below."
 msgstr ""
 
-#: src/ui/buses.rs:421
-#: src/ui/buses.rs:431
+#: src/ui/buses.rs:206
+#: src/ui/buses.rs:216
 msgid "Rename bus"
 msgstr ""
 
-#: src/ui/scenes.rs:41
-#: src/ui/scenes.rs:396
+#: src/ui/scenes.rs:46
+#: src/ui/scenes.rs:448
 msgid "Rename scene"
 msgstr ""
 
@@ -2613,8 +2638,8 @@ msgstr ""
 msgid "Rescan all plugins"
 msgstr ""
 
-#: src/ui/scenes.rs:941
-#: src/ui/scenes.rs:943
+#: src/ui/scenes.rs:1000
+#: src/ui/scenes.rs:1002
 msgid "Reset this engine to defaults"
 msgstr ""
 
@@ -2643,13 +2668,14 @@ msgstr ""
 msgid "Save"
 msgstr ""
 
-#: src/ui/buses.rs:665
-#: src/ui/buses.rs:671
-#: src/ui/buses.rs:687
+#: src/ui/chain_ui.rs:674
+#: src/ui/chain_ui.rs:686
+#: src/ui/chain_ui.rs:692
+#: src/ui/chain_ui.rs:708
 msgid "Save chain"
 msgstr ""
 
-#: src/ui/buses.rs:127
+#: src/ui/chain_ui.rs:191
 msgid "Save chain..."
 msgstr ""
 
@@ -2657,12 +2683,12 @@ msgstr ""
 msgid "Save the collected logs"
 msgstr ""
 
-#: src/ui/buses.rs:687
+#: src/ui/chain_ui.rs:708
 msgid "Saved chain \"{unique}\"."
 msgstr ""
 
-#: src/ui/buses.rs:727
-#: src/ui/buses.rs:730
+#: src/ui/chain_ui.rs:750
+#: src/ui/chain_ui.rs:753
 msgid "Saved chains"
 msgstr ""
 
@@ -2672,15 +2698,15 @@ msgid_plural "Saved {n} sounds to the project."
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/ui/mod.rs:4016
+#: src/ui/mod.rs:4044
 msgid "Scan cancelled"
 msgstr ""
 
-#: src/ui/mod.rs:4006
+#: src/ui/mod.rs:4034
 msgid "Scan complete"
 msgstr ""
 
-#: src/ui/mod.rs:3992
+#: src/ui/mod.rs:4020
 msgid "Scan complete. {found} new plugins found ({total_known} known in total)."
 msgstr ""
 
@@ -2722,12 +2748,12 @@ msgstr ""
 #: src/keybind.rs:244
 #: src/ui/home.rs:56
 #: src/ui/home.rs:58
-#: src/ui/scenes.rs:33
-#: src/ui/scenes.rs:35
+#: src/ui/scenes.rs:38
+#: src/ui/scenes.rs:40
 msgid "Scenes"
 msgstr ""
 
-#: src/ui/mod.rs:2699
+#: src/ui/mod.rs:2724
 msgid "Scenes and Sources"
 msgstr ""
 
@@ -2735,7 +2761,7 @@ msgstr ""
 msgid "Schedule stream"
 msgstr ""
 
-#: src/ui/mod.rs:3076
+#: src/ui/mod.rs:3104
 msgid "Schedule stream..."
 msgstr ""
 
@@ -2776,6 +2802,12 @@ msgstr ""
 msgid "Select a sound file"
 msgstr ""
 
+#: src/ui/chain_ui.rs:137
+msgid ""
+"Select a source first. Effects belong to the source selected in the "
+"list above."
+msgstr ""
+
 #: src/keybind.rs:153
 msgid "Semicolon"
 msgstr ""
@@ -2803,13 +2835,13 @@ msgstr ""
 msgid "Send levels"
 msgstr ""
 
-#: src/ui/scenes.rs:924
-#: src/ui/scenes.rs:928
+#: src/ui/scenes.rs:983
+#: src/ui/scenes.rs:987
 msgid "Send speech to the stream"
 msgstr ""
 
-#: src/ui/scenes.rs:2614
-#: src/ui/scenes.rs:2616
+#: src/ui/scenes.rs:2673
+#: src/ui/scenes.rs:2675
 msgid "Send these sounds to the stream"
 msgstr ""
 
@@ -2842,7 +2874,7 @@ msgstr ""
 msgid "Set stream info"
 msgstr ""
 
-#: src/ui/mod.rs:3071
+#: src/ui/mod.rs:3099
 msgid "Set stream info..."
 msgstr ""
 
@@ -2874,11 +2906,11 @@ msgstr ""
 msgid "Setup streaming services"
 msgstr ""
 
-#: src/ui/mod.rs:3066
+#: src/ui/mod.rs:3094
 msgid "Setup streaming services..."
 msgstr ""
 
-#: src/ui/mod.rs:3315
+#: src/ui/mod.rs:3343
 msgid "ShellExecute failed with code {code}"
 msgstr ""
 
@@ -2907,12 +2939,12 @@ msgstr ""
 msgid "Shortest gap between requests, in milliseconds"
 msgstr ""
 
-#: src/ui/fx_params.rs:309
-#: src/ui/fx_params.rs:311
+#: src/ui/fx_params.rs:496
+#: src/ui/fx_params.rs:498
 msgid "Show unnamed parameters"
 msgstr ""
 
-#: src/ui/scenes.rs:2713
+#: src/ui/scenes.rs:2772
 msgid "Shuffle the folder"
 msgstr ""
 
@@ -2948,29 +2980,29 @@ msgstr ""
 msgid "Slash"
 msgstr ""
 
-#: src/ui/mod.rs:2774
+#: src/ui/mod.rs:2802
 msgid ""
-"Some plugins used by your buses are not installed on this machine and "
-"will be skipped until you install them and rescan:\n"
+"Some plugins used by your sources and buses are not installed on this "
+"machine and will be skipped until you install them and rescan:\n"
 msgstr ""
 
 #: src/source_name.rs:247
 #: src/source_name.rs:327
-#: src/ui/scenes.rs:485
+#: src/ui/scenes.rs:543
 msgid "Sound Events"
 msgstr ""
 
-#: src/ui/scenes.rs:2556
+#: src/ui/scenes.rs:2615
 msgid "Sound Events source"
 msgstr ""
 
 #: src/bin/soundpack_manager.rs:688
 #: src/bin/soundpack_manager.rs:695
-#: src/ui/mod.rs:3143
+#: src/ui/mod.rs:3171
 msgid "Sound Pack Manager"
 msgstr ""
 
-#: src/ui/mod.rs:3090
+#: src/ui/mod.rs:3118
 msgid "Sound Pack Manager..."
 msgstr ""
 
@@ -3003,8 +3035,8 @@ msgstr ""
 msgid "Source file (WAV or Opus)"
 msgstr ""
 
-#: src/ui/scenes.rs:64
-#: src/ui/scenes.rs:67
+#: src/ui/scenes.rs:69
+#: src/ui/scenes.rs:72
 msgid "Sources in selected scene"
 msgstr ""
 
@@ -3012,15 +3044,15 @@ msgstr ""
 msgid "Space"
 msgstr ""
 
-#: src/ui/scenes.rs:1700
+#: src/ui/scenes.rs:1759
 msgid "Speaker boost: off"
 msgstr ""
 
-#: src/ui/scenes.rs:1699
+#: src/ui/scenes.rs:1758
 msgid "Speaker boost: on"
 msgstr ""
 
-#: src/ui/scenes.rs:1698
+#: src/ui/scenes.rs:1757
 msgid "Speaker boost: provider default"
 msgstr ""
 
@@ -3033,24 +3065,24 @@ msgstr ""
 msgid "Speech engine"
 msgstr ""
 
-#: src/ui/scenes.rs:892
-#: src/ui/scenes.rs:899
+#: src/ui/scenes.rs:951
+#: src/ui/scenes.rs:958
 msgid "Speech rate"
 msgstr ""
 
-#: src/ui/scenes.rs:885
+#: src/ui/scenes.rs:944
 msgid "Speech rate (-10 to 10)"
 msgstr ""
 
-#: src/ui/scenes.rs:1948
+#: src/ui/scenes.rs:2007
 msgid "Speed: normal"
 msgstr ""
 
-#: src/ui/scenes.rs:1947
+#: src/ui/scenes.rs:2006
 msgid "Speed: provider default"
 msgstr ""
 
-#: src/ui/scenes.rs:1949
+#: src/ui/scenes.rs:2008
 msgid "Speed: slow"
 msgstr ""
 
@@ -3081,22 +3113,22 @@ msgid "Start or stop this media player"
 msgstr ""
 
 #: src/ui/home.rs:84
-#: src/ui/mod.rs:2122
+#: src/ui/mod.rs:2147
 msgid "Start recording"
 msgstr ""
 
 #: src/ui/home.rs:75
-#: src/ui/mod.rs:2106
+#: src/ui/mod.rs:2131
 msgid "Start streaming"
 msgstr ""
 
-#: src/ui/scenes.rs:2752
+#: src/ui/scenes.rs:2811
 msgid "Start turning down &at"
 msgstr ""
 
-#: src/ui/scenes.rs:2759
-#: src/ui/scenes.rs:2767
-#: src/ui/scenes.rs:2951
+#: src/ui/scenes.rs:2818
+#: src/ui/scenes.rs:2826
+#: src/ui/scenes.rs:3010
 msgid "Start turning down at"
 msgstr ""
 
@@ -3141,11 +3173,11 @@ msgstr ""
 msgid "Stop Media"
 msgstr ""
 
-#: src/ui/mod.rs:2120
+#: src/ui/mod.rs:2145
 msgid "Stop recording"
 msgstr ""
 
-#: src/ui/mod.rs:2107
+#: src/ui/mod.rs:2132
 msgid "Stop streaming"
 msgstr ""
 
@@ -3157,11 +3189,11 @@ msgstr ""
 msgid "Stopping"
 msgstr ""
 
-#: src/ui/mod.rs:486
+#: src/ui/mod.rs:487
 msgid "Stopping the stream"
 msgstr ""
 
-#: src/ui/mod.rs:266
+#: src/ui/mod.rs:267
 #: src/ui/stream_info_dialog.rs:207
 msgid "Stream"
 msgstr ""
@@ -3170,8 +3202,8 @@ msgstr ""
 msgid "Stream Archiving"
 msgstr ""
 
-#: src/ui/scenes.rs:1720
-#: src/ui/scenes.rs:1722
+#: src/ui/scenes.rs:1779
+#: src/ui/scenes.rs:1781
 msgid "Stream audio as it is generated"
 msgstr ""
 
@@ -3202,7 +3234,7 @@ msgstr ""
 msgid "Streaming"
 msgstr ""
 
-#: src/ui/mod.rs:3622
+#: src/ui/mod.rs:3650
 msgid "Streaming problem"
 msgstr ""
 
@@ -3211,11 +3243,11 @@ msgstr ""
 msgid "Streaming services"
 msgstr ""
 
-#: src/ui/mod.rs:485
+#: src/ui/mod.rs:486
 msgid "Streaming started"
 msgstr ""
 
-#: src/ui/mod.rs:495
+#: src/ui/mod.rs:496
 msgid "Streaming stopped"
 msgstr ""
 
@@ -3223,7 +3255,7 @@ msgstr ""
 msgid "Streaming to YouTube (FFmpeg)"
 msgstr ""
 
-#: src/ui/scenes.rs:1806
+#: src/ui/scenes.rs:1865
 msgid "Style intensity"
 msgstr ""
 
@@ -3255,7 +3287,7 @@ msgstr ""
 msgid "Switching scene in"
 msgstr ""
 
-#: src/ui/scenes.rs:1892
+#: src/ui/scenes.rs:1951
 msgid "Synthesis engine"
 msgstr ""
 
@@ -3263,7 +3295,7 @@ msgstr ""
 msgid "Tab"
 msgstr ""
 
-#: src/ui/scenes.rs:2926
+#: src/ui/scenes.rs:2985
 msgid "Talk normally for five seconds, starting now."
 msgstr ""
 
@@ -3288,7 +3320,7 @@ msgid "Test"
 msgstr ""
 
 #: src/source_name.rs:245
-#: src/ui/scenes.rs:484
+#: src/ui/scenes.rs:542
 msgid "Text-to-Speech"
 msgstr ""
 
@@ -3296,7 +3328,7 @@ msgstr ""
 msgid "Text-to-Speech ({voice})"
 msgstr ""
 
-#: src/ui/scenes.rs:819
+#: src/ui/scenes.rs:878
 msgid "Text-to-Speech source"
 msgstr ""
 
@@ -3312,7 +3344,7 @@ msgstr ""
 msgid "Text-to-Speech: {engine}, {voice}"
 msgstr ""
 
-#: src/ui/mod.rs:2228
+#: src/ui/mod.rs:2253
 msgid ""
 "That URL has no site name in it. It should look like "
 "https://audiopub.site"
@@ -3341,13 +3373,13 @@ msgstr ""
 msgid "That strip is not in the mixer right now"
 msgstr ""
 
-#: src/ui/mod.rs:2588
+#: src/ui/mod.rs:2613
 msgid ""
 "The MP3 encoder for the recording could not be created, so nothing "
 "could be written."
 msgstr ""
 
-#: src/ui/mod.rs:3206
+#: src/ui/mod.rs:3234
 msgid ""
 "The Sound Pack Manager ({path}) is missing. Reinstall Pubsplash to "
 "restore it."
@@ -3359,7 +3391,7 @@ msgid ""
 "ended."
 msgstr ""
 
-#: src/ui/scenes.rs:2942
+#: src/ui/scenes.rs:3001
 msgid "The audio engine did not answer; nothing was changed."
 msgstr ""
 
@@ -3369,11 +3401,11 @@ msgid ""
 "broadcast has ended."
 msgstr ""
 
-#: src/ui/scenes.rs:2534
+#: src/ui/scenes.rs:2593
 msgid "The engine returned no audio."
 msgstr ""
 
-#: src/ui/mod.rs:2580
+#: src/ui/mod.rs:2605
 msgid ""
 "The folder {folder} does not exist.\n\n"
 "Choose a folder that does exist under Recording folder in Preferences, "
@@ -3398,20 +3430,20 @@ msgstr ""
 msgid "The parent folder does not exist."
 msgstr ""
 
-#: src/ui/mod.rs:2593
+#: src/ui/mod.rs:2618
 msgid ""
 "The recording did not start.\n\n"
 "{cause}"
 msgstr ""
 
-#: src/ui/mod.rs:2585
+#: src/ui/mod.rs:2610
 msgid ""
 "The recording file could not be created in {folder}.\n\n"
 "Check that the folder exists and can be written to, or choose another "
 "one under Recording folder in Preferences."
 msgstr ""
 
-#: src/ui/mod.rs:4017
+#: src/ui/mod.rs:4045
 msgid "The scan was cancelled. Nothing was saved."
 msgstr ""
 
@@ -3419,17 +3451,17 @@ msgstr ""
 msgid "The sound pack could not be loaded."
 msgstr ""
 
-#: src/ui/mod.rs:2412
+#: src/ui/mod.rs:2437
 msgid ""
 "The still image {path} could not be found. Choose another, or clear the "
 "box to send a plain frame instead."
 msgstr ""
 
-#: src/ui/mod.rs:1055
+#: src/ui/mod.rs:1064
 msgid "The stream is shutting down."
 msgstr ""
 
-#: src/ui/mod.rs:1053
+#: src/ui/mod.rs:1062
 msgid "The stream is still connecting, so its page is not available yet."
 msgstr ""
 
@@ -3441,7 +3473,7 @@ msgstr ""
 msgid "The updater ({path}) is missing. Reinstall Pubsplash to restore it."
 msgstr ""
 
-#: src/ui/buses.rs:706
+#: src/ui/chain_ui.rs:729
 msgid "There are no saved chains yet."
 msgstr ""
 
@@ -3449,26 +3481,26 @@ msgstr ""
 msgid "There is no bus called {name}"
 msgstr ""
 
-#: src/ui/mod.rs:1194
-#: src/ui/mod.rs:1232
+#: src/ui/mod.rs:1208
+#: src/ui/mod.rs:1246
 msgid "There is no media player called {source_name} in this scene"
 msgstr ""
 
-#: src/ui/mod.rs:2785
+#: src/ui/mod.rs:2813
 msgid ""
 "These plugins are installed but could not be loaded, so they will be "
 "skipped:\n"
 msgstr ""
 
-#: src/ui/buses.rs:860
+#: src/ui/chain_ui.rs:899
 msgid "This chain is empty; there is nothing to export."
 msgstr ""
 
-#: src/ui/buses.rs:666
+#: src/ui/chain_ui.rs:687
 msgid "This chain is empty; there is nothing to save."
 msgstr ""
 
-#: src/ui/scenes.rs:1576
+#: src/ui/scenes.rs:1635
 msgid "This engine has no additional voice settings."
 msgstr ""
 
@@ -3476,11 +3508,11 @@ msgstr ""
 msgid "This engine needs no settings."
 msgstr ""
 
-#: src/ui/mod.rs:267
+#: src/ui/mod.rs:268
 msgid "This is just a stream"
 msgstr ""
 
-#: src/ui/scenes.rs:2789
+#: src/ui/scenes.rs:2848
 msgid ""
 "This music is mixed into the stream directly. A Desktop Audio source "
 "will not capture it a second time, because Desktop Audio leaves "
@@ -3493,7 +3525,11 @@ msgstr ""
 msgid "This pack has no sound for that event."
 msgstr ""
 
-#: src/ui/fx_params.rs:252
+#: src/ui/fx_params.rs:733
+msgid "This plugin does not accept typed values. Still {current}."
+msgstr ""
+
+#: src/ui/fx_params.rs:432
 msgid "This plugin exposes no automatable parameters."
 msgstr ""
 
@@ -3501,11 +3537,11 @@ msgstr ""
 msgid "This plugin has no interface of its own. Use \"Edit parameters\" instead."
 msgstr ""
 
-#: src/ui/buses.rs:629
+#: src/ui/chain_ui.rs:636
 msgid "This plugin is not loaded, so it has no interface to open."
 msgstr ""
 
-#: src/ui/buses.rs:611
+#: src/ui/chain_ui.rs:619
 msgid "This plugin is not loaded, so it has no parameters to edit."
 msgstr ""
 
@@ -3532,11 +3568,11 @@ msgstr ""
 msgid "Title"
 msgstr ""
 
-#: src/ui/mod.rs:3072
+#: src/ui/mod.rs:3100
 msgid "Title, description, and archiving for the stream"
 msgstr ""
 
-#: src/ui/mod.rs:3121
+#: src/ui/mod.rs:3149
 msgid "Tools"
 msgstr ""
 
@@ -3544,16 +3580,16 @@ msgstr ""
 msgid "Tuesday"
 msgstr ""
 
-#: src/ui/scenes.rs:2726
+#: src/ui/scenes.rs:2785
 msgid "Turn the music down while other sources are playing"
 msgstr ""
 
-#: src/ui/scenes.rs:2732
+#: src/ui/scenes.rs:2791
 msgid "Turned-down &level"
 msgstr ""
 
-#: src/ui/scenes.rs:2739
-#: src/ui/scenes.rs:2745
+#: src/ui/scenes.rs:2798
+#: src/ui/scenes.rs:2804
 msgid "Turned-down level"
 msgstr ""
 
@@ -3611,21 +3647,21 @@ msgstr ""
 msgid "Validation failed: {error}"
 msgstr ""
 
-#: src/ui/fx_params.rs:282
-#: src/ui/fx_params.rs:288
+#: src/ui/fx_params.rs:469
+#: src/ui/fx_params.rs:475
 msgid "Value"
 msgstr ""
 
-#: src/ui/fx_params.rs:301
+#: src/ui/fx_params.rs:488
 msgid "Value entry"
 msgstr ""
 
-#: src/ui/mod.rs:3107
+#: src/ui/mod.rs:3135
 msgid "Version information"
 msgstr ""
 
-#: src/ui/mod.rs:3115
-#: src/ui/mod.rs:3188
+#: src/ui/mod.rs:3143
+#: src/ui/mod.rs:3216
 msgid "View Changelog"
 msgstr ""
 
@@ -3633,38 +3669,38 @@ msgstr ""
 msgid "View message"
 msgstr ""
 
-#: src/ui/scenes.rs:854
+#: src/ui/scenes.rs:913
 msgid "Voice"
 msgstr ""
 
-#: src/ui/scenes.rs:2376
+#: src/ui/scenes.rs:2435
 msgid "Voice catalog for {name} is refreshing automatically."
 msgstr ""
 
-#: src/ui/scenes.rs:1764
+#: src/ui/scenes.rs:1823
 msgid "Voice instructions (GPT-4o mini TTS)"
 msgstr ""
 
-#: src/ui/scenes.rs:914
-#: src/ui/scenes.rs:2440
+#: src/ui/scenes.rs:973
+#: src/ui/scenes.rs:2499
 msgid "Voice pitch"
 msgstr ""
 
-#: src/ui/scenes.rs:902
+#: src/ui/scenes.rs:961
 msgid "Voice pitch (-50 to 50)"
 msgstr ""
 
-#: src/ui/scenes.rs:2442
+#: src/ui/scenes.rs:2501
 msgid "Voice pitch, not supported by this engine"
 msgstr ""
 
-#: src/ui/scenes.rs:869
-#: src/ui/scenes.rs:876
-#: src/ui/scenes.rs:882
+#: src/ui/scenes.rs:928
+#: src/ui/scenes.rs:935
+#: src/ui/scenes.rs:941
 msgid "Voice volume"
 msgstr ""
 
-#: src/ui/scenes.rs:2390
+#: src/ui/scenes.rs:2449
 msgid "Voice. {text}"
 msgstr ""
 
@@ -3690,8 +3726,8 @@ msgstr ""
 msgid "Wednesday"
 msgstr ""
 
-#: src/ui/scenes.rs:491
-#: src/ui/scenes.rs:492
+#: src/ui/scenes.rs:549
+#: src/ui/scenes.rs:550
 msgid "What kind of source?"
 msgstr ""
 
@@ -3705,16 +3741,16 @@ msgstr ""
 msgid "Which application should this source capture?"
 msgstr ""
 
-#: src/ui/scenes.rs:621
-#: src/ui/scenes.rs:626
+#: src/ui/scenes.rs:680
+#: src/ui/scenes.rs:685
 msgid "Which microphone should this source use?"
 msgstr ""
 
-#: src/ui/mod.rs:2811
+#: src/ui/mod.rs:2839
 msgid "You are currently streaming. Stop the stream and exit?"
 msgstr ""
 
-#: src/ui/mod.rs:1050
+#: src/ui/mod.rs:1059
 msgid "You are not streaming. Start a stream, and this will open its page."
 msgstr ""
 
@@ -3758,7 +3794,7 @@ msgstr ""
 msgid "hour"
 msgstr ""
 
-#: src/ui/buses.rs:519
+#: src/ui/chain_ui.rs:523
 msgid "it is no longer in the plugin cache. Rescan for plugins in Preferences."
 msgstr ""
 
@@ -3770,7 +3806,7 @@ msgstr ""
 msgid "minute"
 msgstr ""
 
-#: src/ui/scenes.rs:2327
+#: src/ui/scenes.rs:2386
 msgid "model"
 msgstr ""
 
@@ -3802,7 +3838,7 @@ msgstr ""
 msgid "somebody else in the room is already using that name"
 msgstr ""
 
-#: src/ui/scenes.rs:2325
+#: src/ui/scenes.rs:2384
 msgid "synthesis engine"
 msgstr ""
 
@@ -3840,10 +3876,6 @@ msgstr ""
 
 #: src/net/pubchat.rs:246
 msgid "there is nothing to send"
-msgstr ""
-
-#: src/ui/fx_params.rs:529
-msgid "this plugin does not accept typed values, still {current}"
 msgstr ""
 
 #: src/ui/api.rs:30
@@ -3898,15 +3930,15 @@ msgstr ""
 msgid "{current} (not running)"
 msgstr ""
 
-#: src/ui/scenes.rs:2951
+#: src/ui/scenes.rs:3010
 msgid "{db} dB"
 msgstr ""
 
-#: src/ui/fx_params.rs:129
+#: src/ui/fx_params.rs:308
 msgid "{display} {label}"
 msgstr ""
 
-#: src/ui/scenes.rs:2331
+#: src/ui/scenes.rs:2390
 msgid "{engine} {noun}"
 msgstr ""
 
@@ -3930,23 +3962,23 @@ msgstr ""
 msgid "{label} (unavailable)"
 msgstr ""
 
-#: src/ui/mod.rs:1210
+#: src/ui/mod.rs:1224
 msgid "{label}, next track"
 msgstr ""
 
-#: src/ui/mod.rs:1203
+#: src/ui/mod.rs:1217
 msgid "{label}, paused"
 msgstr ""
 
-#: src/ui/mod.rs:1201
+#: src/ui/mod.rs:1215
 msgid "{label}, playing"
 msgstr ""
 
-#: src/ui/mod.rs:1209
+#: src/ui/mod.rs:1223
 msgid "{label}, playing {next}"
 msgstr ""
 
-#: src/ui/mod.rs:1200
+#: src/ui/mod.rs:1214
 msgid "{label}, playing {track}"
 msgstr ""
 
@@ -3960,7 +3992,7 @@ msgstr ""
 msgid "{name} (active)"
 msgstr ""
 
-#: src/ui/scenes.rs:251
+#: src/ui/scenes.rs:289
 msgid "{name} (default)"
 msgstr ""
 
@@ -3988,7 +4020,11 @@ msgstr ""
 msgid "{name} muted"
 msgstr ""
 
-#: src/ui/scenes.rs:2373
+#: src/ui/fx_params.rs:442
+msgid "{name} parameters"
+msgstr ""
+
+#: src/ui/scenes.rs:2432
 msgid "{name} reported no voices."
 msgstr ""
 
@@ -4005,10 +4041,14 @@ msgstr ""
 msgid "{name} volume (monitoring)"
 msgstr ""
 
-#: src/ui/buses.rs:527
+#: src/ui/chain_ui.rs:531
 msgid ""
 "{name} was added but could not be loaded, so it will not process audio: "
 "{reason}"
+msgstr ""
+
+#: src/ui/fx_params.rs:716
+msgid "{name}: {value}"
 msgstr ""
 
 #: src/net/pubchat.rs:317
@@ -4021,18 +4061,18 @@ msgid_plural "{n} items"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/ui/scenes.rs:2375
+#: src/ui/scenes.rs:2434
 msgid "{n} voices available for {name}."
 msgstr ""
 
-#: src/ui/scenes.rs:804
+#: src/ui/scenes.rs:863
 msgid ""
 "{process_name} does not appear to be running. The source will stay "
 "silent until it starts, and will be picked up automatically when it "
 "does."
 msgstr ""
 
-#: src/ui/mod.rs:2221
+#: src/ui/mod.rs:2246
 msgid "{scheme} is not a web address scheme. The URL should start with https://"
 msgstr ""
 
@@ -4053,18 +4093,18 @@ msgstr ""
 msgid "{source} ({scene})"
 msgstr ""
 
-#: src/ui/mod.rs:2212
+#: src/ui/mod.rs:2237
 msgid "{url} is not a valid URL. It should look like https://audiopub.site"
 msgstr ""
 
-#: src/ui/mod.rs:2386
+#: src/ui/mod.rs:2411
 msgid ""
 "{url} is not an RTMP address. It should begin with rtmp:// or rtmps://; "
 "YouTube's is {youtube}."
 msgstr ""
 
 #: src/ui/chat.rs:248
-#: src/ui/mod.rs:1474
+#: src/ui/mod.rs:1488
 msgid "{user}: {content}"
 msgstr ""
 
@@ -6108,6 +6148,107 @@ msgstr ""
 #: help.toml
 msgctxt "tab.home.switchScene"
 msgid "Transition to the selected scene."
+msgstr ""
+
+#. Context help for the Export source FX chain file button.
+#: help.toml
+msgctxt "tab.scenes.chainExport"
+msgid ""
+"Saves the selected source's effects, with their current settings, as an "
+"FX chain file you can share or move to another computer."
+msgstr ""
+
+#. Context help for the Import FX chain file for source button.
+#: help.toml
+msgctxt "tab.scenes.chainImport"
+msgid ""
+"Select an FX chain file to add to your library of chains. You are then "
+"asked whether to apply it to the selected source."
+msgstr ""
+
+#. Context help for the Load FX chain from library onto source button.
+#: help.toml
+msgctxt "tab.scenes.chainLoad"
+msgid "Replaces the selected source's effects with a chain from your library."
+msgstr ""
+
+#. Context help for the Save source FX chain to library button.
+#: help.toml
+msgctxt "tab.scenes.chainSave"
+msgid ""
+"Saves the selected source's effects, with their current settings, to "
+"your library of FX chains under a name you choose."
+msgstr ""
+
+#. Context help for the Add plugin to source button.
+#: help.toml
+msgctxt "tab.scenes.fxAdd"
+msgid ""
+"Add a plugin to the selected source's effects. It processes that source "
+"only, so a plugin added to the microphone changes the microphone and "
+"nothing else. Plugins are processed from the top down, so order matters."
+msgstr ""
+
+#. Context help for the Bypass selected source plugin checkbox.
+#: help.toml
+msgctxt "tab.scenes.fxBypass"
+msgid ""
+"When checked, the selected plugin is skipped and the source passes "
+"through it unchanged. The plugin stays in the list with its settings."
+msgstr ""
+
+#. Context help for the Move source plugin down button.
+#: help.toml
+msgctxt "tab.scenes.fxDown"
+msgid ""
+"Move the selected plugin down in the selected source's effects. "
+"CTRL+Down will also work as long as focus is on the list of effects."
+msgstr ""
+
+#. Context help for the Edit source plugin parameters button.
+#: help.toml
+msgctxt "tab.scenes.fxEditParams"
+msgid ""
+"Opens a dialog with a slider for each of the selected plugin's "
+"parameters, one at a time. The slider announces the plugin's own text "
+"for each value. Use this for a plugin that has no interface of its own, "
+"or one whose interface a screen reader cannot read."
+msgstr ""
+
+#. Context help for the Effects chain on the selected source.
+#: help.toml
+msgctxt "tab.scenes.fxList"
+msgid ""
+"This is the list of effects on the source selected in the Sources list "
+"above. They process that source alone, before its volume and mute. Use "
+"arrow keys, page up, page down, home, and end to select an effect. "
+"CTRL+Up and CTRL+Down move the selected effect, and delete removes it. "
+"Effects process from top to bottom, so order matters."
+msgstr ""
+
+#. Context help for the Open source plugin interface button.
+#: help.toml
+msgctxt "tab.scenes.fxOpenInterface"
+msgid ""
+"If the selected plugin has an accessible interface, pressing this "
+"button will open it. From there, you can press F6 to try to focus the "
+"window and use standard controls to work with it. If you know the "
+"plugin doesn't have an accessible interface, it's better to use the "
+"edit parameters button instead."
+msgstr ""
+
+#. Context help for the Remove plugin from source button.
+#: help.toml
+msgctxt "tab.scenes.fxRemove"
+msgid "Remove the selected plugin from the selected source's effects."
+msgstr ""
+
+#. Context help for the Move source plugin up button.
+#: help.toml
+msgctxt "tab.scenes.fxUp"
+msgid ""
+"Move the selected plugin up in the selected source's effects. CTRL+Up "
+"will also work as long as focus is on the list of effects."
 msgstr ""
 
 #. Context help for the Add scene button.

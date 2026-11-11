@@ -301,7 +301,7 @@ pub fn open_editor(
         let app = app.clone();
         bypass.clone().on_toggled(move |_| {
             fx::set_bypass(&app, target, slot, bypass.get_value());
-            super::buses::refresh_fx_list(&app);
+            super::chain_ui::refresh_all(&app);
         });
     }
     {

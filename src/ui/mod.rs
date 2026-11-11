@@ -6,6 +6,7 @@ mod api;
 mod app_picker;
 mod audio_prefs;
 mod buses;
+mod chain_ui;
 mod chat;
 mod connect_dialog;
 mod cue_feed;
@@ -845,7 +846,11 @@ pub struct Widgets {
     pub chat_send: Button,
     pub scenes_list: ListBox,
     pub sources_list: ListBox,
+    /// The selected source's FX chain, and its bypass box. See [`chain_ui`].
+    pub source_fx_list: ListBox,
+    pub source_fx_bypass: CheckBox,
     pub bus_list: ListBox,
+    /// The selected bus's FX chain (or the master's).
     pub fx_list: ListBox,
     /// Reflects (and toggles) the selected plugin's bypass state.
     pub fx_bypass: CheckBox,
@@ -906,12 +911,16 @@ pub struct App {
     /// so the pump can drive it; dropped by `preferences::show` on its way out,
     /// which is what cancels the worker.
     pub ffmpeg_download: RefCell<Option<ffmpeg_prefs::Download>>,
-    /// Live plugin instances, mirroring `config.buses`.
+    /// Live plugin instances, mirroring the config's FX chains.
     pub fx: RefCell<FxRuntime>,
     /// Plugin instances taken out of [`App::fx`] and not yet released. See
     /// [`fx::orphan`] — dropping one runs third-party teardown code that can
     /// re-enter the UI, so it must not happen under a `RefCell` borrow.
     pub orphaned_plugins: RefCell<Vec<Arc<crate::vst::PluginInstance>>>,
+    /// Which chain each FX chain editor last showed. A cell of its own rather
+    /// than a field of [`Runtime`]: it is written on every refresh of the
+    /// Sources list, and nothing else may be holding it when that happens.
+    pub shown_chains: RefCell<chain_ui::ShownChains>,
     /// Named FX chains saved to fx_chains.json.
     pub chain_library: RefCell<crate::fx::FxChainLibrary>,
     /// One worker per sound-event source, feeding its cues into the mixer. See
@@ -1074,15 +1083,20 @@ pub struct ShutdownCue {
     deadline: Instant,
 }
 
-/// The live plugin instances backing the FX chains, kept in lockstep with
-/// `config.buses`. A `None` slot is a chain entry whose plugin is missing on
-/// this machine (it processes as a gap). See `ui::fx` for the lifecycle.
+/// The live plugin instances backing the FX chains, kept in lockstep with the
+/// config. A `None` slot is a chain entry whose plugin is missing on this
+/// machine (it processes as a gap). See `ui::fx` for the lifecycle.
 #[derive(Default)]
 pub struct FxRuntime {
+    /// Every source's chain in every scene, filed by scene and source name and
+    /// matching that source's `SourceConfig.chain` slot for slot. By name where
+    /// the other two are by index, and for every scene rather than only the
+    /// live one — `ui::fx` explains both.
+    pub sources: std::collections::HashMap<fx::SourceKey, fx::Instances>,
     /// `buses[bus][slot]`, matching `config.buses.buses[bus].chain[slot]`.
-    pub buses: Vec<Vec<Option<Arc<crate::vst::PluginInstance>>>>,
+    pub buses: Vec<fx::Instances>,
     /// Matching `config.buses.master_chain`.
-    pub master: Vec<Option<Arc<crate::vst::PluginInstance>>>,
+    pub master: fx::Instances,
 }
 
 /// Plays an event through each enabled Sound Events source in the active scene.
@@ -1700,6 +1714,10 @@ impl App {
         self.engine
             .send(EngineCommand::SetRouting(Box::new(RoutingUpdate {
                 sources: Some(specs),
+                // Always with the sources: replacing them starts each from an
+                // empty chain, so a list sent alone would strip every source's
+                // effects until something else happened to send them.
+                source_chains: fx::source_chain_specs(self),
                 ..Default::default()
             })));
         self.send_master_levels();
@@ -1711,9 +1729,16 @@ impl App {
     /// the wrong bus.
     pub fn sync_engine_routing(self: &Rc<Self>) {
         let (buses, master_chain) = fx::routing_specs(self);
+        let sources = self.source_specs();
+        // Only alongside the sources they belong to; see `sync_engine_sources`.
+        let source_chains = match sources {
+            Some(_) => fx::source_chain_specs(self),
+            None => Vec::new(),
+        };
         self.engine
             .send(EngineCommand::SetRouting(Box::new(RoutingUpdate {
-                sources: self.source_specs(),
+                sources,
+                source_chains,
                 buses: Some(buses),
                 master_chain: Some(master_chain),
             })));
@@ -2713,8 +2738,8 @@ pub fn build(app: Rc<App>) {
     let (overview, stream_button, record_button, home_scene_list, mixer_panel) =
         home::build(&app, &home_panel);
     let (chat_list, chat_input, chat_reconnect, chat_send) = chat::build(&app, &chat_panel);
-    let (scenes_list, sources_list) = scenes::build(&app, &scenes_panel);
-    let (bus_list, fx_list, fx_bypass) = buses::build(&app, &buses_panel);
+    let (scenes_list, sources_list, source_fx) = scenes::build(&app, &scenes_panel);
+    let (bus_list, bus_fx) = buses::build(&app, &buses_panel);
     let (usage_list, usage_refresh) = api::build(&app, &api_panel);
 
     *app.widgets.borrow_mut() = Some(Widgets {
@@ -2734,9 +2759,11 @@ pub fn build(app: Rc<App>) {
         chat_send,
         scenes_list,
         sources_list,
+        source_fx_list: source_fx.list,
+        source_fx_bypass: source_fx.bypass,
         bus_list,
-        fx_list,
-        fx_bypass,
+        fx_list: bus_fx.list,
+        fx_bypass: bus_fx.bypass,
         usage_list,
         usage_refresh,
     });
@@ -2754,6 +2781,7 @@ pub fn build(app: Rc<App>) {
     scenes::refresh_sources_list(&app);
     buses::refresh_bus_list(&app);
     buses::refresh_fx_list(&app);
+    chain_ui::refresh(&app, chain_ui::ChainHost::Sources);
     api::refresh_usage(&app);
     app.refresh_stream_ui();
     // Buses before sources: sources reference buses by index.
@@ -2772,7 +2800,7 @@ pub fn build(app: Rc<App>) {
         let mut message = String::new();
         if !uninstalled.is_empty() {
             message.push_str(&t!(
-                "Some plugins used by your buses are not installed on this machine and will be skipped until you install them and rescan:\n"
+                "Some plugins used by your sources and buses are not installed on this machine and will be skipped until you install them and rescan:\n"
             ));
             for failure in &uninstalled {
                 message.push_str(&format!("\n- {}", failure.describe()));

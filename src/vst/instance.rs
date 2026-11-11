@@ -184,6 +184,26 @@ impl PluginInstance {
         }
     }
 
+    /// How many steps a parameter has above its lowest position; 0 means
+    /// continuous. Only VST3 says: VST2's equivalent is an optional opcode
+    /// almost nothing implements, so a VST2 parameter is always treated as
+    /// continuous and found its detents by the dialog's own stepping.
+    pub fn param_steps(&self, index: i32) -> u32 {
+        match self {
+            Self::Vst2(_) => 0,
+            Self::Vst3(plugin) => plugin.param_steps(index),
+        }
+    }
+
+    /// The text the plugin would show for `value`, without setting it. `None`
+    /// when the format has no way to ask (VST2 formats only the current value).
+    pub fn param_display_at(&self, index: i32, value: f32) -> Option<String> {
+        match self {
+            Self::Vst2(_) => None,
+            Self::Vst3(plugin) => plugin.param_display_at(index, value),
+        }
+    }
+
     /// Re-reads the plugin's parameter list, for formats that can change it at
     /// runtime. Call before showing parameters to the user.
     pub fn refresh_params(&self) {

@@ -4,6 +4,14 @@
 
 ### Additions
 
+### Fixes
+
+### Changes
+
+## 2.1.0
+
+### Additions
+
 - **Chat for Icecast services.** A direct Icecast mount can now have chat: a new `chat/` server ships in this repository as a single self-contained binary, and an Icecast service points at it with a Chat server, Chat room, Your name in chat and Chat host key in Setup streaming services. The Chat tab then reads and sends exactly as it does for an Audio Pub stream, and messages are spoken by whichever speech engine is configured.
 
 - **Your name in chat** is what listeners see against everything you say in the room. It is its own box beside the room and the host key, because the name a service is given in the services list is chosen to be recognised at a glance by you, and is rarely the name to be introduced by to an audience. Leave it empty and the service's nickname is used, as before.
@@ -70,7 +78,23 @@
 
 - **The local system voice speaks on macOS**, through the Mac's own installed voices. It appears in the engine picker as **System voice** rather than SAPI 5, and its voice list, rate, pitch and volume work as they do on Windows. A settings file moves between the two platforms unchanged.
 
+- **Effects on a single source.** Every source now has its own effect chain, so a plugin can go on the microphone alone without a bus. On **Scenes and Sources**, select a source and use the **Effects on selected source** list under the Sources list: add, remove, reorder and bypass plugins, edit their parameters, open their interface, and save, load, import or export the chain, exactly as on the Buses tab.
+
+- A source's effects run before its volume and mute, and everything after the source hears the result: the master output, its bus sends, local monitoring, and the level that makes a Media Player duck.
+
+- Sources in every scene keep their effects loaded, so switching scenes does not wait for a plugin, and a source in a scene that is not live can still have its plugins edited.
+
+- **Stepped plugin parameters are a slider with one position per value.** A parameter that chooses between named values — a voice, a mode, an on/off switch — moves exactly one value per arrow press, and the slider announces the plugin's own name for it.
+
+- **A stepped VST3 parameter can be set by typing its value's name** in the value entry box. The start of a name is enough when only one value begins that way.
+
+- The parameters dialog is titled with the plugin's name, and opens on the value slider when the plugin has a single parameter.
+
+- Adding a plugin to a chain selects it, so Edit parameters and Bypass act on it straight away.
+
 ### Fixes
+
+- **Microsoft Edge voices stopped speaking.** Microsoft changed the token its read-aloud service asks for, and refused every request that still carried the old one, so the voice list loaded but nothing was ever spoken. Pubsplash now sends the new token, and Edge voices work again.
 
 - **The interface language could follow a setting that has nothing to do with what language you read.** "Follow Windows" asked Windows for the regional format — the setting that says how dates, numbers and currency are written — rather than the language Windows is displayed in, and Windows lets you set those separately. An English Windows with Spanish regional formats came up in Spanish, unasked. Pubsplash now reads the display languages, and where you list several it takes the first one it has an interface for, so a French-then-Spanish machine comes up in Spanish rather than English.
 
@@ -94,6 +118,12 @@
 
 - Google Translate TTS voices now populate the voice picker.
 
+- **Left and Right arrow, the mouse and the wheel moved a plugin parameter's slider without changing the plugin.** Only Up, Down, Page Up, Page Down, Home and End reached it, so the slider could show one value while the plugin held another, with nothing announced. Every way of moving the slider now sets the parameter and announces the new value.
+
+- Tabbing past the parameter value entry box without typing no longer re-applies its text.
+
+- The result of typing a parameter value — accepted, not a value the parameter has, or not supported by the plugin — is now spoken while focus is in the value entry box.
+
 ### Changes
 
 - The project has moved to github.com/cha0t1cnu3tral/pubsplash. Automatic updates, the download links in the README, the Help menu's online readme and changelog, and the website Pubsplash registers with Mastodon now point at the new home.
@@ -107,6 +137,10 @@
 - Scheduling, Mastodon posting and the log-archive and recording filenames now take the local time from a timezone database rather than from Windows.
 
 - Credential encryption, the single-instance guard, the crash handler and the plugin scan helper each gained a macOS implementation alongside the existing Windows one; the Windows behaviour is unchanged.
+
+- In the parameters dialog, Page Up and Page Down move a stepped parameter a tenth of the way through its values.
+
+- Selecting a different bus on the Buses tab clears the selection in its effects list instead of carrying it over to the same position in the new bus's chain.
 
 ## 2.0.0
 

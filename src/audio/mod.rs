@@ -122,8 +122,24 @@ pub struct BusSpec {
 #[derive(Default)]
 pub struct RoutingUpdate {
     pub sources: Option<Vec<SourceSpec>>,
+    /// Per-source FX chains, as `(source index, chain)`, applied after
+    /// `sources` and so addressed against the list in effect once this update
+    /// has landed. A source not named here keeps the chain it has — except that
+    /// replacing `sources` starts every source from an empty chain, so a
+    /// sender of `sources` names all of them. Separate from [`SourceSpec`]
+    /// because a spec is plain data and a chain owns live plugins.
+    pub source_chains: Vec<(usize, FxChain)>,
     pub buses: Option<Vec<BusSpec>>,
     pub master_chain: Option<FxChain>,
+}
+
+/// Which FX chain an engine command addresses.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ChainId {
+    /// A source's own chain, by index into the active scene's sources.
+    Source(usize),
+    Bus(usize),
+    Master,
 }
 
 pub enum EngineCommand {
@@ -166,9 +182,9 @@ pub enum EngineCommand {
     SetBusMute(usize, bool),
     /// See [`EngineCommand::SetSourceMonitor`].
     SetBusMonitor(usize, bool),
-    /// Toggle bypass on one plugin. `bus: None` targets the master chain.
+    /// Toggle bypass on one plugin.
     SetFxBypass {
-        bus: Option<usize>,
+        chain: ChainId,
         slot: usize,
         bypass: bool,
     },
@@ -425,6 +441,8 @@ struct ActiveSource {
     stop: Arc<AtomicBool>,
     /// Scratch block for this source's pull, reused across iterations.
     scratch: Vec<f32>,
+    /// The source's own FX, run on the pulled block ahead of the fader.
+    chain: FxChain,
     to_master: bool,
     sends: Vec<ActiveSend>,
     monitor: bool,
@@ -704,12 +722,18 @@ fn engine_loop(
                 Ok(EngineCommand::SetRouting(update)) => {
                     let RoutingUpdate {
                         sources: new_sources,
+                        source_chains: new_source_chains,
                         buses: new_buses,
                         master_chain: new_master_chain,
                     } = *update;
                     // Whether this edit touched FX, and so whether the UI is
                     // waiting to hear that its retired plugins are unreferenced.
-                    let touched_fx = new_buses.is_some() || new_master_chain.is_some();
+                    let mut touched_fx = new_buses.is_some()
+                        || new_master_chain.is_some()
+                        || !new_source_chains.is_empty();
+                    // The chains the outgoing sources were running, kept until
+                    // the incoming ones have taken their fade state from them.
+                    let mut replaced_source_chains: Vec<FxChain> = Vec::new();
                     if let Some(specs) = new_sources {
                         // A routing update arrives for every scene edit, and a
                         // media player mid-duck must not be snapped back to full
@@ -719,7 +743,15 @@ fn engine_loop(
                             .iter()
                             .filter_map(|s| Some((s.name.clone(), s.ducker.clone()?)))
                             .collect();
-                        stop_sources(&mut sources, last_health.elapsed());
+                        replaced_source_chains =
+                            stop_sources(&mut sources, last_health.elapsed());
+                        // Even when every one of them is empty. They go back
+                        // through the retirement channel whatever they hold,
+                        // and nothing empties that channel but the UI answering
+                        // this event — so a scene with no effects at all would
+                        // otherwise queue a chain per source on every edit, and
+                        // every application poll that moves a pid, for good.
+                        touched_fx |= !replaced_source_chains.is_empty();
                         // The replacement sources deserve a full window before
                         // their first line, and their rings start empty.
                         last_health = Instant::now();
@@ -769,6 +801,7 @@ fn engine_loop(
                                 consumer,
                                 stop,
                                 scratch: vec![0f32; BLOCK_SAMPLES],
+                                chain: FxChain::empty(),
                                 to_master: spec.to_master,
                                 sends: active_sends(spec.sends),
                                 monitor: spec.monitor,
@@ -780,6 +813,27 @@ fn engine_loop(
                                 baseline: health::Counters::default(),
                             });
                         }
+                    }
+                    for (index, mut chain) in new_source_chains {
+                        let Some(source) = sources.get_mut(index) else {
+                            // Addressed past the end: a stale edit. The chain
+                            // still goes back the way every other one does.
+                            let _ = retired.send(chain);
+                            continue;
+                        };
+                        // Matched by plugin identity, so it does not matter
+                        // which source the plugin used to sit on: a respawned
+                        // scene finds its fades among the chains just replaced,
+                        // a one-plugin edit finds them in the chain it replaces.
+                        chain.adopt_fades_from(&source.chain);
+                        for old in &replaced_source_chains {
+                            chain.adopt_fades_from(old);
+                        }
+                        let replaced = std::mem::replace(&mut source.chain, chain);
+                        let _ = retired.send(replaced);
+                    }
+                    for chain in replaced_source_chains {
+                        let _ = retired.send(chain);
                     }
                     if let Some(specs) = new_buses {
                         let mut replacement: Vec<ActiveBus> = specs
@@ -856,13 +910,18 @@ fn engine_loop(
                         b.monitor = m;
                     }
                 }
-                Ok(EngineCommand::SetFxBypass { bus, slot, bypass }) => match bus {
-                    Some(i) => {
+                Ok(EngineCommand::SetFxBypass { chain, slot, bypass }) => match chain {
+                    ChainId::Source(i) => {
+                        if let Some(s) = sources.get_mut(i) {
+                            s.chain.set_bypass(slot, bypass);
+                        }
+                    }
+                    ChainId::Bus(i) => {
                         if let Some(b) = buses.get_mut(i) {
                             b.chain.set_bypass(slot, bypass);
                         }
                     }
-                    None => master_chain.set_bypass(slot, bypass),
+                    ChainId::Master => master_chain.set_bypass(slot, bypass),
                 },
                 Ok(EngineCommand::SetMasterVolume(v)) => master.set_volume(v),
                 Ok(EngineCommand::SetMasterMute(m)) => master.set_muted(m),
@@ -957,10 +1016,15 @@ fn engine_loop(
                 }
                 Ok(EngineCommand::Shutdown) => {
                     finalize_recording(&mut rec_encoder, &mut recorder);
-                    stop_sources(&mut sources, last_health.elapsed());
+                    for chain in stop_sources(&mut sources, last_health.elapsed()) {
+                        let _ = retired.send(chain);
+                    }
                     park_chains(&mut buses, &mut master_chain, &retired);
                     while let Ok(command) = commands.try_recv() {
                         if let EngineCommand::SetRouting(update) = command {
+                            for (_, chain) in update.source_chains {
+                                let _ = retired.send(chain);
+                            }
                             for bus in update.buses.into_iter().flatten() {
                                 let _ = retired.send(bus.chain);
                             }
@@ -1192,9 +1256,10 @@ fn engine_loop(
     }
 }
 
-/// Mixes one 10 ms block: sources into master (if routed there) and into
-/// their send buses (post-fader, per-send level), then each bus through its
-/// strip into master, then the master strip. Allocation-free.
+/// Mixes one 10 ms block: each source through its own FX chain and strip, into
+/// master (if routed there) and into its send buses (post-fader, per-send
+/// level), then each bus through its chain and strip into master, then the
+/// master chain and strip. Allocation-free.
 ///
 /// `monitor_block` collects the local monitoring mix. Every tap is taken
 /// **post-fader and post-mute**, so what a monitored strip sounds like is
@@ -1244,6 +1309,12 @@ fn mix_one_block(
         if filled < source.scratch.len() {
             source.window.starved_blocks += 1;
         }
+        // Ahead of the fader, as an insert: a compressor's threshold must not
+        // move with the volume slider, and mute silences the effect's tail
+        // along with everything else. It also puts the processed signal in
+        // front of the ducking trigger just below, so a gate on a microphone
+        // stops its noise floor ducking the music.
+        source.chain.process(&mut source.scratch);
         source.strip.process(&mut source.scratch);
         if source.duck_trigger {
             trigger_level = trigger_level.max(mixer::trigger_level(&source.scratch));
@@ -1298,6 +1369,10 @@ fn mix_one_block(
 /// on the UI thread. So no exit from `engine_loop` may simply let `buses` and
 /// `master_chain` fall out of scope — every one of them calls this first, and
 /// `AudioEngine::drop` drains the channel after the join.
+///
+/// The sources' chains are not here because they never outlive their sources:
+/// [`stop_sources`] hands them back, and the one exit that skips it — the idle
+/// park — is only reachable with no sources at all.
 fn park_chains(buses: &mut Vec<ActiveBus>, master_chain: &mut FxChain, retired: &Sender<FxChain>) {
     for bus in buses.drain(..) {
         let _ = retired.send(bus.chain);
@@ -1348,7 +1423,12 @@ fn report_capture_health(sources: &mut [ActiveSource], elapsed: Duration) {
 /// Stops every capture thread and drops the sources. `since` is how long the
 /// current health window has been open, so the last line reports a real trend
 /// rather than one scaled against a window length that never happened.
-fn stop_sources(sources: &mut Vec<ActiveSource>, since: Duration) {
+///
+/// The sources' FX chains come back rather than being dropped with them: this
+/// runs on the audio thread, which must never be a plugin's last owner (see
+/// [`park_chains`]). The caller retires them.
+#[must_use = "the chains hold live plugins and must be retired, not dropped here"]
+fn stop_sources(sources: &mut Vec<ActiveSource>, since: Duration) -> Vec<FxChain> {
     for source in sources.iter() {
         source.stop.store(true, Ordering::Relaxed);
     }
@@ -1357,7 +1437,7 @@ fn stop_sources(sources: &mut Vec<ActiveSource>, since: Duration) {
     // the one reading that says what state the ring was in when they gave up on
     // it — and the replacement ring starts empty, which erases the evidence.
     report_capture_health(sources, since);
-    sources.clear();
+    sources.drain(..).map(|source| source.chain).collect()
 }
 
 /// Flushes the recording encoder's tail into the file and closes it. Safe to
@@ -1454,6 +1534,7 @@ mod routing_tests {
             consumer,
             stop: Arc::new(AtomicBool::new(false)),
             scratch: vec![0f32; BLOCK_SAMPLES],
+            chain: FxChain::empty(),
             to_master,
             sends: active_sends(sends),
             monitor: false,
@@ -1883,5 +1964,271 @@ mod routing_tests {
         // update replaced (the empty initial set has only the master chain).
         let handed_back = retired_rx.try_iter().count();
         assert_eq!(handed_back, 4, "every live chain came back to this thread");
+    }
+
+    /// A source's chain lives inside the source, and sources are dropped on the
+    /// audio thread — on every scene edit, not only at shutdown. So the chain
+    /// has to be lifted out and handed back each time, or the audio thread
+    /// becomes the last owner of every plugin on a source that is replaced.
+    #[test]
+    fn source_chains_are_handed_back_when_sources_are_replaced_and_at_shutdown() {
+        fn external(name: &str) -> SourceSpec {
+            SourceSpec {
+                name: name.into(),
+                volume: 100,
+                muted: false,
+                feed: FeedKind::External,
+                to_master: true,
+                sends: Vec::new(),
+                monitor: false,
+                local: false,
+                duck: None,
+                duck_trigger: true,
+            }
+        }
+        fn scene() -> RoutingUpdate {
+            RoutingUpdate {
+                sources: Some(vec![external("a"), external("b")]),
+                source_chains: vec![(0, FxChain::empty()), (1, FxChain::empty())],
+                ..Default::default()
+            }
+        }
+
+        let (cmd_tx, cmd_rx) = crossbeam_channel::unbounded();
+        let (event_tx, event_rx) = crossbeam_channel::unbounded();
+        let (retired_tx, retired_rx) = crossbeam_channel::unbounded();
+        let feeds = ExternalFeeds::default();
+        let thread = std::thread::spawn(move || {
+            engine_loop(cmd_rx, EventSender(event_tx), retired_tx, feeds)
+        });
+        let applied = || {
+            assert!(matches!(
+                event_rx.recv_timeout(Duration::from_secs(2)),
+                Ok(EngineEvent::BusesApplied)
+            ));
+        };
+
+        // The first scene: each new source starts with an empty chain of its
+        // own, which the one sent for it replaces.
+        cmd_tx
+            .send(EngineCommand::SetRouting(Box::new(scene())))
+            .expect("engine is listening");
+        applied();
+        assert_eq!(retired_rx.try_iter().count(), 2);
+
+        // The same scene again, as every scene edit sends it: the two chains
+        // that were running come back, and so do the two placeholders.
+        cmd_tx
+            .send(EngineCommand::SetRouting(Box::new(scene())))
+            .expect("engine is listening");
+        applied();
+        assert_eq!(retired_rx.try_iter().count(), 4);
+
+        // One chain replaced on its own, with the sources left running.
+        cmd_tx
+            .send(EngineCommand::SetRouting(Box::new(RoutingUpdate {
+                source_chains: vec![(1, FxChain::empty())],
+                ..Default::default()
+            })))
+            .expect("engine is listening");
+        applied();
+        assert_eq!(retired_rx.try_iter().count(), 1);
+
+        // And one addressed past the end is returned rather than dropped.
+        cmd_tx
+            .send(EngineCommand::SetRouting(Box::new(RoutingUpdate {
+                source_chains: vec![(9, FxChain::empty())],
+                ..Default::default()
+            })))
+            .expect("engine is listening");
+        applied();
+        assert_eq!(retired_rx.try_iter().count(), 1);
+
+        cmd_tx
+            .send(EngineCommand::Shutdown)
+            .expect("engine is listening");
+        thread.join().expect("the engine thread exits cleanly");
+        // Both sources' chains, and the master's.
+        assert_eq!(retired_rx.try_iter().count(), 3);
+    }
+
+    /// The whole path, with a real plugin: a source with an effect on it comes
+    /// out of the master changed, and a source beside it does not.
+    ///
+    /// Everything else about source chains is tested with empty ones, which
+    /// proves the plumbing and nothing about audio. This is the one that says a
+    /// plugin on a microphone is heard on the microphone and only there.
+    ///
+    /// Ignored for the reasons `hosts_a_real_plugin` is: it needs a plugin
+    /// installed and loads third-party code into the test process. It listens
+    /// for a tone being moved off its pitch, so it wants a plugin that does
+    /// that. `PUBSPLASH_TEST_VST3` is the `.vst3` bundle and
+    /// `PUBSPLASH_TEST_VST3_VALUE`, optionally, the value to give its first
+    /// parameter, by the name the plugin shows for it — a pitch-shifting
+    /// preset, for a plugin whose first parameter is a list of them:
+    /// `cargo test a_plugin_on_one_source -- --include-ignored --nocapture`.
+    #[test]
+    #[ignore = "loads a third-party plugin into this process"]
+    fn a_plugin_on_one_source_changes_that_source_and_no_other() {
+        use crate::config::FxSlotConfig;
+        use crate::vst::host3::Vst3Plugin;
+        use crate::vst::{PluginFormat, PluginInfo, PluginInstance};
+        use fx_chain::FxUnit;
+
+        let Ok(bundle) = std::env::var("PUBSPLASH_TEST_VST3") else {
+            println!("set PUBSPLASH_TEST_VST3 to a .vst3 bundle to run this");
+            return;
+        };
+        let bundle = std::path::Path::new(&bundle);
+        let name = bundle.file_name().expect("a named bundle");
+        #[cfg(windows)]
+        let binary = bundle.join("Contents").join("x86_64-win").join(name);
+        #[cfg(target_os = "macos")]
+        let binary = bundle
+            .join("Contents")
+            .join("MacOS")
+            .join(std::path::Path::new(name).file_stem().expect("a named bundle"));
+        let info = PluginInfo {
+            path: binary.to_string_lossy().to_string(),
+            format: PluginFormat::Vst3,
+            ..Default::default()
+        };
+        let load = || {
+            let plugin =
+                Vst3Plugin::load(&info, &FxSlotConfig::default()).expect("the plugin loads");
+            // The setting to test with, by the name the plugin gives it.
+            if let Ok(wanted) = std::env::var("PUBSPLASH_TEST_VST3_VALUE") {
+                let steps = plugin.param_steps(0).max(1);
+                let value = (0..=steps)
+                    .map(|k| k as f32 / steps as f32)
+                    .find(|v| plugin.param_display_at(0, *v).as_deref() == Some(wanted.as_str()))
+                    .unwrap_or_else(|| panic!("the plugin has no value called {wanted}"));
+                plugin.set_parameter(0, value);
+            }
+            println!("parameter 0 is {:?}", plugin.param_display(0));
+            Arc::new(PluginInstance::Vst3(plugin))
+        };
+
+        /// How much of `samples` (interleaved stereo) is at `hz`: a Goertzel
+        /// filter over the left channel, as an amplitude.
+        fn amplitude_at(samples: &[f32], hz: f32) -> f32 {
+            let left: Vec<f32> = samples.iter().step_by(2).copied().collect();
+            let w = std::f32::consts::TAU * hz / mixer::SAMPLE_RATE as f32;
+            let coeff = 2.0 * w.cos();
+            let (mut s1, mut s2) = (0.0f32, 0.0f32);
+            for sample in &left {
+                let s0 = sample + coeff * s1 - s2;
+                s2 = s1;
+                s1 = s0;
+            }
+            let power = s1 * s1 + s2 * s2 - coeff * s1 * s2;
+            2.0 * power.max(0.0).sqrt() / left.len() as f32
+        }
+
+        fn source(name: &str) -> SourceSpec {
+            SourceSpec {
+                name: name.into(),
+                volume: 100,
+                muted: false,
+                feed: FeedKind::External,
+                to_master: true,
+                sends: Vec::new(),
+                monitor: false,
+                local: false,
+                duck: None,
+                duck_trigger: true,
+            }
+        }
+
+        /// Two seconds of a tone, quiet enough that two of them sum unclipped.
+        fn tone(hz: f32) -> Vec<f32> {
+            (0..mixer::SAMPLE_RATE as usize * 2)
+                .flat_map(|i| {
+                    let t = i as f32 / mixer::SAMPLE_RATE as f32;
+                    let sample = (t * hz * std::f32::consts::TAU).sin() * 0.4;
+                    [sample, sample]
+                })
+                .collect()
+        }
+
+        /// Plays [`MIC`] through a source carrying `chain` and [`MUSIC`] through
+        /// one beside it carrying nothing, and returns the second half of what
+        /// reached the master — by which time a plugin has filled whatever
+        /// latency it has.
+        fn master_of(chain: Option<FxChain>) -> Vec<f32> {
+            let engine = AudioEngine::start();
+            let (out, mut raw) = tokio::sync::mpsc::channel(4096);
+            engine.send(EngineCommand::SetRouting(Box::new(RoutingUpdate {
+                sources: Some(vec![source("mic"), source("music")]),
+                source_chains: chain.into_iter().map(|chain| (0, chain)).collect(),
+                ..Default::default()
+            })));
+            engine.send(EngineCommand::StartRawFeed { out });
+            let wanted = tone(MIC).len();
+            // Both at once, each paced by the mixer's drain of its own ring.
+            let feeds = engine.external_feeds.clone();
+            let music = std::thread::spawn(move || feeds.feed_all("music", &tone(MUSIC), "test"));
+            engine.external_feeds.feed_all("mic", &tone(MIC), "test");
+            music.join().expect("the second feeder finishes");
+            let mut heard: Vec<f32> = Vec::with_capacity(wanted);
+            let deadline = Instant::now() + Duration::from_secs(5);
+            while heard.len() < wanted && Instant::now() < deadline {
+                match raw.try_recv() {
+                    Ok(bytes) => heard.extend(
+                        bytes
+                            .chunks_exact(2)
+                            .map(|b| i16::from_le_bytes([b[0], b[1]]) as f32 / 32768.0),
+                    ),
+                    Err(_) => std::thread::sleep(Duration::from_millis(5)),
+                }
+            }
+            // Dropping the engine joins its thread and takes the chain back on
+            // this one, which is where the plugin is torn down.
+            drop(engine);
+            heard.split_off(heard.len() / 2)
+        }
+
+        /// What the source with the plugin on it plays, and what the one
+        /// beside it plays. Far enough apart that neither a pitch shift nor its
+        /// harmonics put one on top of the other.
+        const MIC: f32 = 440.0;
+        const MUSIC: f32 = 3000.0;
+
+        let dry = master_of(None);
+        let wet = master_of(Some(FxChain::new(vec![FxUnit::new(load(), false)])));
+        let bypassed = master_of(Some(FxChain::new(vec![FxUnit::new(load(), true)])));
+
+        let level = |samples: &[f32]| {
+            (samples.iter().map(|s| s * s).sum::<f32>() / samples.len().max(1) as f32).sqrt()
+        };
+        for (label, run) in [("no chain", &dry), ("plugin", &wet), ("bypassed", &bypassed)] {
+            println!(
+                "{label:>9}: {MIC} Hz {:.3}, {MUSIC} Hz {:.3}, level {:.3}",
+                amplitude_at(run, MIC),
+                amplitude_at(run, MUSIC),
+                level(run)
+            );
+        }
+        let (dry_mic, dry_music) = (amplitude_at(&dry, MIC), amplitude_at(&dry, MUSIC));
+        assert!(
+            dry_mic > 0.3 && dry_music > 0.3,
+            "both tones reach master untouched without a chain"
+        );
+        assert!(
+            amplitude_at(&wet, MIC) < dry_mic * 0.5,
+            "the plugin moved its own source off its pitch"
+        );
+        assert!(
+            level(&wet) > level(&dry) * 0.6,
+            "and replaced it with sound of its own rather than with silence"
+        );
+        assert!(
+            (amplitude_at(&wet, MUSIC) - dry_music).abs() < dry_music * 0.1,
+            "the source beside it is exactly as it was"
+        );
+        assert!(
+            amplitude_at(&bypassed, MIC) > dry_mic * 0.9,
+            "a bypassed plugin leaves its source alone"
+        );
     }
 }

@@ -1392,6 +1392,11 @@ pub fn on_sources_changed(app: &Rc<App>, previous_sources: Option<&[SourceConfig
     } else {
         app.clear_source_monitors();
     }
+    // Ahead of the engine sync, which builds its chains out of the instances
+    // this loads. Anything that would not load is in the log already, and the
+    // Scenes tab's effects list marks the slot; a modal is not owed for a
+    // plugin the user did not just add.
+    super::fx::sync_source_chains(app);
     app.sync_engine_sources();
     // Beside `sync_engine_sources`, because that is where `ExternalFeeds` gains
     // and loses its rings: a cue worker for a source that just left the scene

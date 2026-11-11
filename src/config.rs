@@ -1020,6 +1020,10 @@ pub struct SourceConfig {
     /// heard only through its bus sends (insert-style routing).
     pub to_master: bool,
     pub sends: Vec<SendConfig>,
+    /// This source's own FX chain; list order is processing order. It runs
+    /// ahead of the fader, so everything downstream — master, sends, the local
+    /// monitor and the ducking trigger — hears the processed signal.
+    pub chain: Vec<FxSlotConfig>,
 }
 
 impl Default for SourceConfig {
@@ -1032,6 +1036,7 @@ impl Default for SourceConfig {
             kind: SourceKindConfig::Microphone { device_id: None },
             to_master: true,
             sends: Vec::new(),
+            chain: Vec::new(),
         }
     }
 }

@@ -151,6 +151,7 @@ fn main() {
             ffmpeg_download: RefCell::new(None),
             fx: RefCell::new(ui::FxRuntime::default()),
             orphaned_plugins: RefCell::new(Vec::new()),
+            shown_chains: RefCell::new(Default::default()),
             chain_library: RefCell::new(chain_library.clone()),
             cues: Default::default(),
             media: Default::default(),

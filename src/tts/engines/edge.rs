@@ -9,8 +9,12 @@
 //! ourselves:
 //!
 //! 1. **`Sec-MS-GEC`.** Since 2024 the endpoint rejects connections without a
-//!    token derived from the current time and a fixed client token — see
-//!    [`gec_token`]. It changes every five minutes.
+//!    token derived from the current time and a fixed client token, and since
+//!    late 2026 it wants the second version of that token, which is its own
+//!    module — see [`token`]. It changes every five minutes. Both requests
+//!    also carry a random `muid` cookie, as Edge's and `edge-tts`'s do; the
+//!    service did not require it when this was written, but it is the next
+//!    thing it could start checking.
 //! 2. **Framing.** Messages carry an HTTP-like header block; binary frames
 //!    prefix it with a big-endian `u16` length. The audio is whatever follows.
 //! 3. **Turn tracking.** The audio arrives across many frames and is only
@@ -27,10 +31,11 @@ use crate::tts::engine::{SpeechEngine, SynthRequest, TtsError, Voice};
 use crate::tts::net::{block_on, body_json, client};
 use crate::tts::ssml;
 use futures_util::{SinkExt, StreamExt};
-use sha2::{Digest, Sha256};
 use std::time::Duration;
 use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::tungstenite::client::IntoClientRequest;
+
+mod token;
 
 const SERVICE: &str = "Microsoft Edge";
 const DEFAULT_VOICE: &str = "en-US-EmmaMultilingualNeural";
@@ -46,7 +51,8 @@ const VOICES_URL: &str =
 /// **This goes stale and the service starts answering 403 when it does** — it
 /// rejects versions it considers too old, and that is the single most likely
 /// way this engine breaks. When it does, take the current value from
-/// `edge-tts`'s `constants.py` (`CHROMIUM_FULL_VERSION`) and update it here;
+/// `edge-tts`'s `constants.py` (`CHROMIUM_FULL_VERSION`) and update it here,
+/// checking `SEC_MS_GEC_VERSION` beside it for the token version as well;
 /// `edge_speaks` is the ignored test that catches it.
 const CHROMIUM_FULL: &str = "143.0.3650.75";
 
@@ -66,12 +72,6 @@ fn user_agent() -> String {
 
 /// The one output format Edge's own client asks for.
 const OUTPUT_FORMAT: &str = "audio-24khz-48kbitrate-mono-mp3";
-
-/// Seconds between the Windows and Unix epochs; the token is in Windows time.
-const WINDOWS_EPOCH_OFFSET: u64 = 11_644_473_600;
-/// The token is rounded down to a five-minute boundary, so it is stable for
-/// that long and a small clock difference doesn't break the connection.
-const TOKEN_PERIOD: u64 = 300;
 
 pub struct Edge;
 
@@ -125,6 +125,7 @@ impl SpeechEngine for Edge {
                     ("Sec-MS-GEC-Version", &gec_version()),
                 ])
                 .header("User-Agent", user_agent())
+                .header("Cookie", muid_cookie())
                 .send()
                 .await?;
             body_json(SERVICE, response).await
@@ -180,6 +181,7 @@ async fn collect_audio(document: String) -> Result<Vec<u8>, TtsError> {
         );
         headers.insert("Accept-Language", "en-US,en;q=0.9".parse().unwrap());
         headers.insert("User-Agent", user_agent().parse().unwrap());
+        headers.insert("Cookie", muid_cookie().parse().unwrap());
     }
 
     let (mut socket, _) = tokio_tungstenite::connect_async(request)
@@ -261,20 +263,24 @@ fn audio_of(frame: &[u8]) -> &[u8] {
     frame.get(header_end..).unwrap_or(&[])
 }
 
-/// The `Sec-MS-GEC` token: SHA-256 of the current time in Windows 100 ns
-/// ticks, rounded down to five minutes, concatenated with the client token,
-/// as uppercase hex.
+/// The `Sec-MS-GEC` token for a moment in time; see [`token`].
 fn gec_token(unix_seconds: u64) -> String {
-    let windows_seconds = unix_seconds + WINDOWS_EPOCH_OFFSET;
-    let rounded = windows_seconds - windows_seconds % TOKEN_PERIOD;
-    let ticks = rounded as u128 * 10_000_000;
-    let mut hasher = Sha256::new();
-    hasher.update(format!("{ticks}{TRUSTED_CLIENT_TOKEN}").as_bytes());
-    format!("{:X}", hasher.finalize())
+    token::sec_ms_gec(unix_seconds)
 }
 
+/// The token version travels with the token: a v2 token labelled `1-` is
+/// refused exactly as a stale v1 token is.
 fn gec_version() -> String {
-    format!("1-{CHROMIUM_FULL}")
+    format!("2-{CHROMIUM_FULL}")
+}
+
+/// A fresh random machine id per request, which is what `edge-tts` sends.
+/// Not an identifier of anything: it is never stored or reused. Measured as
+/// not yet required (only the v2 token was), and sent anyway so the client
+/// keeps looking like the one the service expects.
+fn muid_cookie() -> String {
+    let muid = uuid::Uuid::new_v4().simple().to_string().to_uppercase();
+    format!("muid={muid};")
 }
 
 /// The JavaScript `Date.toString()` form the protocol's `X-Timestamp` uses.
@@ -330,40 +336,6 @@ fn parse_voices(body: &serde_json::Value) -> Vec<Voice> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    /// Pins the token derivation. If this changes, every Edge connection
-    /// breaks, so it is worth catching here rather than in the field.
-    #[test]
-    fn the_gec_token_matches_the_reference_derivation() {
-        // 2024-01-01T00:00:00Z. Windows seconds 13_346_766_336_000_000 ticks.
-        let token = gec_token(1_704_067_200);
-        assert_eq!(token.len(), 64, "a SHA-256 in hex");
-        assert!(
-            token
-                .chars()
-                .all(|c| c.is_ascii_hexdigit() && !c.is_lowercase()),
-            "must be uppercase hex: {token}"
-        );
-
-        let expected = {
-            let mut hasher = Sha256::new();
-            let ticks: u128 = (1_704_067_200u128 + WINDOWS_EPOCH_OFFSET as u128) * 10_000_000;
-            hasher.update(format!("{ticks}{TRUSTED_CLIENT_TOKEN}").as_bytes());
-            format!("{:X}", hasher.finalize())
-        };
-        assert_eq!(token, expected);
-    }
-
-    /// The whole point of the rounding is that clients a few minutes apart
-    /// still agree.
-    #[test]
-    fn the_token_is_stable_across_a_five_minute_window() {
-        // 1_704_067_200 + 11_644_473_600 is a multiple of 300, so this is the
-        // start of a window.
-        let base = 1_704_067_200;
-        assert_eq!(gec_token(base), gec_token(base + 299));
-        assert_ne!(gec_token(base), gec_token(base + 300));
-    }
 
     #[test]
     fn binary_frames_are_split_at_the_declared_header_length() {
@@ -441,7 +413,9 @@ mod tests {
     /// Live check against the real service; needs no account.
     /// `cargo test edge_speaks -- --include-ignored`
     ///
-    /// This is the test that catches the `Sec-MS-GEC` derivation going stale,
+    /// This is the test that catches the `Sec-MS-GEC` derivation or the
+    /// client version going stale (the voice list is laxer, so
+    /// `edge_lists_voices` passing proves nothing about this one),
     /// which is the most likely way this engine breaks.
     #[test]
     #[ignore]
@@ -467,7 +441,7 @@ mod tests {
 
     #[test]
     fn the_advertised_client_version_stays_consistent() {
-        assert_eq!(gec_version(), format!("1-{CHROMIUM_FULL}"));
+        assert_eq!(gec_version(), format!("2-{CHROMIUM_FULL}"));
         let agent = user_agent();
         let major = chromium_major();
         assert_eq!(major, "143");
