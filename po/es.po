@@ -81,19 +81,19 @@ msgstr "&Editar parámetros"
 msgid "&Folder"
 msgstr "&Carpeta"
 
-#: src/ui/home.rs:1094
+#: src/ui/home.rs:1178
 msgid "&Next track"
 msgstr "Pista &siguiente"
 
-#: src/ui/home.rs:1099
+#: src/ui/home.rs:1183
 msgid "&Open file..."
 msgstr "&Abrir archivo..."
 
-#: src/ui/home.rs:1089
+#: src/ui/home.rs:1173
 msgid "&Pause"
 msgstr "&Pausar"
 
-#: src/ui/home.rs:1089
+#: src/ui/home.rs:1173
 msgid "&Play"
 msgstr "&Reproducir"
 
@@ -301,7 +301,7 @@ msgstr "Avanzado"
 msgid "All output devices (Pubsplash excluded)"
 msgstr "Todos los dispositivos de salida (excepto Pubsplash)"
 
-#: src/ui/home.rs:1070
+#: src/ui/home.rs:1154
 msgid "Allow this strip's volume to go above 100%, up to 500%"
 msgstr "Permitir que el volumen de este canal supere el 100%, hasta el 500%"
 
@@ -1124,7 +1124,7 @@ msgstr "Ajustes de voz de ElevenLabs"
 msgid "Email"
 msgstr "Correo electrónico"
 
-#: src/ui/home.rs:1069
+#: src/ui/home.rs:1153
 msgid "Enable volume boost"
 msgstr "Activar el refuerzo de volumen"
 
@@ -1850,7 +1850,7 @@ msgstr "Monitorizar la salida principal"
 msgid "Monitor the bus {bus}"
 msgstr "Monitorizar el bus {bus}"
 
-#: src/ui/home.rs:1074
+#: src/ui/home.rs:1158
 msgid "Monitor this strip"
 msgstr "Monitorizar este canal"
 
@@ -1882,7 +1882,7 @@ msgstr "Subir el plugin"
 msgid "Move up"
 msgstr "Subir"
 
-#: src/ui/home.rs:897
+#: src/ui/home.rs:934
 msgid "Mute"
 msgstr "Silenciar"
 
@@ -1906,7 +1906,7 @@ msgstr "Silenciar o activar el bus {bus}"
 msgid "Mute or unmute {source}"
 msgstr "Silenciar o activar {source}"
 
-#: src/ui/home.rs:859
+#: src/ui/home.rs:896
 msgid "Mute {name}"
 msgstr "Silenciar {name}"
 
@@ -1996,6 +1996,10 @@ msgstr "Todavía no se ha usado ningún motor"
 #: src/ui/scheduler_ui.rs:51
 msgid "No file"
 msgstr "Sin archivo"
+
+#: src/ui/media.rs:163
+msgid "No folder is set"
+msgstr "No hay ninguna carpeta definida"
 
 #: src/ui/help.rs:51
 msgid "No help available for this control."
@@ -2087,6 +2091,11 @@ msgstr ""
 "el nivel se ha dejado como estaba. Compruebe que su micrófono está en "
 "esta escena, sin silenciar y con el volumen subido."
 
+#: src/ui/media.rs:150
+#: src/ui/media.rs:165
+msgid "Nothing queued"
+msgstr "No hay nada en cola"
+
 #: src/ui/picker_acc.rs:161
 msgid "November"
 msgstr "noviembre"
@@ -2162,7 +2171,7 @@ msgstr "Abrir un archivo y reproducirlo"
 msgid "Open a file and play it on {source}"
 msgstr "Abrir un archivo y reproducirlo en {source}"
 
-#: src/ui/home.rs:955
+#: src/ui/home.rs:993
 msgid "Open a file to play on {source}"
 msgstr "Abrir un archivo para reproducirlo en {source}"
 
@@ -2170,7 +2179,7 @@ msgstr "Abrir un archivo para reproducirlo en {source}"
 msgid "Open a sound pack project folder"
 msgstr "Abrir una carpeta de proyecto de paquete de sonidos"
 
-#: src/ui/home.rs:950
+#: src/ui/home.rs:988
 msgid "Open file..."
 msgstr "Abrir archivo..."
 
@@ -2301,7 +2310,7 @@ msgstr "Punto"
 msgid "Play"
 msgstr "Reproducir"
 
-#: src/ui/home.rs:1100
+#: src/ui/home.rs:1184
 msgid "Play a file of your choosing, then carry on with the folder"
 msgstr "Reproducir un archivo que elija y después seguir con la carpeta"
 
@@ -2333,7 +2342,7 @@ msgstr "Reproducir el sonido de inicio"
 msgid "Play this item"
 msgstr "Reproducir este elemento"
 
-#: src/ui/home.rs:1075
+#: src/ui/home.rs:1159
 msgid "Play this strip through your speakers or headphones"
 msgstr "Reproducir este canal por sus altavoces o auriculares"
 
@@ -2651,7 +2660,7 @@ msgid "Record this stream"
 msgstr "Grabar esta emisión"
 
 #: src/ui/home.rs:371
-#: src/ui/mod.rs:3950
+#: src/ui/mod.rs:3952
 #: src/ui/preferences.rs:277
 msgid "Recording"
 msgstr "Grabando"
@@ -2819,15 +2828,15 @@ msgid_plural "Saved {n} sounds to the project."
 msgstr[0] "Se ha guardado {n} sonido en el proyecto."
 msgstr[1] "Se han guardado {n} sonidos en el proyecto."
 
-#: src/ui/mod.rs:4044
+#: src/ui/mod.rs:4046
 msgid "Scan cancelled"
 msgstr "Análisis cancelado"
 
-#: src/ui/mod.rs:4034
+#: src/ui/mod.rs:4036
 msgid "Scan complete"
 msgstr "Análisis completado"
 
-#: src/ui/mod.rs:4020
+#: src/ui/mod.rs:4022
 msgid "Scan complete. {found} new plugins found ({total_known} known in total)."
 msgstr ""
 "Análisis completado. Se han encontrado {found} plugins nuevos "
@@ -3095,7 +3104,7 @@ msgstr "Omitir este plugin"
 msgid "Skip to the next track"
 msgstr "Saltar a la pista siguiente"
 
-#: src/ui/home.rs:1095
+#: src/ui/home.rs:1179
 msgid "Skip to the next track in the folder"
 msgstr "Saltar a la pista siguiente de la carpeta"
 
@@ -3243,7 +3252,7 @@ msgstr "Iniciar o detener la grabación"
 msgid "Start or stop streaming"
 msgstr "Iniciar o detener la emisión"
 
-#: src/ui/home.rs:1090
+#: src/ui/home.rs:1174
 msgid "Start or stop this media player"
 msgstr "Iniciar o detener este reproductor multimedia"
 
@@ -3511,8 +3520,8 @@ msgstr "Esa carpeta ya está en la lista."
 msgid "That sound pack could not be loaded: {e}"
 msgstr "No se pudo cargar ese paquete de sonidos: {e}"
 
-#: src/ui/home.rs:1251
-#: src/ui/home.rs:1271
+#: src/ui/home.rs:1335
+#: src/ui/home.rs:1355
 msgid "That strip is not in the mixer right now"
 msgstr "Ese canal no está ahora mismo en el mezclador"
 
@@ -3555,6 +3564,10 @@ msgstr ""
 #: src/ui/scenes.rs:2593
 msgid "The engine returned no audio."
 msgstr "El motor no devolvió audio."
+
+#: src/ui/media.rs:164
+msgid "The folder has no audio files Pubsplash can play"
+msgstr "La carpeta no tiene archivos de audio que Pubsplash pueda reproducir"
 
 #: src/ui/mod.rs:2605
 msgid ""
@@ -3604,7 +3617,7 @@ msgstr ""
 "Compruebe que la carpeta existe y se puede escribir en ella, o elija "
 "otra en Carpeta de grabación, en Preferencias."
 
-#: src/ui/mod.rs:4045
+#: src/ui/mod.rs:4047
 msgid "The scan was cancelled. Nothing was saved."
 msgstr "El análisis se canceló. No se guardó nada."
 
@@ -3785,6 +3798,14 @@ msgstr "Desvincular"
 #: src/keybind.rs:130
 msgid "Up Arrow"
 msgstr "Flecha arriba"
+
+#: src/ui/home.rs:1015
+msgid "Upcoming tracks"
+msgstr "Próximas pistas"
+
+#: src/ui/home.rs:1028
+msgid "Upcoming tracks on {source}"
+msgstr "Próximas pistas en {source}"
 
 #: src/ui/update.rs:210
 #: src/ui/update.rs:334
@@ -4200,15 +4221,15 @@ msgstr "Interfaz de {name}"
 msgid "{name} is not in the current scene"
 msgstr "{name} no está en la escena actual"
 
-#: src/ui/home.rs:1316
+#: src/ui/home.rs:1400
 msgid "{name} monitoring off"
 msgstr "monitorización de {name} desactivada"
 
-#: src/ui/home.rs:1314
+#: src/ui/home.rs:1398
 msgid "{name} monitoring on"
 msgstr "monitorización de {name} activada"
 
-#: src/ui/home.rs:1261
+#: src/ui/home.rs:1345
 msgid "{name} muted"
 msgstr "{name} silenciado"
 
@@ -4220,16 +4241,16 @@ msgstr "Parámetros de {name}"
 msgid "{name} reported no voices."
 msgstr "{name} no devolvió ninguna voz."
 
-#: src/ui/home.rs:1263
+#: src/ui/home.rs:1347
 msgid "{name} unmuted"
 msgstr "{name} sin silenciar"
 
-#: src/ui/home.rs:807
-#: src/ui/home.rs:833
+#: src/ui/home.rs:844
+#: src/ui/home.rs:870
 msgid "{name} volume"
 msgstr "Volumen de {name}"
 
-#: src/ui/home.rs:831
+#: src/ui/home.rs:868
 msgid "{name} volume (monitoring)"
 msgstr "Volumen de {name} (monitorizando)"
 
@@ -7108,6 +7129,31 @@ msgstr ""
 "esté sonando, igual que hace saltar a la pista siguiente, y cuando "
 "termina la carpeta continúa con la pista que iba a reproducir a "
 "continuación. No se recuerda nada del archivo. Este botón solo "
+"aparece en el canal de un reproductor multimedia."
+
+#. Context help for the Mixer strip upcoming tracks field.
+#: help.toml
+msgctxt "tab.home.mixer.strip.upcoming"
+msgid ""
+"The next four tracks this media player will play, one per line and "
+"numbered, with the very next one first, so you can introduce a song on "
+"air before it starts. Use the arrow keys to read it. With shuffle on, "
+"the order shown is the order they will really play in, even past the "
+"end of the folder. It updates by itself whenever a track changes, and "
+"skipping moves it on just as a track ending does. A file you open "
+"yourself plays straight away, and when it ends the folder carries on "
+"with the first track shown. This field only appears on a media player's "
+"strip."
+msgstr ""
+"Las cuatro próximas pistas que reproducirá este reproductor "
+"multimedia, una por línea y numeradas, con la siguiente en primer "
+"lugar, para que puedas presentar una canción en antena antes de que "
+"empiece. Léelo con las flechas. Con el orden aleatorio activado, el "
+"orden que se muestra es el orden real en que sonarán, incluso después "
+"del final de la carpeta. Se actualiza solo cada vez que cambia la "
+"pista, y saltar a la siguiente lo hace avanzar igual que cuando termina "
+"una pista. Un archivo que abras tú suena enseguida, y cuando termina "
+"la carpeta continúa con la primera pista de la lista. Este campo solo "
 "aparece en el canal de un reproductor multimedia."
 
 #. Context help for the Mixer strip volume slider.

@@ -8,6 +8,16 @@
 
 ### Changes
 
+## 2.2.0
+
+### Additions
+
+- A media player's mixer strip has an **Upcoming tracks** field: a read-only list of the next four tracks, numbered, soonest first, so a song can be introduced on air before it plays. It follows shuffle across the end of the folder, and updates on its own as tracks change.
+
+### Fixes
+
+### Changes
+
 - The macOS build now runs on a current GitHub build machine. The one it used was retired, which is why 2.1.0 was released without a Mac download.
 
 ## 2.1.0

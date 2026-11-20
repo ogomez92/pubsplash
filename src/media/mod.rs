@@ -106,6 +106,12 @@ pub struct Playlist {
     files: Vec<PathBuf>,
     /// Indices into `files`, in playing order.
     order: Vec<usize>,
+    /// The pass after this one, already decided. Shuffling it only at the wrap
+    /// would leave every track past the end of this pass unknown, and
+    /// [`Playlist::upcoming`] is asked for several tracks ahead — the whole
+    /// point of which is presenting a song on air before it plays, so a list
+    /// that turned out wrong at the boundary would be worse than none.
+    following: Vec<usize>,
     /// How far into `order` the player has got.
     position: usize,
     shuffle: bool,
@@ -116,10 +122,12 @@ impl Playlist {
         let mut playlist = Self {
             files,
             order: Vec::new(),
+            following: Vec::new(),
             position: 0,
             shuffle,
         };
-        playlist.reorder(None);
+        playlist.order = playlist.pass(None);
+        playlist.following = playlist.pass(playlist.order.last().copied());
         playlist
     }
 
@@ -144,11 +152,12 @@ impl Playlist {
         self.position += 1;
         // Wrapped eagerly, the moment the pass runs out, rather than on the way
         // into the next `next()`. That is what makes [`Playlist::peek`] able to
-        // answer at all: deferring the reshuffle leaves the first track of the
-        // next pass genuinely undecided, and "skip to the next track" has to be
-        // able to say what it is about to play before it plays it.
+        // answer at all: deferring the wrap leaves the first track of the next
+        // pass out of reach, and "skip to the next track" has to be able to say
+        // what it is about to play before it plays it.
         if self.position >= self.order.len() {
-            self.reorder(self.order.last().copied());
+            self.order = std::mem::take(&mut self.following);
+            self.following = self.pass(self.order.last().copied());
             self.position = 0;
         }
         Some(picked)
@@ -159,22 +168,39 @@ impl Playlist {
     /// This is what the announcement on a skip is built from, so it has to be
     /// the truth rather than a guess — see the eager wrap in `next`.
     pub fn peek(&self) -> Option<PathBuf> {
-        let index = *self.order.get(self.position)?;
-        self.files.get(index).cloned()
+        self.upcoming(1).into_iter().next()
     }
 
-    /// Rebuilds the play order. `avoid_first` is the track that just finished:
-    /// a fresh shuffle is allowed to start with it, which is the one repeat a
-    /// listener always notices, so it is moved out of the way.
-    fn reorder(&mut self, avoid_first: Option<usize>) {
-        self.order = (0..self.files.len()).collect();
+    /// The next `count` files [`Playlist::next`] will hand back, in order —
+    /// across the end of the pass too, since the pass after it is already
+    /// shuffled.
+    ///
+    /// Never longer than the folder: a two-file folder has two tracks coming,
+    /// not a list of four that names each of them twice.
+    pub fn upcoming(&self, count: usize) -> Vec<PathBuf> {
+        self.order
+            .get(self.position..)
+            .unwrap_or_default()
+            .iter()
+            .chain(&self.following)
+            .take(count.min(self.files.len()))
+            .filter_map(|&index| self.files.get(index).cloned())
+            .collect()
+    }
+
+    /// One pass's play order. `avoid_first` is the last track of the pass
+    /// before it: a fresh shuffle is allowed to start with it, which is the one
+    /// repeat a listener always notices, so it is moved out of the way.
+    fn pass(&self, avoid_first: Option<usize>) -> Vec<usize> {
+        let mut order: Vec<usize> = (0..self.files.len()).collect();
         if !self.shuffle {
-            return;
+            return order;
         }
-        self.order.shuffle(&mut rand::thread_rng());
-        if self.order.len() > 1 && self.order.first().copied() == avoid_first {
-            self.order.swap(0, 1);
+        order.shuffle(&mut rand::thread_rng());
+        if order.len() > 1 && order.first().copied() == avoid_first {
+            order.swap(0, 1);
         }
+        order
     }
 }
 
@@ -263,6 +289,42 @@ mod tests {
                 assert!(peeked.is_some());
             }
         }
+    }
+
+    /// The list shown ahead of time has to be what then plays, track for
+    /// track — across the wrap above all, where a shuffled pass used to be
+    /// decided only once the previous one ran out.
+    #[test]
+    fn upcoming_is_what_next_hands_back_in_turn() {
+        for shuffle in [false, true] {
+            for _ in 0..50 {
+                let mut playlist = Playlist::new(files(5), shuffle);
+                for _ in 0..13 {
+                    let ahead = playlist.upcoming(4);
+                    assert_eq!(ahead.len(), 4);
+                    let mut probe = Playlist {
+                        files: playlist.files.clone(),
+                        order: playlist.order.clone(),
+                        following: playlist.following.clone(),
+                        position: playlist.position,
+                        shuffle,
+                    };
+                    let played: Vec<PathBuf> = (0..4).filter_map(|_| probe.next()).collect();
+                    assert_eq!(ahead, played, "shuffle: {shuffle}");
+                    playlist.next();
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn upcoming_never_names_more_tracks_than_the_folder_holds() {
+        assert_eq!(Playlist::new(files(2), true).upcoming(4).len(), 2);
+        assert_eq!(
+            Playlist::new(files(1), true).upcoming(4),
+            vec![PathBuf::from("track0.mp3")]
+        );
+        assert!(Playlist::new(Vec::new(), true).upcoming(4).is_empty());
     }
 
     #[test]

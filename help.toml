@@ -1327,6 +1327,12 @@ file = "src/ui/home.rs"
 message = "Plays one file of your choosing on this media player. The file can be anywhere on your computer and does not have to be in the source's folder. It interrupts whatever is playing, exactly as skipping to the next track does, and when it finishes the folder carries on with the track it was going to play next. Nothing about the file is remembered. This button only appears on a media player's strip."
 
 [[control]]
+id = "tab.home.mixer.strip.upcoming"
+label = "Mixer strip upcoming tracks field"
+file = "src/ui/home.rs"
+message = "The next four tracks this media player will play, one per line and numbered, with the very next one first, so you can introduce a song on air before it starts. Use the arrow keys to read it. With shuffle on, the order shown is the order they will really play in, even past the end of the folder. It updates by itself whenever a track changes, and skipping moves it on just as a track ending does. A file you open yourself plays straight away, and when it ends the folder carries on with the first track shown. This field only appears on a media player's strip."
+
+[[control]]
 id = "tab.home.mixer.strip.volume"
 label = "Mixer strip volume slider"
 file = "src/ui/home.rs"

@@ -1219,7 +1219,7 @@ pub(crate) fn media_transport(
         // this — "next track" told the user only what they had just pressed.
         // `None` is a folder with nothing playable in it, where there is no
         // answer to give and the label already says so.
-        (Command::Next, _) => match &status.next {
+        (Command::Next, _) => match status.next() {
             Some(next) => t!("{label}, playing {next}", label = label, next = next),
             None => t!("{label}, next track", label = label),
         },
@@ -3879,6 +3879,8 @@ fn pump_events(app: &Rc<App>) {
         if run.media_generation != generation {
             run.media_generation = generation;
             labels_dirty = true;
+            drop(run);
+            home::refresh_upcoming_tracks(app);
         }
     }
 

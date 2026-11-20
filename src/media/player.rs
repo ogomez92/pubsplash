@@ -100,14 +100,26 @@ pub struct Status {
     pub state: PlaybackState,
     /// The track playing (or paused), without its extension.
     pub track: Option<String>,
-    /// The track a skip would move to, without its extension.
+    /// The next [`UPCOMING`] tracks, soonest first, without their extensions.
     ///
     /// Published by the worker rather than worked out by the caller because the
-    /// playlist lives here — and it is what "skip to the next track" is
+    /// playlist lives here. The first is what "skip to the next track" is
     /// announced as, so the announcement names the track the user is about to
-    /// hear instead of telling them something they already know.
-    pub next: Option<String>,
+    /// hear instead of telling them something they already know; the whole
+    /// list is the mixer strip's Upcoming tracks field, which is there so a
+    /// song can be introduced on air before it starts.
+    pub upcoming: Vec<String>,
 }
+
+impl Status {
+    /// The track a skip would move to.
+    pub fn next(&self) -> Option<&str> {
+        self.upcoming.first().map(String::as_str)
+    }
+}
+
+/// How many tracks ahead a player publishes.
+pub const UPCOMING: usize = 4;
 
 /// What the UI can ask a running player to do.
 pub enum Command {
@@ -358,7 +370,12 @@ impl Worker {
         let next = Status {
             state,
             track,
-            next: self.playlist.peek().map(|path| track_title(&path)),
+            upcoming: self
+                .playlist
+                .upcoming(UPCOMING)
+                .iter()
+                .map(|path| track_title(path))
+                .collect(),
         };
         let mut status =
             crate::audio::device::lock_recovering(&self.status, "Media player status");
@@ -683,7 +700,7 @@ mod tests {
         }
         assert_eq!(player.status().track.as_deref(), Some("a"), "first track");
         // What the skip about to be pressed will be announced as.
-        assert_eq!(player.status().next.as_deref(), Some("b"));
+        assert_eq!(player.status().next(), Some("b"));
 
         player.send(Command::Next);
 
@@ -760,7 +777,7 @@ mod tests {
         assert_eq!(playing.state, PlaybackState::Playing);
         // The folder never stopped being the folder, so a skip out of the
         // opened file is announced as — and plays — the track that was next.
-        assert_eq!(playing.next.as_deref(), Some("b"));
+        assert_eq!(playing.next(), Some("b"));
         assert_eq!(after.track.as_deref(), Some("b"));
     }
 

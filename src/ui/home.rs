@@ -760,6 +760,19 @@ pub struct MixerStrip {
     boost: Rc<Cell<bool>>,
     /// Shared with the monitoring handlers (context menu and CTRL+M).
     monitor: Rc<Cell<bool>>,
+    /// A media player's Upcoming tracks field. `None` on every other strip.
+    upcoming: Option<UpcomingField>,
+}
+
+/// The read-only list of tracks a media player will play next.
+#[derive(Clone)]
+struct UpcomingField {
+    /// The source's identity name, which is what its player is filed under.
+    source: String,
+    field: TextCtrl,
+    /// What the field holds, so a refresh can tell an unchanged list without
+    /// reading the widget back.
+    shown: Rc<RefCell<String>>,
 }
 
 /// Removes the UIA providers installed on the current mixer sliders. Must run
@@ -796,6 +809,30 @@ pub fn relabel_source_strips(app: &Rc<App>) {
             }
             *strip.name.borrow_mut() = name.clone();
             apply_strip_name(strip, true);
+        }
+    });
+}
+
+/// Brings every media player strip's Upcoming tracks field up to date. Run off
+/// the pump when a player reports a change.
+///
+/// Only a field whose list actually moved is written: `set_value` puts the
+/// caret back at the start, so rewriting an unchanged field would yank a user
+/// who is arrowing through it back to the top for nothing. A list that really
+/// did change — a track ending, a skip — is new text worth reading from the
+/// top anyway.
+pub fn refresh_upcoming_tracks(app: &Rc<App>) {
+    app.widgets(|w| {
+        for strip in w.mixer_strips.borrow().iter() {
+            let Some(upcoming) = &strip.upcoming else {
+                continue;
+            };
+            let text = super::media::upcoming_text(app.media.status(&upcoming.source).as_ref());
+            if *upcoming.shown.borrow() == text {
+                continue;
+            }
+            upcoming.field.change_value(&text);
+            *upcoming.shown.borrow_mut() = text;
         }
     });
 }
@@ -909,6 +946,7 @@ fn add_strip(
         // Monitoring is session state; a rebuilt mixer picks up whatever is
         // playing right now rather than resetting it.
         monitor: Rc::new(Cell::new(monitor_of(app, target))),
+        upcoming: None,
     };
     apply_strip_name(&strip, true);
     let name = strip.name.clone();
@@ -967,6 +1005,52 @@ fn add_strip(
         row.add(&open, 0, SizerFlag::AlignCenterVertical | SizerFlag::All, 4);
     }
     sizer.add_sizer(&row, 0, SizerFlag::Expand, 0);
+
+    // And the tracks coming next, so a song can be introduced on air before it
+    // starts. Created after the Open file button, which puts it next in the Tab
+    // order — creation order is Tab order.
+    if let Some(source) = &media_source {
+        let upcoming_row = BoxSizer::builder(Orientation::Horizontal).build();
+        let upcoming_label = StaticText::builder(parent)
+            .with_label(&t!("Upcoming tracks"))
+            .build();
+        let text = super::media::upcoming_text(app.media.status(source).as_ref());
+        // `MultiLine` as well as `ReadOnly`: wx drops a single-line read-only
+        // `TextCtrl` out of the Tab order, and a list the user cannot reach is
+        // a list they cannot read.
+        let field = TextCtrl::builder(parent)
+            .with_value(&text)
+            .with_style(TextCtrlStyle::MultiLine | TextCtrlStyle::ReadOnly)
+            .with_size(Size::new(-1, 76))
+            .build();
+        super::set_accessible_name(
+            &field,
+            &t!("Upcoming tracks on {source}", source = name.borrow()),
+        );
+        super::help::tag(
+            &field,
+            "tab.home.mixer.strip.upcoming",
+            "Mixer strip upcoming tracks field",
+        );
+        upcoming_row.add(&upcoming_label, 0, SizerFlag::All, 4);
+        upcoming_row.add(&field, 1, SizerFlag::Expand | SizerFlag::All, 4);
+        sizer.add_sizer(&upcoming_row, 0, SizerFlag::Expand, 0);
+        app.widgets(|w| {
+            if let Some(strip) = w
+                .mixer_strips
+                .borrow_mut()
+                .iter_mut()
+                .rev()
+                .find(|strip| strip.target == target)
+            {
+                strip.upcoming = Some(UpcomingField {
+                    source: source.clone(),
+                    field,
+                    shown: Rc::new(RefCell::new(text)),
+                });
+            }
+        });
+    }
 
     // Volume changes.
     {
