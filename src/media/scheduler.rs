@@ -585,6 +585,18 @@ mod tests {
     use super::*;
     use crate::config::ScheduleTrigger;
 
+    /// A file path built from components rather than written as a literal,
+    /// for the tests that read a title back: a backslash is not a separator on
+    /// macOS, where `C:\nine.mp3` is one file *name* titled with the whole
+    /// string.
+    fn file(components: &[&str]) -> String {
+        components
+            .iter()
+            .collect::<std::path::PathBuf>()
+            .to_string_lossy()
+            .into_owned()
+    }
+
     fn item(file: &str, trigger: ScheduleTrigger) -> ScheduleItem {
         ScheduleItem {
             file: file.to_string(),
@@ -747,7 +759,7 @@ mod tests {
             .flat_map(|chime| {
                 [chime, (chime + 12) % 24].map(move |hour| {
                     item(
-                        &format!(r"O:\hours\{chime:02}.mp3"),
+                        &file(&["hours", &format!("{chime:02}.mp3")]),
                         ScheduleTrigger::DailyAt { hour, minute: 0 },
                     )
                 })
@@ -865,7 +877,7 @@ mod tests {
     fn the_next_item_is_named_with_its_time() {
         let mut worker = worker(
             vec![item(
-                r"C:\nine.mp3",
+                &file(&["radio", "nine.mp3"]),
                 ScheduleTrigger::DailyAt { hour: 9, minute: 0 },
             )],
             LocalTime::now(),

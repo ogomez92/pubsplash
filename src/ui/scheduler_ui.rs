@@ -706,7 +706,14 @@ mod tests {
 
     #[test]
     fn a_file_picker_opens_in_the_folder_the_current_file_is_in() {
-        assert_eq!(parent_folder(r"O:\radio\hours\09.mp3"), r"O:\radio\hours");
+        // Built from components: a backslash is not a separator on macOS, so a
+        // Windows literal has no parent folder there at all.
+        let folder = std::path::Path::new("radio").join("hours");
+        let file = folder.join("09.mp3");
+        assert_eq!(
+            parent_folder(&file.to_string_lossy()),
+            folder.to_string_lossy()
+        );
         assert_eq!(parent_folder("   "), "");
     }
 }
