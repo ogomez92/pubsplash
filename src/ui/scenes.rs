@@ -10,7 +10,8 @@ use super::{App, WXK_DELETE, WXK_DOWN, WXK_UP, show_error};
 use crate::audio::mixer;
 use crate::config::{
     AzureTtsSettings, ElevenLabsTtsSettings, GoogleTtsSettings, GttsTtsSettings,
-    MediaPlayerSourceConfig, OpenAiTtsSettings, PollyTtsSettings, SchedulerSourceConfig,
+    MediaPlayerSourceConfig, OpenAiTtsSettings, PhononTtsSettings, PollyTtsSettings,
+    SchedulerSourceConfig,
     SoundEventsSourceConfig, SourceConfig, SourceKindConfig, TtsEngineProfile, TtsEngineSettings,
     TtsSourceConfig,
 };
@@ -978,6 +979,14 @@ fn edit_tts(app: &Rc<App>, scene_index: usize, source_index: usize, current: Tts
     let provider_controls =
         TtsProviderControls::build(&panel, &current, &app.config.borrow().speech, selected_id);
     provider_controls.show(selected_id);
+    // Phonon's language filter is saved with the source, so the list it opens
+    // with has to be filtered by it — the fill above ran before the panel that
+    // holds it existed.
+    if selected_id == crate::tts::engines::PHONON {
+        let language = provider_controls.model_value(selected_id);
+        fill_voice_choice(&voice_choice, &voices, selected_id, &language, &current.voice);
+        update_voice_status(&voice_count_label, &voice_choice, selected_id, &language);
+    }
 
     let output_check = CheckBox::builder(&panel)
         .with_label(&t!("Send speech to the stream"))
@@ -1233,6 +1242,22 @@ fn edit_tts(app: &Rc<App>, scene_index: usize, source_index: usize, current: Tts
                 fill_voice_choice(&choice, &voices_for_model, engine, &model, &wanted);
                 update_voice_status(&count_label, &choice, engine, &model);
                 controls.refresh_compatibility();
+            });
+    }
+    {
+        let controls = provider_controls.clone();
+        let choice = voice_choice;
+        let voices_for_language = voices.clone();
+        let count_label = voice_count_label;
+        provider_controls
+            .phonon_language
+            .clone()
+            .on_selection_changed(move |_| {
+                let engine = crate::tts::engines::PHONON;
+                let wanted = selected_voice(&choice, &voices_for_language);
+                let language = controls.model_value(engine);
+                fill_voice_choice(&choice, &voices_for_language, engine, &language, &wanted);
+                update_voice_status(&count_label, &choice, engine, &language);
             });
     }
     {
@@ -1523,6 +1548,7 @@ fn default_profile(engine: &str, speech: Option<&crate::config::SpeechConfig>) -
             ..Default::default()
         })),
         engines::GTTS => Some(TtsEngineSettings::Gtts(GttsTtsSettings::default())),
+        engines::PHONON => Some(TtsEngineSettings::Phonon(PhononTtsSettings::default())),
         _ => None,
     };
     TtsEngineProfile {
@@ -1579,6 +1605,11 @@ struct TtsProviderControls {
     gtts_panel: Panel,
     gtts_tld: TextCtrl,
     gtts_speed: Choice,
+    phonon_panel: Panel,
+    phonon_language: Choice,
+    /// The locale behind each row of `phonon_language` after the first, which
+    /// is "All languages". Read by index, never by the translated row text.
+    phonon_languages: Rc<Vec<String>>,
 }
 
 impl TtsProviderControls {
@@ -1627,6 +1658,10 @@ impl TtsProviderControls {
         let gtts = match &current.provider_settings {
             Some(TtsEngineSettings::Gtts(settings)) => settings.clone(),
             _ => GttsTtsSettings::default(),
+        };
+        let phonon = match &current.provider_settings {
+            Some(TtsEngineSettings::Phonon(settings)) => settings.clone(),
+            _ => PhononTtsSettings::default(),
         };
 
         let none_panel = Panel::builder(parent).build();
@@ -2022,6 +2057,29 @@ impl TtsProviderControls {
         gtts_sizer.add(&gtts_speed, 0, SizerFlag::Expand | SizerFlag::All, 3);
         gtts_panel.set_sizer(gtts_sizer, true);
 
+        let phonon_panel = Panel::builder(parent).build();
+        let (phonon_sizer, phonon_box) =
+            super::group_box(&phonon_panel, &t!("Phonon voice settings"));
+        phonon_sizer.add(
+            &StaticText::builder(&phonon_box)
+                .with_label(&t!("Language"))
+                .build(),
+            0,
+            SizerFlag::All,
+            3,
+        );
+        let phonon_language = Choice::builder(&phonon_box).build();
+        super::set_accessible_name(&phonon_language, &t!("Phonon voice language"));
+        super::help::tag(
+            &phonon_language,
+            "dialog.ttsSource.phononLanguage",
+            "Phonon voice language filter",
+        );
+        let phonon_languages = Rc::new(crate::tts::engines::phonon::languages());
+        fill_phonon_languages(&phonon_language, &phonon_languages, &phonon.language);
+        phonon_sizer.add(&phonon_language, 0, SizerFlag::Expand | SizerFlag::All, 3);
+        phonon_panel.set_sizer(phonon_sizer, true);
+
         let controls = Self {
             none_panel,
             eleven_panel,
@@ -2051,12 +2109,15 @@ impl TtsProviderControls {
             gtts_panel,
             gtts_tld,
             gtts_speed,
+            phonon_panel,
+            phonon_language,
+            phonon_languages,
         };
         controls.refresh_compatibility();
         controls
     }
 
-    fn panels(&self) -> [Panel; 7] {
+    fn panels(&self) -> [Panel; 8] {
         [
             self.none_panel,
             self.eleven_panel,
@@ -2065,6 +2126,7 @@ impl TtsProviderControls {
             self.google_panel,
             self.polly_panel,
             self.gtts_panel,
+            self.phonon_panel,
         ]
     }
 
@@ -2085,6 +2147,7 @@ impl TtsProviderControls {
         self.google_panel.show(engine == engines::GOOGLE);
         self.polly_panel.show(engine == engines::AWS);
         self.gtts_panel.show(engine == engines::GTTS);
+        self.phonon_panel.show(engine == engines::PHONON);
         self.none_panel.show(matches!(
             engine,
             engines::SAPI | engines::EDGE | engines::STAR
@@ -2196,6 +2259,13 @@ impl TtsProviderControls {
                 fill_model_choice(&self.polly_engine, engines::AWS, &polly.engine);
                 self.polly_language.set_value(&polly.language_code);
             }
+            (engines::PHONON, Some(TtsEngineSettings::Phonon(phonon))) => {
+                fill_phonon_languages(
+                    &self.phonon_language,
+                    &self.phonon_languages,
+                    &phonon.language,
+                );
+            }
             (engines::GTTS, Some(TtsEngineSettings::Gtts(gtts))) => {
                 self.gtts_tld.set_value(&gtts.tld);
                 self.gtts_speed.set_selection(match gtts.slow {
@@ -2214,8 +2284,19 @@ impl TtsProviderControls {
             crate::tts::engines::ELEVENLABS => model_choice_value(&self.eleven_model),
             crate::tts::engines::OPENAI => model_choice_value(&self.openai_model),
             crate::tts::engines::AWS => self.polly_engine_value(),
+            // The language filter does the job a model does for the cloud
+            // engines: it narrows the voice list, through each voice's
+            // `supported_engines` (see `tts::engines::phonon`).
+            crate::tts::engines::PHONON => self.phonon_language_value(),
             _ => String::new(),
         }
+    }
+    fn phonon_language_value(&self) -> String {
+        self.phonon_language
+            .get_selection()
+            .and_then(|index| index.checked_sub(1))
+            .and_then(|index| self.phonon_languages.get(index as usize).cloned())
+            .unwrap_or_default()
     }
     fn polly_engine_value(&self) -> String {
         model_choice_value(&self.polly_engine)
@@ -2271,6 +2352,9 @@ impl TtsProviderControls {
                 engine: self.polly_engine_value(),
                 language_code: self.polly_language.get_value().trim().to_string(),
             })),
+            engines::PHONON => Some(TtsEngineSettings::Phonon(PhononTtsSettings {
+                language: self.phonon_language_value(),
+            })),
             engines::GTTS => Some(TtsEngineSettings::Gtts(GttsTtsSettings {
                 tld: self.gtts_tld.get_value().trim().to_string(),
                 slow: match self.gtts_speed.get_selection().unwrap_or(0) {
@@ -2282,6 +2366,23 @@ impl TtsProviderControls {
             _ => None,
         }
     }
+}
+
+/// Fills Phonon's language filter: "All languages", then one row per locale
+/// that has a voice, selecting `wanted`. A saved locale whose voices have all
+/// gone falls back to "All languages" rather than to a row that lists nothing.
+fn fill_phonon_languages(choice: &Choice, languages: &[String], wanted: &str) {
+    choice.clear();
+    choice.append(&t!("All languages"));
+    for locale in languages {
+        choice.append(&crate::tts::engines::phonon::language_label(locale));
+    }
+    let selection = languages
+        .iter()
+        .position(|locale| locale == wanted)
+        .map(|index| index + 1)
+        .unwrap_or(0);
+    choice.set_selection(selection as u32);
 }
 
 fn bind_optional_double(check: &CheckBox, input: &SpinCtrlDouble) {

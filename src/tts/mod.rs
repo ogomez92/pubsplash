@@ -1,8 +1,9 @@
 //! Text-to-speech engines behind a common interface.
 //!
 //! SAPI runs on a COM apartment thread and speaks locally as well as feeding
-//! the mixer; every other engine is a blocking network call rendered on the
-//! `tts-net` worker. [`speaker::Speaker`] routes between the two.
+//! the mixer; every other engine is a blocking call rendered on the `tts-net`
+//! worker — a network request for all of them but Phonon, which synthesizes
+//! in-process. [`speaker::Speaker`] routes between the two.
 
 pub mod catalog;
 pub mod clock;

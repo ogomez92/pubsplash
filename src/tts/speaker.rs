@@ -161,7 +161,12 @@ fn start_network_worker(queue: Queue<SpeakRequest>, feeds: ExternalFeeds, proble
 
                 // Floor on how often a paid API is called. Applied before
                 // synthesis so a burst is spread out rather than refused.
-                let interval = Duration::from_millis(request.speech.min_request_interval_ms);
+                // Phonon calls nothing, so it has nothing to spread out.
+                let interval = if engines::resolve_id(&request.engine) == engines::PHONON {
+                    Duration::ZERO
+                } else {
+                    Duration::from_millis(request.speech.min_request_interval_ms)
+                };
                 if let Some(previous) = last_request {
                     let elapsed = previous.elapsed();
                     if elapsed < interval {

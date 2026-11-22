@@ -13,8 +13,10 @@
          and Help > View Changelog hand to the browser. Best effort: these need
          `marked`, reached through whichever of marked/pnpm/npx this machine
          has, and finding none of them only warns.
-      4. Replaces the shipped files, moving the old ones aside first so a
-         failure half way through rolls back rather than leaving a broken folder.
+      4. Replaces the shipped files -- the binaries, the docs, the Phonon
+         voice model and the voices\ folder -- moving the old ones aside first
+         so a failure half way through rolls back rather than leaving a broken
+         folder.
 
     It only ever writes the files the portable ZIP ships. user_data\ -- settings,
     logs, crash dumps, recordings, staged updates -- and anything else you keep
@@ -86,8 +88,7 @@ $releaseDir = Join-Path $repoRoot 'target\release'
 # Every user-facing binary, matching the `Assemble portable ZIP` step in
 # .github/workflows/release.yml. pubsplash.exe resolves its helpers as siblings
 # of itself. gen-help is a dev tool and is deliberately absent; the default
-# sound pack and help.toml are compiled into the exe, so there are no loose
-# assets to copy.
+# sound pack and help.toml are compiled into the exe.
 $Binaries = @(
     'pubsplash.exe',
     'pubsplash-scan.exe',
@@ -95,6 +96,29 @@ $Binaries = @(
     'pubsplash-update.exe',
     'soundpack.exe'
 )
+
+# Phonon's model and voices, which ship beside the exe under the same names the
+# installer and the portable ZIP give them (Cargo.toml `resources`, the
+# workflow's ZIP step); that is where tts::engines::phonon looks. The model is
+# committed in parts (model.safetensors.001, .002) and joined into this path by
+# build.rs, so it exists once any build has run -- which -SkipBuild assumes.
+$PhononModel = @{
+    Name   = 'phonon-model.safetensors'
+    Source = Join-Path $repoRoot 'assets\phonon\model.safetensors'
+}
+# Anything smaller than this is not a usable model.
+$PhononModelMinimumBytes = 1MB
+# The model's config and tokenizer, a matched set with it, under the same
+# prefixed names.
+$PhononModelCompanions = @(
+    @{ Name = 'phonon-config.json';    Source = Join-Path $repoRoot 'assets\phonon\config.json' },
+    @{ Name = 'phonon-tokenizer.json'; Source = Join-Path $repoRoot 'assets\phonon\tokenizer.json' }
+)
+# Copied file by file into voices\ beside the exe, keeping each voice's
+# language subfolder. Voices the user has added to the install's voices folder
+# are not in this list, so like everything else outside it they are left alone.
+$PhononVoicesSource = Join-Path $repoRoot 'assets\phonon\voices'
+$PhononVoicesTarget = 'voices'
 
 # Generated from the Markdown sources rather than kept in the repo, which is why
 # they are gitignored. Deployed only if they exist.
@@ -336,6 +360,41 @@ foreach ($doc in $Docs) {
         $plan += [pscustomobject]@{ Name = $doc.Html; Source = $source }
     }
 }
+$plan += [pscustomobject]@{ Name = $PhononModel.Name; Source = $PhononModel.Source }
+foreach ($file in $PhononModelCompanions) {
+    $plan += [pscustomobject]@{ Name = $file.Name; Source = $file.Source }
+}
+if (-not (Test-Path -LiteralPath $PhononVoicesSource -PathType Container)) {
+    Fail "No Phonon voices at $PhononVoicesSource."
+}
+$voiceFiles = @(Get-ChildItem -LiteralPath $PhononVoicesSource -Recurse -File -Filter '*.safetensors')
+foreach ($file in $voiceFiles) {
+    $relative = $file.FullName.Substring($PhononVoicesSource.Length).TrimStart('\')
+    $plan += [pscustomobject]@{ Name = Join-Path $PhononVoicesTarget $relative; Source = $file.FullName }
+}
+
+# The voices are summarized as one row when the plan is printed: 104 rows of
+# voice files would bury the handful of lines worth reading.
+function Format-Plan {
+    param([object[]]$Items, [string]$Root, [switch]$Written)
+
+    $voicePrefix = $PhononVoicesTarget + '\'
+    $rows = foreach ($item in $Items) {
+        if ($item.Name.StartsWith($voicePrefix)) { continue }
+        $file = Get-Item -LiteralPath $(if ($Root) { Join-Path $Root $item.Name } else { $item.Source })
+        if ($Written) {
+            [pscustomobject]@{ File = $item.Name; Bytes = $file.Length; Written = $file.LastWriteTime }
+        } else {
+            [pscustomobject]@{ File = $item.Name; Bytes = $file.Length }
+        }
+    }
+    $voices = @($Items | Where-Object { $_.Name.StartsWith($voicePrefix) })
+    if ($voices.Count -gt 0) {
+        $bytes = [long]($voices | ForEach-Object { (Get-Item -LiteralPath $_.Source).Length } | Measure-Object -Sum).Sum
+        $rows = @($rows) + [pscustomobject]@{ File = "$PhononVoicesTarget\ ($($voices.Count) voices)"; Bytes = $bytes }
+    }
+    $rows | Format-Table -AutoSize | Out-String -Width 100 | Write-Host
+}
 
 # Checked as a set before anything is moved: the cheapest possible way to avoid
 # a half-replaced folder is to find out that a file is missing while the folder
@@ -343,14 +402,19 @@ foreach ($doc in $Docs) {
 $missing = @($plan | Where-Object { -not (Test-Path $_.Source) })
 if ($missing.Count -gt 0) {
     $names = ($missing | ForEach-Object { $_.Name }) -join ', '
-    Fail "Missing from $releaseDir - $names. Build first, or drop -SkipBuild."
+    Fail "Missing - $names. Build first, or drop -SkipBuild: a build also joins the Phonon model from its parts."
+}
+
+# Deploying a pointer would leave the install with a Phonon engine that reports
+# its model incomplete, and overwrite a good model that may already be there.
+$modelBytes = (Get-Item -LiteralPath $PhononModel.Source).Length
+if ($modelBytes -lt $PhononModelMinimumBytes) {
+    Fail "$($PhononModel.Source) is only $modelBytes bytes, not the Phonon model. Build again without -SkipBuild; build.rs rejoins it from assets\phonon\model.safetensors.001 and .002."
 }
 
 if ($DryRun) {
     Write-Host "`nWould deploy to $Target" -ForegroundColor Cyan
-    $plan | ForEach-Object {
-        [pscustomobject]@{ File = $_.Name; Bytes = (Get-Item $_.Source).Length }
-    } | Format-Table -AutoSize | Out-String -Width 100 | Write-Host
+    Format-Plan -Items $plan
     Write-Host 'Nothing else in the folder would be touched, user_data included.' -ForegroundColor Cyan
     exit 0
 }
@@ -382,8 +446,14 @@ $movedAside = New-Object System.Collections.Generic.List[string]
 try {
     foreach ($item in $plan) {
         $destination = Join-Path $Target $item.Name
-        if (Test-Path $destination) {
-            Move-Item -LiteralPath $destination -Destination (Join-Path $aside $item.Name) -Force
+        $saved = Join-Path $aside $item.Name
+        # The voices live in subfolders, which neither a fresh install nor the
+        # move-aside folder has yet.
+        foreach ($dir in @((Split-Path -Parent $destination), (Split-Path -Parent $saved))) {
+            if (-not (Test-Path -LiteralPath $dir)) { New-Item -ItemType Directory -Path $dir | Out-Null }
+        }
+        if (Test-Path -LiteralPath $destination) {
+            Move-Item -LiteralPath $destination -Destination $saved -Force
             $movedAside.Add($item.Name) | Out-Null
         }
         Copy-Item -LiteralPath $item.Source -Destination $destination -Force
@@ -392,7 +462,7 @@ try {
     Write-Host "Deploy failed part way through; putting the old files back." -ForegroundColor Red
     foreach ($name in $movedAside) {
         $destination = Join-Path $Target $name
-        if (Test-Path $destination) { Remove-Item -LiteralPath $destination -Force -ErrorAction SilentlyContinue }
+        if (Test-Path -LiteralPath $destination) { Remove-Item -LiteralPath $destination -Force -ErrorAction SilentlyContinue }
         Move-Item -LiteralPath (Join-Path $aside $name) -Destination $destination -Force
     }
     Remove-Item -LiteralPath $aside -Recurse -Force -ErrorAction SilentlyContinue
@@ -404,10 +474,7 @@ Remove-Item -LiteralPath $aside -Recurse -Force
 # --- Report -----------------------------------------------------------------
 
 Write-Host "`nDeployed Pubsplash $version to $Target" -ForegroundColor Green
-$plan | ForEach-Object {
-    $item = Get-Item (Join-Path $Target $_.Name)
-    [pscustomobject]@{ File = $item.Name; Bytes = $item.Length; Written = $item.LastWriteTime }
-} | Format-Table -AutoSize | Out-String -Width 100 | Write-Host
+Format-Plan -Items $plan -Root $Target -Written
 Write-Host 'user_data and everything else in the folder was left alone.' -ForegroundColor Green
 
 # Explicit, because a script that ends without one exits with the status of the

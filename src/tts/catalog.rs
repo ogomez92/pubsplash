@@ -176,6 +176,7 @@ impl TtsCatalog {
                     | super::engines::GTTS
                     | super::engines::OPENAI
                     | super::engines::STAR
+                    | super::engines::PHONON
             )
         });
     }
@@ -370,7 +371,7 @@ pub fn discover(engine: &str, speech: &SpeechConfig) -> Result<EngineCatalog, Tt
         ),
         engines::OPENAI => engines::openai::discover(speech)?,
         engines::ELEVENLABS => engines::elevenlabs::discover(speech)?,
-        engines::AZURE | engines::GOOGLE | engines::GTTS | engines::STAR => {
+        engines::AZURE | engines::GOOGLE | engines::GTTS | engines::STAR | engines::PHONON => {
             EngineCatalog::from_voices(
                 Vec::new(),
                 engines::build(engine, speech)
@@ -391,9 +392,10 @@ pub fn discover(engine: &str, speech: &SpeechConfig) -> Result<EngineCatalog, Tt
 
 pub fn startup_engines(speech: &SpeechConfig) -> Vec<&'static str> {
     use super::engines;
-    // Google Translate's language list is fixed and needs no network, so it is
-    // refreshed alongside the two engines that need no setup.
-    let mut selected = vec![engines::SAPI, engines::EDGE, engines::GTTS];
+    // Google Translate's language list is fixed and needs no network, and
+    // Phonon's voices are on disk, so both are refreshed alongside the two
+    // engines that need no setup.
+    let mut selected = vec![engines::SAPI, engines::EDGE, engines::GTTS, engines::PHONON];
     if !speech.star_host.trim().is_empty() {
         selected.push(engines::STAR);
     }

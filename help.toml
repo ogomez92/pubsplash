@@ -1093,6 +1093,12 @@ file = "src/ui/scenes.rs"
 message = "Choose an OpenAI speech model discovered with your validated credentials. Saved legacy models remain selectable when unavailable."
 
 [[control]]
+id = "dialog.ttsSource.phononLanguage"
+label = "Phonon voice language filter"
+file = "src/ui/scenes.rs"
+message = "Choose which Phonon voices the voice list shows, by language and accent. All languages lists every voice. This only filters the list: each voice reads text in its own language."
+
+[[control]]
 id = "dialog.ttsSource.pitch"
 label = "TTS voice pitch slider"
 file = "src/ui/scenes.rs"

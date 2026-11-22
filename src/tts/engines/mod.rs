@@ -13,14 +13,16 @@ pub mod elevenlabs;
 pub mod google;
 pub mod gtts;
 pub mod openai;
+pub mod phonon;
 pub mod polly;
 pub mod star;
 
-/// Every engine, in the order the picker shows them: the two that need no
+/// Every engine, in the order the picker shows them: the three that need no
 /// setup first, then the rest alphabetically.
 pub const ALL: &[(&str, &str)] = &[
     (SAPI, LOCAL_VOICE_NAME),
     (EDGE, "Microsoft Edge"),
+    (PHONON, "Phonon"),
     (AWS, "AWS Polly"),
     (AZURE, "Azure"),
     (ELEVENLABS, "ElevenLabs"),
@@ -52,6 +54,8 @@ pub const GOOGLE: &str = "google";
 pub const GTTS: &str = "gtts";
 pub const OPENAI: &str = "openai";
 pub const STAR: &str = "star";
+/// Offline neural voices, synthesized in-process — see [`phonon`].
+pub const PHONON: &str = "phonon";
 
 /// The id to use for an `engine` string read from the config.
 ///
@@ -92,8 +96,12 @@ pub fn voice_ids_are_opaque(engine: &str) -> bool {
     engine == ELEVENLABS
 }
 
-/// Whether an engine runs over the network, and so belongs on the `tts-net`
-/// worker rather than the COM apartment thread.
+/// Whether an engine is a [`SpeechEngine`], and so belongs on the `tts-net`
+/// worker rather than the platform voice's own thread.
+///
+/// Every one of them is a network engine except Phonon, which is local but
+/// CPU-bound and has nothing to gain from a thread of its own: the worker
+/// already runs one utterance at a time, in order, which is what it wants.
 pub fn is_network(engine: &str) -> bool {
     resolve_id(engine) != SAPI
 }
@@ -113,6 +121,7 @@ pub fn build(engine: &str, config: &SpeechConfig) -> Option<Box<dyn SpeechEngine
         GTTS => Some(Box::new(gtts::GoogleTranslate::new())),
         OPENAI => Some(Box::new(openai::OpenAi::new(config))),
         STAR => Some(Box::new(star::Star::new(config))),
+        PHONON => Some(Box::new(phonon::Phonon::new())),
         _ => None,
     }
 }

@@ -59,6 +59,10 @@ fn main() {
             data_dir::root().display()
         );
     }
+    // A portable copy that updated itself from 2.3.0 has its Phonon voices
+    // loose beside the exe; this puts them back in `voices\`. After logging, so
+    // the one time it happens is in the log.
+    tts::engines::phonon::adopt_flattened_voices();
     let config = config::load();
     // Before the first `t!` anywhere, which in practice means before any window
     // exists — but also before the sound pack and engine threads below, since a
@@ -76,6 +80,9 @@ fn main() {
     // which kills the process without unwinding, so it takes a Win32 exception
     // filter to leave any trace at all of who did it.
     crash::install();
+    // Before any thread that could read the environment exists: sizing the
+    // Phonon model's CPU pool also writes `RAYON_NUM_THREADS`.
+    tts::engines::phonon::configure_threads();
     log::info!("Pubsplash {} starting", env!("CARGO_PKG_VERSION"));
     // Clears the staging area, and with it the helper copy from a previous
     // update -- a running process cannot delete its own image, so that one

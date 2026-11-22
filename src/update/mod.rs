@@ -300,19 +300,25 @@ pub fn cleanup_leftovers() {
     }
 }
 
+/// The one folder the portable ZIP ships, and so the one folder an update keeps
+/// as a folder: Phonon's voices, `voices\<locale>\<name>.safetensors`, where
+/// the subfolder is each voice's language. `bin/updater_win.rs` names the same
+/// folder; the two must agree.
+pub const SHIPPED_FOLDER: &str = "voices";
+
 /// Unpacks the portable ZIP into `destination`.
 ///
-/// Entries are flattened to their file name. The archive is our own, built by
-/// `Compress-Archive` from a flat `bundle\` directory, so there are no
-/// directories in it to preserve.
+/// Entries are flattened to their file name, except under [`SHIPPED_FOLDER`],
+/// which keeps its layout one language folder deep. The archive is our own,
+/// built by `Compress-Archive` from `bundle\`, whose only directory is that one.
 ///
 /// Nothing can escape `destination`, by two independent means. `enclosed_name`
 /// returns `None` for any entry naming a parent directory, an absolute path or a
 /// drive letter, and that is treated as a broken archive and refuses the *whole*
 /// update rather than skipping the entry — a release containing such a path is
-/// not one to take half of. Taking `file_name` of what survives then discards
-/// any interior directories, so the join below can only ever produce a direct
-/// child.
+/// not one to take half of. What survives is then rebuilt from its normal
+/// components only, so the join below can only ever produce a direct child or a
+/// path under `voices\` at most two levels down.
 fn extract(archive: &Path, destination: &Path) -> Result<(), String> {
     let file = std::fs::File::open(archive)
         .map_err(|e| format!("Could not open the downloaded update: {e}"))?;
@@ -331,14 +337,15 @@ fn extract(archive: &Path, destination: &Path) -> Result<(), String> {
         }
         let name = entry
             .enclosed_name()
-            .and_then(|path| {
-                path.file_name()
-                    .map(|name| name.to_string_lossy().into_owned())
-            })
+            .and_then(|path| staged_path(&path))
             .ok_or_else(|| {
                 "The downloaded update contains an entry with an unusable name.".to_string()
             })?;
         let target = destination.join(&name);
+        if let Some(parent) = target.parent() {
+            std::fs::create_dir_all(parent)
+                .map_err(|e| format!("Could not create {}: {e}", parent.display()))?;
+        }
         let mut out = std::fs::File::create(&target)
             .map_err(|e| format!("Could not write {}: {e}", target.display()))?;
         std::io::copy(&mut entry, &mut out)
@@ -350,6 +357,26 @@ fn extract(archive: &Path, destination: &Path) -> Result<(), String> {
     }
     log::info!("Extracted {written} files to {}", destination.display());
     Ok(())
+}
+
+/// Where an archive entry lands in the staging directory, relative to it: a
+/// path inside [`SHIPPED_FOLDER`] is kept, at most one language folder deep;
+/// anything else is flattened to its file name. `None` for an entry with no
+/// file name at all.
+fn staged_path(path: &Path) -> Option<PathBuf> {
+    let parts: Vec<&std::ffi::OsStr> = path
+        .components()
+        .filter_map(|part| match part {
+            std::path::Component::Normal(part) => Some(part),
+            _ => None,
+        })
+        .collect();
+    match parts.as_slice() {
+        [folder, rest @ ..] if *folder == SHIPPED_FOLDER && (1..=2).contains(&rest.len()) => {
+            Some(parts.iter().collect())
+        }
+        _ => parts.last().map(PathBuf::from),
+    }
 }
 
 /// A current-thread runtime per worker.
@@ -482,6 +509,35 @@ mod tests {
 
         assert!(staging.join("pubsplash.exe").is_file());
         assert!(!staging.join("nested").exists());
+    }
+
+    /// The voices folder is the one exception to flattening: a voice's language
+    /// is the folder it is in, so flattening would lose it — and two languages
+    /// may hold the same file name.
+    #[test]
+    fn the_voices_folder_keeps_its_layout() {
+        let scratch = Scratch::new("voices");
+        let archive = scratch.0.join("voices.zip");
+        build_zip(
+            &archive,
+            &[
+                ("pubsplash.exe", b"new exe"),
+                ("voices/es_ES/Oriol.safetensors", b"oriol"),
+                ("voices/Loose.safetensors", b"loose"),
+                // Deeper than a language folder: flattened like anything else.
+                ("voices/es_ES/deep/Too.safetensors", b"deep"),
+            ],
+        );
+        let staging = scratch.0.join("staging");
+        extract(&archive, &staging).expect("extraction succeeds");
+
+        assert_eq!(
+            std::fs::read(staging.join("voices").join("es_ES").join("Oriol.safetensors")).unwrap(),
+            b"oriol"
+        );
+        assert!(staging.join("voices").join("Loose.safetensors").is_file());
+        assert!(staging.join("Too.safetensors").is_file());
+        assert!(!staging.join("voices").join("es_ES").join("deep").exists());
     }
 
     #[test]

@@ -248,6 +248,23 @@ fn apply_portable(staging: &Path, target: &Path, relaunch: Option<&Path>) -> Res
         let destination = target.join(name);
         let saved = backup.join(name);
 
+        // A voice lives in a language folder, which neither an older copy nor
+        // the move-aside directory has yet. Left behind, empty, by a rollback,
+        // which is harmless: an empty language folder lists no voices.
+        for dir in [destination.parent(), saved.parent()].into_iter().flatten() {
+            if let Err(e) = std::fs::create_dir_all(dir) {
+                return Err(undo(
+                    &moved,
+                    &backup,
+                    format!(
+                        "Could not create {}: {e}. The update was undone and your existing \
+                         version is unchanged.",
+                        dir.display()
+                    ),
+                ));
+            }
+        }
+
         if destination.exists()
             && let Err(e) = retry(|| std::fs::rename(&destination, &saved))
         {
@@ -304,20 +321,42 @@ fn apply_portable(staging: &Path, target: &Path, relaunch: Option<&Path>) -> Res
     Ok(())
 }
 
-/// The file names the staged update ships, top level only.
+/// The one folder the update ships as a folder: Phonon's voices, one language
+/// subfolder deep. Must match `update::SHIPPED_FOLDER`, which is what keeps it
+/// a folder when the ZIP is unpacked into staging.
+const SHIPPED_FOLDER: &str = "voices";
+
+/// The files the staged update ships, relative to it: every top-level file,
+/// and every file in [`SHIPPED_FOLDER`] and its language folders.
 ///
-/// Flat by construction: `extract` in `src/update/mod.rs` writes only file names
-/// into the staging directory, and the release ZIP is itself flat.
-fn shipped_files(staging: &Path) -> Result<Vec<String>, String> {
-    let entries = std::fs::read_dir(staging)
-        .map_err(|e| format!("Could not read the downloaded update: {e}"))?;
+/// Nothing else is descended into, which is what keeps `user_data\` safe if a
+/// staging directory ever held one. `extract` in `src/update/mod.rs` writes
+/// only these two shapes anyway.
+fn shipped_files(staging: &Path) -> Result<Vec<PathBuf>, String> {
+    let unreadable = |e: std::io::Error| format!("Could not read the downloaded update: {e}");
     let mut files = Vec::new();
-    for entry in entries {
-        let entry = entry.map_err(|e| format!("Could not read the downloaded update: {e}"))?;
-        if entry.path().is_file()
-            && let Some(name) = entry.file_name().to_str()
-        {
-            files.push(name.to_string());
+    for entry in std::fs::read_dir(staging).map_err(unreadable)? {
+        let entry = entry.map_err(unreadable)?;
+        if entry.path().is_file() {
+            files.push(PathBuf::from(entry.file_name()));
+        }
+    }
+    let folder = staging.join(SHIPPED_FOLDER);
+    if folder.is_dir() {
+        for entry in std::fs::read_dir(&folder).map_err(unreadable)? {
+            let entry = entry.map_err(unreadable)?;
+            let path = entry.path();
+            let relative = Path::new(SHIPPED_FOLDER).join(entry.file_name());
+            if path.is_file() {
+                files.push(relative);
+            } else if path.is_dir() {
+                for inner in std::fs::read_dir(&path).map_err(unreadable)? {
+                    let inner = inner.map_err(unreadable)?;
+                    if inner.path().is_file() {
+                        files.push(relative.join(inner.file_name()));
+                    }
+                }
+            }
         }
     }
     files.sort();
@@ -495,15 +534,27 @@ mod tests {
         std::fs::read_to_string(dir.join(name)).expect("reading a scratch file")
     }
 
+    /// Top-level files and the voices folder, nothing else: any other folder
+    /// is not descended into.
     #[test]
-    fn lists_only_top_level_files() {
+    fn lists_top_level_files_and_the_voices_folder_only() {
         let scratch = Scratch::new("listing");
         let staging = scratch.sub("staging");
         write(&staging, "pubsplash.exe", "new");
         write(&staging, "readme.html", "new");
-        scratch.sub("staging/nested");
+        write(&scratch.sub("staging/nested"), "ignored.txt", "x");
+        write(&scratch.sub("staging/voices/es_ES"), "Oriol.safetensors", "x");
+        write(&scratch.sub("staging/voices"), "Loose.safetensors", "x");
         let files = shipped_files(&staging).expect("listing succeeds");
-        assert_eq!(files, vec!["pubsplash.exe", "readme.html"]);
+        assert_eq!(
+            files,
+            vec![
+                PathBuf::from("pubsplash.exe"),
+                PathBuf::from("readme.html"),
+                Path::new("voices").join("Loose.safetensors"),
+                Path::new("voices").join("es_ES").join("Oriol.safetensors"),
+            ]
+        );
     }
 
     #[test]
@@ -570,6 +621,27 @@ mod tests {
         apply_portable(&staging, &target, None).expect("the update applies");
 
         assert_eq!(read(&target, "my-notes.txt"), "keep me");
+    }
+
+    /// The voices folder arrives on a copy that has never had one, its shipped
+    /// voices are replaced on one that has, and a voice the user added to it
+    /// themselves is left exactly where it is.
+    #[test]
+    fn installs_the_voices_folder_and_keeps_the_users_own_voices() {
+        let scratch = Scratch::new("voices");
+        let staging = scratch.sub("staging");
+        let target = scratch.sub("target");
+        write(&staging, "pubsplash.exe", "new");
+        write(&scratch.sub("staging/voices/es_ES"), "Oriol.safetensors", "new oriol");
+        write(&target, "pubsplash.exe", "old");
+        let mine = scratch.sub("target/voices/es_ES");
+        write(&mine, "Mine.safetensors", "my voice");
+
+        apply_portable(&staging, &target, None).expect("the update applies");
+
+        assert_eq!(read(&mine, "Oriol.safetensors"), "new oriol");
+        assert_eq!(read(&mine, "Mine.safetensors"), "my voice");
+        assert!(!target.join(BACKUP_DIR).exists());
     }
 
     #[test]

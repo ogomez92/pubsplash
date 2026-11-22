@@ -1,6 +1,6 @@
 [package]
 name = "pubsplash"
-version = "2.3.0"
+version = "2.4.0"
 edition = "2024"
 # Several binaries live here, so `cargo run` is ambiguous without naming the
 # default target.
@@ -129,6 +129,17 @@ zip = { version = "8", default-features = false, features = ["deflate-flate2-zli
 # Windows on its own account: jiff carries the real IANA rules, so a schedule
 # set across a DST transition lands on the right instant on either platform.
 jiff = "0.2"
+# The Phonon speech engine (`tts/engines/phonon.rs`): Gradium's Rust runtime,
+# linked in-process, so offline neural speech needs no DLL, no Python and no
+# separately installed Phonon. `hf` is the Hugging Face tokenizer, which reads
+# the `tokenizer.json` compiled in from `assets/phonon/`. Default features only:
+# the GPU backends each need a toolchain at build time (Vulkan wants `glslc`),
+# and the CPU is several times faster than real time anyway.
+ptts = { version = "0.7.1", features = ["hf"] }
+# `ptts`'s tensor crate, named only for `set_num_threads`: its CPU pool otherwise
+# takes every core, which is slower than four (measured: 0.70 s against 0.44 s
+# for the same sentence on a 32-thread machine) and competes with the mixer.
+xn = "0.2.14"
 
 # Windows-only. `wasapi` is the capture and render stack, and the `windows`
 # crates are everything else Win32: DPAPI, the keyboard hook, MSAA/UIA, the
@@ -235,6 +246,23 @@ tokio = { version = "1", features = ["test-util"] }
 debug = false
 opt-level = 2
 
+# Phonon's tensor and matrix crates. Unoptimized, a sentence that takes half a
+# second in a release build takes most of a minute, which makes the engine
+# untestable from a debug build. Same trade as libopus above: code we never
+# step through.
+[profile.dev.package.ptts]
+opt-level = 3
+[profile.dev.package.xn]
+opt-level = 3
+[profile.dev.package.xn-gemm]
+opt-level = 3
+[profile.dev.package.xn-gemm-common]
+opt-level = 3
+[profile.dev.package.xn-gemm-f32]
+opt-level = 3
+[profile.dev.package.xn-gemm-f16]
+opt-level = 3
+
 [profile.release]
 lto = "fat"
 codegen-units = 1
@@ -256,7 +284,23 @@ icons = ["assets/icon/pubsplash.ico", "assets/icon/pubsplash.icns"]
 # the Help menu looks for them. Both are generated from the Markdown sources at
 # package time (see the release workflow's "Convert docs to HTML" step) —
 # a local `cargo packager` run needs them produced first.
-resources = ["readme.html", "changelog.html"]
+#
+# Phonon's model (with its config and tokenizer, a matched set) and its voices
+# ship as ordinary files beside the exe, where
+# `tts::engines::phonon` looks for them (on macOS they land in
+# `Contents/Resources`, which it also searches). A directory `src` is copied
+# whole, so the voices keep their `voices/<locale>/` layout: the folder is the
+# voice's language. The model is committed in parts and joined into
+# `assets/phonon/model.safetensors` by build.rs, which the
+# before-packaging-command's build runs first.
+resources = [
+  "readme.html",
+  "changelog.html",
+  { src = "assets/phonon/model.safetensors", target = "phonon-model.safetensors" },
+  { src = "assets/phonon/config.json", target = "phonon-config.json" },
+  { src = "assets/phonon/tokenizer.json", target = "phonon-tokenizer.json" },
+  { src = "assets/phonon/voices", target = "voices" },
+]
 
 # Listed explicitly so the dev-only gen-help tool is not installed: with this
 # unset, cargo-packager auto-detects every [[bin]] target in the manifest.

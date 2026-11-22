@@ -1101,6 +1101,7 @@ pub enum TtsEngineSettings {
     Google(GoogleTtsSettings),
     Polly(PollyTtsSettings),
     Gtts(GttsTtsSettings),
+    Phonon(PhononTtsSettings),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -1192,6 +1193,16 @@ pub struct GttsTtsSettings {
     pub tld: String,
     /// None preserves the provider default, while Some selects normal/slow.
     pub slow: Option<bool>,
+}
+
+/// The local Phonon engine's per-source settings.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(default)]
+pub struct PhononTtsSettings {
+    /// The locale the voice picker is filtered to, such as `es_ES` — a folder
+    /// name under `assets/phonon/voices`. Empty lists every voice. Only a
+    /// filter: the text is normalized for whichever voice is chosen.
+    pub language: String,
 }
 
 /// One engine's saved state within a text-to-speech source.
@@ -2404,6 +2415,9 @@ mod tests {
             TtsEngineSettings::Gtts(GttsTtsSettings {
                 tld: "co.uk".into(),
                 slow: Some(true),
+            }),
+            TtsEngineSettings::Phonon(PhononTtsSettings {
+                language: "es_ES".into(),
             }),
         ];
         for provider_settings in settings {

@@ -41,7 +41,7 @@ msgstr ""
 "\n\n"
 "La emisión en sí no se ve afectada y sigue en directo."
 
-#: src/ui/scenes.rs:2407
+#: src/ui/scenes.rs:2508
 msgid " (unavailable)"
 msgstr " (no disponible)"
 
@@ -49,11 +49,11 @@ msgstr " (no disponible)"
 msgid "&Add bus"
 msgstr "&Añadir bus"
 
-#: src/ui/scenes.rs:79
+#: src/ui/scenes.rs:80
 msgid "&Add source"
 msgstr "&Añadir fuente"
 
-#: src/ui/scenes.rs:2767
+#: src/ui/scenes.rs:2868
 msgid "&Browse..."
 msgstr "&Examinar..."
 
@@ -61,7 +61,7 @@ msgstr "&Examinar..."
 msgid "&Bypass"
 msgstr "&Omitir"
 
-#: src/ui/scenes.rs:2833
+#: src/ui/scenes.rs:2934
 msgid "&Calibrate to my voice"
 msgstr "Calibrar con mi &voz"
 
@@ -69,7 +69,7 @@ msgstr "Calibrar con mi &voz"
 msgid "&Connect"
 msgstr "&Conectar"
 
-#: src/ui/scenes.rs:80
+#: src/ui/scenes.rs:81
 msgid "&Edit"
 msgstr "&Editar"
 
@@ -77,7 +77,7 @@ msgstr "&Editar"
 msgid "&Edit parameters"
 msgstr "&Editar parámetros"
 
-#: src/ui/scenes.rs:2757
+#: src/ui/scenes.rs:2858
 msgid "&Folder"
 msgstr "&Carpeta"
 
@@ -101,15 +101,15 @@ msgstr "&Reproducir"
 msgid "&Rename bus"
 msgstr "&Renombrar bus"
 
-#: src/ui/scenes.rs:81
+#: src/ui/scenes.rs:82
 msgid "&Sends..."
 msgstr "En&víos..."
 
-#: src/ui/scenes.rs:2770
+#: src/ui/scenes.rs:2871
 msgid "&Shuffle the folder"
 msgstr "&Reproducir la carpeta en orden aleatorio"
 
-#: src/ui/scenes.rs:2781
+#: src/ui/scenes.rs:2882
 msgid "&Turn the music down while other sources are playing"
 msgstr "&Bajar la música mientras suenan otras fuentes"
 
@@ -118,7 +118,7 @@ msgstr "&Bajar la música mientras suenan otras fuentes"
 msgid "&Validate"
 msgstr "&Validar"
 
-#: src/ui/scenes.rs:2433
+#: src/ui/scenes.rs:2534
 msgid "1 voice available for {name}."
 msgstr "1 voz disponible para {name}."
 
@@ -142,7 +142,7 @@ msgstr ""
 "Por sí sola, esa tecla quedaría capturada en todas las aplicaciones "
 "en las que escriba."
 
-#: src/ui/scenes.rs:427
+#: src/ui/scenes.rs:428
 msgid "A scene with that name already exists."
 msgstr "Ya existe una escena con ese nombre."
 
@@ -181,7 +181,7 @@ msgstr "API"
 msgid "API usage this session"
 msgstr "Uso de la API en esta sesión"
 
-#: src/ui/scenes.rs:1938
+#: src/ui/scenes.rs:1973
 msgid "AWS Polly voice settings"
 msgstr "Ajustes de voz de AWS Polly"
 
@@ -202,7 +202,7 @@ msgstr "Clave de acceso secreta de AWS"
 msgid "About Pubsplash"
 msgstr "Acerca de Pubsplash"
 
-#: src/ui/scenes.rs:1996
+#: src/ui/scenes.rs:2031
 msgid "Accent domain suffix, for example co.uk"
 msgstr "Sufijo de dominio del acento, por ejemplo co.uk"
 
@@ -261,9 +261,9 @@ msgstr "Añadir carpeta..."
 msgid "Add plugin"
 msgstr "Añadir plugin"
 
-#: src/ui/scenes.rs:45
-#: src/ui/scenes.rs:416
-#: src/ui/scenes.rs:426
+#: src/ui/scenes.rs:46
+#: src/ui/scenes.rs:417
+#: src/ui/scenes.rs:427
 msgid "Add scene"
 msgstr "Añadir escena"
 
@@ -276,7 +276,7 @@ msgstr "Añadir elemento programado"
 msgid "Add service"
 msgstr "Añadir servicio"
 
-#: src/ui/scenes.rs:549
+#: src/ui/scenes.rs:550
 msgid "Add source"
 msgstr "Añadir fuente"
 
@@ -297,7 +297,11 @@ msgstr "¿Qué plugin desea añadir?"
 msgid "Advanced"
 msgstr "Avanzado"
 
-#: src/ui/scenes.rs:755
+#: src/ui/scenes.rs:2376
+msgid "All languages"
+msgstr "Todos los idiomas"
+
+#: src/ui/scenes.rs:756
 msgid "All output devices (Pubsplash excluded)"
 msgstr "Todos los dispositivos de salida (excepto Pubsplash)"
 
@@ -315,7 +319,7 @@ msgid "Announcements"
 msgstr "Anuncios"
 
 #: src/source_name.rs:232
-#: src/ui/scenes.rs:541
+#: src/ui/scenes.rs:542
 msgid "Application"
 msgstr "Aplicación"
 
@@ -325,7 +329,7 @@ msgstr "Preferencias de la aplicación"
 
 #: src/ui/app_picker.rs:38
 #: src/ui/app_picker.rs:256
-#: src/ui/scenes.rs:862
+#: src/ui/scenes.rs:863
 msgid "Application source"
 msgstr "Fuente de aplicación"
 
@@ -373,7 +377,7 @@ msgstr "Archivado"
 msgid "Audio"
 msgstr "Audio"
 
-#: src/ui/scenes.rs:1928
+#: src/ui/scenes.rs:1963
 msgid "Audio effects profile"
 msgstr "Perfil de efectos de audio"
 
@@ -430,15 +434,15 @@ msgstr "Actualizaciones automáticas"
 msgid "Azure region, for example eastus"
 msgstr "Región de Azure, por ejemplo eastus"
 
-#: src/ui/scenes.rs:1873
+#: src/ui/scenes.rs:1908
 msgid "Azure speaking role"
 msgstr "Rol de habla de Azure"
 
-#: src/ui/scenes.rs:1840
+#: src/ui/scenes.rs:1875
 msgid "Azure speaking style"
 msgstr "Estilo de habla de Azure"
 
-#: src/ui/scenes.rs:1856
+#: src/ui/scenes.rs:1891
 msgid "Azure style intensity, zero point zero one to two"
 msgstr "Intensidad del estilo de Azure, de cero coma cero uno a dos"
 
@@ -446,7 +450,7 @@ msgstr "Intensidad del estilo de Azure, de cero coma cero uno a dos"
 msgid "Azure subscription key"
 msgstr "Clave de suscripción de Azure"
 
-#: src/ui/scenes.rs:1838
+#: src/ui/scenes.rs:1873
 msgid "Azure voice settings"
 msgstr "Ajustes de voz de Azure"
 
@@ -509,7 +513,7 @@ msgstr "Omitir el plugin seleccionado"
 msgid "Bypass this plugin"
 msgstr "Omitir este plugin"
 
-#: src/ui/scenes.rs:3011
+#: src/ui/scenes.rs:3112
 msgid "Calibrated. The music will start turning down at {db} decibels."
 msgstr "Calibrado. La música empezará a bajar a {db} decibelios."
 
@@ -522,10 +526,10 @@ msgstr "Calibrado. La música empezará a bajar a {db} decibelios."
 #: src/ui/mastodon_post.rs:313
 #: src/ui/mastodon_templates.rs:101
 #: src/ui/mastodon_templates.rs:230
-#: src/ui/scenes.rs:770
-#: src/ui/scenes.rs:1014
-#: src/ui/scenes.rs:2688
-#: src/ui/scenes.rs:2861
+#: src/ui/scenes.rs:771
+#: src/ui/scenes.rs:1023
+#: src/ui/scenes.rs:2789
+#: src/ui/scenes.rs:2962
 #: src/ui/schedule_ui.rs:207
 #: src/ui/scheduler_ui.rs:131
 #: src/ui/scheduler_ui.rs:395
@@ -570,7 +574,7 @@ msgstr "No se puede emitir mientras hay una grabación en curso"
 msgid "Caps Lock"
 msgstr "Bloq Mayús"
 
-#: src/ui/scenes.rs:742
+#: src/ui/scenes.rs:743
 msgid "Capture from"
 msgstr "Capturar desde"
 
@@ -669,7 +673,7 @@ msgid "Choose a folder for stream recordings"
 msgstr "Elija una carpeta para las grabaciones de la emisión"
 
 #: src/ui/mod.rs:1338
-#: src/ui/scenes.rs:2889
+#: src/ui/scenes.rs:2990
 msgid "Choose a folder of music for this source"
 msgstr "Elija una carpeta de música para esta fuente"
 
@@ -919,7 +923,7 @@ msgstr "Fecha"
 msgid "December"
 msgstr "diciembre"
 
-#: src/ui/scenes.rs:675
+#: src/ui/scenes.rs:676
 msgid "Default microphone"
 msgstr "Micrófono predeterminado"
 
@@ -927,19 +931,19 @@ msgstr "Micrófono predeterminado"
 msgid "Default output device (follow system)"
 msgstr "Dispositivo de salida predeterminado (seguir al sistema)"
 
-#: src/ui/scenes.rs:1874
-#: src/ui/scenes.rs:2123
-#: src/ui/scenes.rs:2183
+#: src/ui/scenes.rs:1909
+#: src/ui/scenes.rs:2186
+#: src/ui/scenes.rs:2246
 msgid "Default speaking role"
 msgstr "Rol de habla predeterminado"
 
-#: src/ui/scenes.rs:1841
-#: src/ui/scenes.rs:2117
-#: src/ui/scenes.rs:2175
+#: src/ui/scenes.rs:1876
+#: src/ui/scenes.rs:2180
+#: src/ui/scenes.rs:2238
 msgid "Default speaking style"
 msgstr "Estilo de habla predeterminado"
 
-#: src/ui/scenes.rs:2467
+#: src/ui/scenes.rs:2568
 msgid "Default voice"
 msgstr "Voz predeterminada"
 
@@ -954,8 +958,8 @@ msgid "Description"
 msgstr "Descripción"
 
 #: src/source_name.rs:223
-#: src/ui/scenes.rs:540
-#: src/ui/scenes.rs:809
+#: src/ui/scenes.rs:541
+#: src/ui/scenes.rs:810
 msgid "Desktop Audio"
 msgstr "Audio del escritorio"
 
@@ -971,7 +975,7 @@ msgstr "Audio del escritorio (no disponible)"
 msgid "Desktop Audio ({name})"
 msgstr "Audio del escritorio ({name})"
 
-#: src/ui/scenes.rs:734
+#: src/ui/scenes.rs:735
 msgid "Desktop Audio source"
 msgstr "Fuente de audio del escritorio"
 
@@ -1113,31 +1117,31 @@ msgstr "Efectos de la fuente seleccionada"
 msgid "ElevenLabs API key"
 msgstr "Clave de API de ElevenLabs"
 
-#: src/ui/scenes.rs:1672
+#: src/ui/scenes.rs:1707
 msgid "ElevenLabs language code; blank uses provider default"
 msgstr "Código de idioma de ElevenLabs; en blanco usa el valor del proveedor"
 
-#: src/ui/scenes.rs:1651
+#: src/ui/scenes.rs:1686
 msgid "ElevenLabs model; blank uses provider default"
 msgstr "Modelo de ElevenLabs; en blanco usa el valor del proveedor"
 
-#: src/ui/scenes.rs:1724
+#: src/ui/scenes.rs:1759
 msgid "ElevenLabs similarity boost, zero to one"
 msgstr "Refuerzo de similitud de ElevenLabs, de cero a uno"
 
-#: src/ui/scenes.rs:1768
+#: src/ui/scenes.rs:1803
 msgid "ElevenLabs speaker boost"
 msgstr "Refuerzo de voz de ElevenLabs"
 
-#: src/ui/scenes.rs:1701
+#: src/ui/scenes.rs:1736
 msgid "ElevenLabs stability, zero to one"
 msgstr "Estabilidad de ElevenLabs, de cero a uno"
 
-#: src/ui/scenes.rs:1746
+#: src/ui/scenes.rs:1781
 msgid "ElevenLabs style exaggeration, zero to one"
 msgstr "Exageración del estilo de ElevenLabs, de cero a uno"
 
-#: src/ui/scenes.rs:1642
+#: src/ui/scenes.rs:1677
 msgid "ElevenLabs voice settings"
 msgstr "Ajustes de voz de ElevenLabs"
 
@@ -1158,10 +1162,22 @@ msgstr "Codificar los sonidos como Opus ({kbps} kbps)"
 msgid "End"
 msgstr "Fin"
 
-#: src/ui/scenes.rs:894
-#: src/ui/scenes.rs:897
+#: src/ui/scenes.rs:895
+#: src/ui/scenes.rs:898
 msgid "Engine"
 msgstr "Motor"
+
+#: src/tts/engines/phonon.rs:120
+msgid "English (United Kingdom)"
+msgstr "Inglés (Reino Unido)"
+
+#: src/tts/engines/phonon.rs:119
+msgid "English (United States)"
+msgstr "Inglés (Estados Unidos)"
+
+#: src/tts/engines/phonon.rs:121
+msgid "English character voices"
+msgstr "Voces de personajes en inglés"
 
 #: src/keybind.rs:133
 msgid "Enter"
@@ -1236,7 +1252,7 @@ msgstr "Escape"
 msgid "Every day"
 msgstr "Cada día"
 
-#: src/config.rs:2718
+#: src/config.rs:2732
 msgid "Every day at {time}"
 msgstr "Cada día a las {time}"
 
@@ -1244,17 +1260,17 @@ msgstr "Cada día a las {time}"
 msgid "Every hour"
 msgstr "Cada hora"
 
-#: src/config.rs:2711
+#: src/config.rs:2725
 msgid "Every hour, on the hour"
 msgstr "Cada hora, en punto"
 
-#: src/config.rs:2712
+#: src/config.rs:2726
 msgid "Every hour, {n} minute past"
 msgid_plural "Every hour, {n} minutes past"
 msgstr[0] "Cada hora, {n} minuto pasada la hora"
 msgstr[1] "Cada hora, {n} minutos pasada la hora"
 
-#: src/config.rs:2707
+#: src/config.rs:2721
 msgid "Every minute"
 msgstr "Cada minuto"
 
@@ -1262,7 +1278,7 @@ msgstr "Cada minuto"
 msgid "Every so many minutes"
 msgstr "Cada cierto número de minutos"
 
-#: src/config.rs:2708
+#: src/config.rs:2722
 msgid "Every {n} minute"
 msgid_plural "Every {n} minutes"
 msgstr[0] "Cada {n} minuto"
@@ -1360,7 +1376,7 @@ msgstr "Filtro"
 msgid "Filter parameters"
 msgstr "Filtrar parámetros"
 
-#: src/ui/scenes.rs:2761
+#: src/ui/scenes.rs:2862
 msgid "Folder"
 msgstr "Carpeta"
 
@@ -1376,6 +1392,10 @@ msgstr "Se encontró {path}, pero no se puede usar: {problem}"
 msgid "Found {total} plugins to scan."
 msgstr "Se han encontrado {total} plugins para analizar."
 
+#: src/tts/engines/phonon.rs:124
+msgid "French"
+msgstr "Francés"
+
 #: src/ui/picker_acc.rs:170
 msgid "Friday"
 msgstr "viernes"
@@ -1383,6 +1403,10 @@ msgstr "viernes"
 #: src/ui/preferences.rs:42
 msgid "General"
 msgstr "General"
+
+#: src/tts/engines/phonon.rs:125
+msgid "German"
+msgstr "Alemán"
 
 #: src/ui/keybinds_ui.rs:292
 #: src/ui/keybinds_ui.rs:293
@@ -1424,27 +1448,27 @@ msgstr "Ir a la página de la emisión"
 msgid "Google Cloud API key"
 msgstr "Clave de API de Google Cloud"
 
-#: src/ui/scenes.rs:1908
+#: src/ui/scenes.rs:1943
 msgid "Google Cloud audio effects profile"
 msgstr "Perfil de efectos de audio de Google Cloud"
 
-#: src/ui/scenes.rs:1891
+#: src/ui/scenes.rs:1926
 msgid "Google Cloud language code; blank infers it from the voice"
 msgstr "Código de idioma de Google Cloud; en blanco se deduce de la voz"
 
-#: src/ui/scenes.rs:1885
+#: src/ui/scenes.rs:1920
 msgid "Google Cloud voice settings"
 msgstr "Ajustes de voz de Google Cloud"
 
-#: src/ui/scenes.rs:1987
+#: src/ui/scenes.rs:2022
 msgid "Google Translate accent domain suffix; blank uses com"
 msgstr "Sufijo de dominio del acento de Google Translate; en blanco usa com"
 
-#: src/ui/scenes.rs:2004
+#: src/ui/scenes.rs:2039
 msgid "Google Translate speed mode"
 msgstr "Modo de velocidad de Google Translate"
 
-#: src/ui/scenes.rs:1983
+#: src/ui/scenes.rs:2018
 msgid "Google Translate voice settings"
 msgstr "Ajustes de voz de Google Translate"
 
@@ -1604,15 +1628,16 @@ msgstr ""
 
 #: src/ui/preferences.rs:187
 #: src/ui/preferences.rs:242
+#: src/ui/scenes.rs:2065
 msgid "Language"
 msgstr "Idioma"
 
-#: src/ui/scenes.rs:1900
+#: src/ui/scenes.rs:1935
 msgid "Language code (blank infers from voice)"
 msgstr "Código de idioma (en blanco se deduce de la voz)"
 
-#: src/ui/scenes.rs:1681
-#: src/ui/scenes.rs:1972
+#: src/ui/scenes.rs:1716
+#: src/ui/scenes.rs:2007
 msgid "Language code (optional)"
 msgstr "Código de idioma (opcional)"
 
@@ -1737,7 +1762,7 @@ msgid "May"
 msgstr "mayo"
 
 #: src/source_name.rs:255
-#: src/ui/scenes.rs:544
+#: src/ui/scenes.rs:545
 msgid "Media Player"
 msgstr "Reproductor multimedia"
 
@@ -1745,7 +1770,7 @@ msgstr "Reproductor multimedia"
 msgid "Media Player ({folder})"
 msgstr "Reproductor multimedia ({folder})"
 
-#: src/ui/scenes.rs:2748
+#: src/ui/scenes.rs:2849
 msgid "Media Player source"
 msgstr "Fuente de reproductor multimedia"
 
@@ -1777,7 +1802,7 @@ msgid "Media Player: {folder}, playing {track}"
 msgstr "Reproductor multimedia: {folder}, reproduciendo {track}"
 
 #: src/source_name.rs:262
-#: src/ui/scenes.rs:545
+#: src/ui/scenes.rs:546
 msgid "Media Scheduler"
 msgstr "Programador multimedia"
 
@@ -1824,9 +1849,9 @@ msgid "Messages"
 msgstr "Mensajes"
 
 #: src/source_name.rs:216
-#: src/ui/scenes.rs:539
-#: src/ui/scenes.rs:672
-#: src/ui/scenes.rs:681
+#: src/ui/scenes.rs:540
+#: src/ui/scenes.rs:673
+#: src/ui/scenes.rs:682
 msgid "Microphone"
 msgstr "Micrófono"
 
@@ -1856,11 +1881,11 @@ msgstr "Plugins que faltan"
 msgid "Mixer"
 msgstr "Mezclador"
 
-#: src/ui/scenes.rs:1806
+#: src/ui/scenes.rs:1841
 msgid "Model"
 msgstr "Modelo"
 
-#: src/ui/scenes.rs:1660
+#: src/ui/scenes.rs:1695
 msgid "Model (blank uses provider default)"
 msgstr "Modelo (en blanco usa el valor del proveedor)"
 
@@ -1897,8 +1922,8 @@ msgid "Monitoring"
 msgstr "Monitorización"
 
 #: src/ui/buses.rs:43
-#: src/ui/scenes.rs:44
-#: src/ui/scenes.rs:84
+#: src/ui/scenes.rs:45
+#: src/ui/scenes.rs:85
 msgid "Move down"
 msgstr "Bajar"
 
@@ -1911,8 +1936,8 @@ msgid "Move plugin up"
 msgstr "Subir el plugin"
 
 #: src/ui/buses.rs:42
-#: src/ui/scenes.rs:43
-#: src/ui/scenes.rs:83
+#: src/ui/scenes.rs:44
+#: src/ui/scenes.rs:84
 msgid "Move up"
 msgstr "Subir"
 
@@ -1948,7 +1973,7 @@ msgstr "Silenciar {name}"
 msgid "Muting"
 msgstr "Silenciado"
 
-#: src/ui/scenes.rs:416
+#: src/ui/scenes.rs:417
 msgid "Name for the new scene:"
 msgstr "Nombre de la nueva escena:"
 
@@ -1964,7 +1989,7 @@ msgstr "Nombre de la aplicación que se va a capturar (por ejemplo: firefox):"
 msgid "New bus name:"
 msgstr "Nuevo nombre del bus:"
 
-#: src/ui/scenes.rs:448
+#: src/ui/scenes.rs:449
 msgid "New name for the scene:"
 msgstr "Nuevo nombre de la escena:"
 
@@ -1988,6 +2013,14 @@ msgstr "Pista siguiente"
 #: src/ui/connect_dialog.rs:962
 msgid "Nickname"
 msgstr "Apodo"
+
+#: src/tts/engines/phonon.rs:532
+msgid ""
+"No Phonon voices were found. They belong in the voices folder beside "
+"Pubsplash."
+msgstr ""
+"No se encontraron voces de Phonon. Van en la carpeta voices, junto a "
+"Pubsplash."
 
 #: src/ui/keybinds_ui.rs:24
 msgid "No actions"
@@ -2016,7 +2049,7 @@ msgstr ""
 "No hay ningún plugin VST compatible disponible. Analice primero en "
 "busca de plugins en Preferencias."
 
-#: src/ui/scenes.rs:1909
+#: src/ui/scenes.rs:1944
 msgid "No effects profile"
 msgstr "Sin perfil de efectos"
 
@@ -2040,7 +2073,7 @@ msgstr "No hay ninguna carpeta definida"
 msgid "No help available for this control."
 msgstr "No hay ayuda disponible para este control."
 
-#: src/ui/scenes.rs:672
+#: src/ui/scenes.rs:673
 msgid "No microphones were found."
 msgstr "No se ha encontrado ningún micrófono."
 
@@ -2057,7 +2090,7 @@ msgid "No saved chains"
 msgstr "Sin cadenas guardadas"
 
 #: src/ui/home.rs:21
-#: src/ui/scenes.rs:25
+#: src/ui/scenes.rs:26
 msgid "No scenes"
 msgstr "Sin escenas"
 
@@ -2078,7 +2111,7 @@ msgstr "Sin eventos de sonido"
 msgid "No sound pack project is open"
 msgstr "No hay ningún proyecto de paquete de sonidos abierto"
 
-#: src/ui/scenes.rs:28
+#: src/ui/scenes.rs:29
 msgid "No sources"
 msgstr "Sin fuentes"
 
@@ -2116,7 +2149,7 @@ msgstr "Sin vincular. Escriba su servidor y elija Autorizar."
 msgid "Not streaming"
 msgstr "Sin emitir"
 
-#: src/ui/scenes.rs:3017
+#: src/ui/scenes.rs:3118
 msgid ""
 "Nothing loud enough to be a voice was heard, so the level was left "
 "alone. Check that your microphone is in this scene, unmuted, and turned "
@@ -2164,10 +2197,10 @@ msgstr "{digit} del teclado numérico"
 #: src/ui/keybinds_ui.rs:304
 #: src/ui/mastodon_templates.rs:97
 #: src/ui/mastodon_templates.rs:227
-#: src/ui/scenes.rs:766
-#: src/ui/scenes.rs:1010
-#: src/ui/scenes.rs:2684
-#: src/ui/scenes.rs:2857
+#: src/ui/scenes.rs:767
+#: src/ui/scenes.rs:1019
+#: src/ui/scenes.rs:2785
+#: src/ui/scenes.rs:2958
 #: src/ui/schedule_ui.rs:203
 #: src/ui/scheduler_ui.rs:127
 #: src/ui/scheduler_ui.rs:392
@@ -2257,17 +2290,21 @@ msgstr "Abrir..."
 msgid "OpenAI API key"
 msgstr "Clave de API de OpenAI"
 
-#: src/ui/scenes.rs:1799
+#: src/ui/scenes.rs:1834
 msgid "OpenAI speech model"
 msgstr "Modelo de voz de OpenAI"
 
-#: src/ui/scenes.rs:1815
+#: src/ui/scenes.rs:1850
 msgid "OpenAI voice instructions"
 msgstr "Instrucciones de voz de OpenAI"
 
-#: src/ui/scenes.rs:1796
+#: src/ui/scenes.rs:1831
 msgid "OpenAI voice settings"
 msgstr "Ajustes de voz de OpenAI"
+
+#: src/tts/engines/phonon.rs:127
+msgid "Other languages"
+msgstr "Otros idiomas"
 
 #: src/soundpack.rs:111
 msgid "Outgoing chat message"
@@ -2278,18 +2315,18 @@ msgstr "Mensaje de chat saliente"
 msgid "Output device"
 msgstr "Dispositivo de salida"
 
-#: src/ui/scenes.rs:1711
-#: src/ui/scenes.rs:1713
+#: src/ui/scenes.rs:1746
+#: src/ui/scenes.rs:1748
 msgid "Override similarity boost"
 msgstr "Sustituir el refuerzo de similitud"
 
-#: src/ui/scenes.rs:1690
-#: src/ui/scenes.rs:1692
+#: src/ui/scenes.rs:1725
+#: src/ui/scenes.rs:1727
 msgid "Override stability"
 msgstr "Sustituir la estabilidad"
 
-#: src/ui/scenes.rs:1735
-#: src/ui/scenes.rs:1737
+#: src/ui/scenes.rs:1770
+#: src/ui/scenes.rs:1772
 msgid "Override style exaggeration"
 msgstr "Sustituir la exageración del estilo"
 
@@ -2335,6 +2372,14 @@ msgstr "Pausa"
 #: src/keybind.rs:170
 msgid "Period"
 msgstr "Punto"
+
+#: src/ui/scenes.rs:2072
+msgid "Phonon voice language"
+msgstr "Idioma de las voces de Phonon"
+
+#: src/ui/scenes.rs:2062
+msgid "Phonon voice settings"
+msgstr "Ajustes de voz de Phonon"
 
 #: src/ui/sound_preview.rs:59
 #: src/ui/sound_preview.rs:60
@@ -2414,9 +2459,13 @@ msgstr "Parámetros del plugin"
 msgid "Plugins skipped"
 msgstr "Plugins omitidos"
 
-#: src/ui/scenes.rs:1963
+#: src/ui/scenes.rs:1998
 msgid "Polly language code; blank uses the voice default"
 msgstr "Código de idioma de Polly; en blanco usa el de la voz"
+
+#: src/tts/engines/phonon.rs:126
+msgid "Portuguese (Brazil)"
+msgstr "Portugués (Brasil)"
 
 #: src/ui/mastodon_templates.rs:205
 #: src/ui/mastodon_templates.rs:210
@@ -2484,10 +2533,10 @@ msgstr "Escuchar los sonidos"
 msgid "Preview sounds..."
 msgstr "Escuchar los sonidos..."
 
-#: src/ui/scenes.rs:995
-#: src/ui/scenes.rs:996
-#: src/ui/scenes.rs:2593
-#: src/ui/scenes.rs:2601
+#: src/ui/scenes.rs:1004
+#: src/ui/scenes.rs:1005
+#: src/ui/scenes.rs:2694
+#: src/ui/scenes.rs:2702
 msgid "Preview voice"
 msgstr "Escuchar la voz"
 
@@ -2513,7 +2562,7 @@ msgstr "Progreso"
 msgid "Project: {name} at {path} (revision {revision})"
 msgstr "Proyecto: {name} en {path} (revisión {revision})"
 
-#: src/ui/scenes.rs:2362
+#: src/ui/scenes.rs:2463
 msgid "Provider default"
 msgstr "Valor predeterminado del proveedor"
 
@@ -2603,7 +2652,7 @@ msgstr ""
 msgid "Pubsplash sound packs (*.pspack)|*.pspack"
 msgstr "Paquetes de sonidos de Pubsplash (*.pspack)|*.pspack"
 
-#: src/ui/scenes.rs:1359
+#: src/ui/scenes.rs:1384
 msgid "Pubsplash text to speech is working."
 msgstr "La síntesis de voz de Pubsplash funciona."
 
@@ -2769,7 +2818,7 @@ msgstr "Quitar el plugin"
 msgid "Remove service"
 msgstr "Quitar el servicio"
 
-#: src/ui/scenes.rs:82
+#: src/ui/scenes.rs:83
 msgid "Remove source"
 msgstr "Quitar la fuente"
 
@@ -2802,8 +2851,8 @@ msgstr ""
 msgid "Rename bus"
 msgstr "Renombrar el bus"
 
-#: src/ui/scenes.rs:46
-#: src/ui/scenes.rs:448
+#: src/ui/scenes.rs:47
+#: src/ui/scenes.rs:449
 msgid "Rename scene"
 msgstr "Renombrar la escena"
 
@@ -2818,8 +2867,8 @@ msgstr "Renombrar el servicio"
 msgid "Rescan all plugins"
 msgstr "Volver a analizar todos los plugins"
 
-#: src/ui/scenes.rs:1000
-#: src/ui/scenes.rs:1002
+#: src/ui/scenes.rs:1009
+#: src/ui/scenes.rs:1011
 msgid "Reset this engine to defaults"
 msgstr "Restaurar este motor a sus valores predeterminados"
 
@@ -2934,8 +2983,8 @@ msgstr "Escena {name}"
 #: src/keybind.rs:262
 #: src/ui/home.rs:57
 #: src/ui/home.rs:59
-#: src/ui/scenes.rs:38
-#: src/ui/scenes.rs:40
+#: src/ui/scenes.rs:39
+#: src/ui/scenes.rs:41
 msgid "Scenes"
 msgstr "Escenas"
 
@@ -3027,13 +3076,13 @@ msgstr "Enviar un mensaje (no disponible para YouTube)"
 msgid "Send levels"
 msgstr "Niveles de envío"
 
-#: src/ui/scenes.rs:983
-#: src/ui/scenes.rs:987
+#: src/ui/scenes.rs:992
+#: src/ui/scenes.rs:996
 msgid "Send speech to the stream"
 msgstr "Enviar la voz a la emisión"
 
-#: src/ui/scenes.rs:2673
-#: src/ui/scenes.rs:2675
+#: src/ui/scenes.rs:2774
+#: src/ui/scenes.rs:2776
 msgid "Send these sounds to the stream"
 msgstr "Enviar estos sonidos a la emisión"
 
@@ -3138,7 +3187,7 @@ msgstr "Intervalo mínimo entre peticiones, en milisegundos"
 msgid "Show unnamed parameters"
 msgstr "Mostrar los parámetros sin nombre"
 
-#: src/ui/scenes.rs:2772
+#: src/ui/scenes.rs:2873
 msgid "Shuffle the folder"
 msgstr "Reproducir la carpeta en orden aleatorio"
 
@@ -3184,11 +3233,11 @@ msgstr ""
 
 #: src/source_name.rs:247
 #: src/source_name.rs:327
-#: src/ui/scenes.rs:543
+#: src/ui/scenes.rs:544
 msgid "Sound Events"
 msgstr "Eventos de sonido"
 
-#: src/ui/scenes.rs:2615
+#: src/ui/scenes.rs:2716
 msgid "Sound Events source"
 msgstr "Fuente de eventos de sonido"
 
@@ -3233,8 +3282,8 @@ msgstr "Fuente"
 msgid "Source file (WAV or Opus)"
 msgstr "Archivo de origen (WAV u Opus)"
 
-#: src/ui/scenes.rs:69
-#: src/ui/scenes.rs:72
+#: src/ui/scenes.rs:70
+#: src/ui/scenes.rs:73
 msgid "Sources in selected scene"
 msgstr "Fuentes de la escena seleccionada"
 
@@ -3242,15 +3291,23 @@ msgstr "Fuentes de la escena seleccionada"
 msgid "Space"
 msgstr "Espacio"
 
-#: src/ui/scenes.rs:1759
+#: src/tts/engines/phonon.rs:123
+msgid "Spanish (Mexico)"
+msgstr "Español (México)"
+
+#: src/tts/engines/phonon.rs:122
+msgid "Spanish (Spain)"
+msgstr "Español (España)"
+
+#: src/ui/scenes.rs:1794
 msgid "Speaker boost: off"
 msgstr "Refuerzo de voz: desactivado"
 
-#: src/ui/scenes.rs:1758
+#: src/ui/scenes.rs:1793
 msgid "Speaker boost: on"
 msgstr "Refuerzo de voz: activado"
 
-#: src/ui/scenes.rs:1757
+#: src/ui/scenes.rs:1792
 msgid "Speaker boost: provider default"
 msgstr "Refuerzo de voz: valor predeterminado del proveedor"
 
@@ -3263,24 +3320,24 @@ msgstr "Voz"
 msgid "Speech engine"
 msgstr "Motor de voz"
 
-#: src/ui/scenes.rs:951
-#: src/ui/scenes.rs:958
+#: src/ui/scenes.rs:952
+#: src/ui/scenes.rs:959
 msgid "Speech rate"
 msgstr "Velocidad del habla"
 
-#: src/ui/scenes.rs:944
+#: src/ui/scenes.rs:945
 msgid "Speech rate (-10 to 10)"
 msgstr "Velocidad del habla (de -10 a 10)"
 
-#: src/ui/scenes.rs:2007
+#: src/ui/scenes.rs:2042
 msgid "Speed: normal"
 msgstr "Velocidad: normal"
 
-#: src/ui/scenes.rs:2006
+#: src/ui/scenes.rs:2041
 msgid "Speed: provider default"
 msgstr "Velocidad: valor predeterminado del proveedor"
 
-#: src/ui/scenes.rs:2008
+#: src/ui/scenes.rs:2043
 msgid "Speed: slow"
 msgstr "Velocidad: lenta"
 
@@ -3321,13 +3378,13 @@ msgstr "Iniciar la grabación"
 msgid "Start streaming"
 msgstr "Iniciar la emisión"
 
-#: src/ui/scenes.rs:2811
+#: src/ui/scenes.rs:2912
 msgid "Start turning down &at"
 msgstr "Empezar a bajar &a"
 
-#: src/ui/scenes.rs:2818
-#: src/ui/scenes.rs:2826
-#: src/ui/scenes.rs:3010
+#: src/ui/scenes.rs:2919
+#: src/ui/scenes.rs:2927
+#: src/ui/scenes.rs:3111
 msgid "Start turning down at"
 msgstr "Empezar a bajar a"
 
@@ -3409,8 +3466,8 @@ msgstr "Emisión"
 msgid "Stream Archiving"
 msgstr "Archivado de la emisión"
 
-#: src/ui/scenes.rs:1779
-#: src/ui/scenes.rs:1781
+#: src/ui/scenes.rs:1814
+#: src/ui/scenes.rs:1816
 msgid "Stream audio as it is generated"
 msgstr "Emitir el audio según se va generando"
 
@@ -3462,7 +3519,7 @@ msgstr "Emisión detenida"
 msgid "Streaming to YouTube (FFmpeg)"
 msgstr "Emitir a YouTube (FFmpeg)"
 
-#: src/ui/scenes.rs:1865
+#: src/ui/scenes.rs:1900
 msgid "Style intensity"
 msgstr "Intensidad del estilo"
 
@@ -3494,7 +3551,7 @@ msgstr "Cambiar a la escena {scene}"
 msgid "Switching scene in"
 msgstr "Cambiando de escena en"
 
-#: src/ui/scenes.rs:1951
+#: src/ui/scenes.rs:1986
 msgid "Synthesis engine"
 msgstr "Motor de síntesis"
 
@@ -3506,7 +3563,7 @@ msgstr "Tab"
 msgid "Take this song out of the playlist. The file is not deleted"
 msgstr "Quita esta canción de la lista de reproducción. El archivo no se borra"
 
-#: src/ui/scenes.rs:2985
+#: src/ui/scenes.rs:3086
 msgid "Talk normally for five seconds, starting now."
 msgstr "Hable con normalidad durante cinco segundos, empezando ahora."
 
@@ -3531,7 +3588,7 @@ msgid "Test"
 msgstr "Probar"
 
 #: src/source_name.rs:245
-#: src/ui/scenes.rs:542
+#: src/ui/scenes.rs:543
 msgid "Text-to-Speech"
 msgstr "Síntesis de voz"
 
@@ -3539,7 +3596,7 @@ msgstr "Síntesis de voz"
 msgid "Text-to-Speech ({voice})"
 msgstr "Síntesis de voz ({voice})"
 
-#: src/ui/scenes.rs:878
+#: src/ui/scenes.rs:879
 msgid "Text-to-Speech source"
 msgstr "Fuente de síntesis de voz"
 
@@ -3596,6 +3653,34 @@ msgstr ""
 "No se pudo crear el codificador MP3 de la grabación, así que no se "
 "pudo escribir nada."
 
+#: src/tts/engines/phonon.rs:431
+msgid ""
+"The Phonon voice model at {path} is incomplete. Reinstall Pubsplash to "
+"restore it."
+msgstr ""
+"El modelo de voz de Phonon en {path} está incompleto. Reinstala "
+"Pubsplash para recuperarlo."
+
+#: src/tts/engines/phonon.rs:438
+msgid "The Phonon voice model could not be loaded: {error}"
+msgstr "No se pudo cargar el modelo de voz de Phonon: {error}"
+
+#: src/tts/engines/phonon.rs:408
+msgid ""
+"The Phonon voice model file {file} is missing from the Pubsplash "
+"folder. Reinstall Pubsplash to restore it."
+msgstr ""
+"Falta el archivo {file} del modelo de voz de Phonon en la carpeta de "
+"Pubsplash. Reinstala Pubsplash para recuperarlo."
+
+#: src/tts/engines/phonon.rs:474
+msgid "The Phonon voice {voice} could not be loaded: {error}"
+msgstr "No se pudo cargar la voz de Phonon {voice}: {error}"
+
+#: src/tts/engines/phonon.rs:537
+msgid "The Phonon voice {voice} is not installed."
+msgstr "La voz de Phonon {voice} no está instalada."
+
 #: src/ui/mod.rs:3330
 msgid ""
 "The Sound Pack Manager ({path}) is missing. Reinstall Pubsplash to "
@@ -3612,7 +3697,7 @@ msgstr ""
 "No se pudo restablecer la conexión de audio: {reason}. La emisión ha "
 "terminado."
 
-#: src/ui/scenes.rs:3001
+#: src/ui/scenes.rs:3102
 msgid "The audio engine did not answer; nothing was changed."
 msgstr "El motor de audio no respondió; no se ha cambiado nada."
 
@@ -3624,7 +3709,7 @@ msgstr ""
 "No se pudo restablecer la conexión con {target}: {reason}. La emisión "
 "ha terminado."
 
-#: src/ui/scenes.rs:2593
+#: src/ui/scenes.rs:2694
 msgid "The engine returned no audio."
 msgstr "El motor no devolvió audio."
 
@@ -3760,7 +3845,7 @@ msgstr "Esta cadena está vacía; no hay nada que exportar."
 msgid "This chain is empty; there is nothing to save."
 msgstr "Esta cadena está vacía; no hay nada que guardar."
 
-#: src/ui/scenes.rs:1635
+#: src/ui/scenes.rs:1670
 msgid "This engine has no additional voice settings."
 msgstr "Este motor no tiene más ajustes de voz."
 
@@ -3772,7 +3857,7 @@ msgstr "Este motor no necesita ningún ajuste."
 msgid "This is just a stream"
 msgstr "Esto es simplemente una emisión"
 
-#: src/ui/scenes.rs:2848
+#: src/ui/scenes.rs:2949
 msgid ""
 "This music is mixed into the stream directly. A Desktop Audio source "
 "will not capture it a second time, because Desktop Audio leaves "
@@ -3851,16 +3936,16 @@ msgstr "Herramientas"
 msgid "Tuesday"
 msgstr "martes"
 
-#: src/ui/scenes.rs:2785
+#: src/ui/scenes.rs:2886
 msgid "Turn the music down while other sources are playing"
 msgstr "Bajar la música mientras suenan otras fuentes"
 
-#: src/ui/scenes.rs:2791
+#: src/ui/scenes.rs:2892
 msgid "Turned-down &level"
 msgstr "&Nivel al que se baja"
 
-#: src/ui/scenes.rs:2798
-#: src/ui/scenes.rs:2804
+#: src/ui/scenes.rs:2899
+#: src/ui/scenes.rs:2905
 msgid "Turned-down level"
 msgstr "Nivel al que se baja"
 
@@ -3940,38 +4025,38 @@ msgstr "Ver el registro de cambios"
 msgid "View message"
 msgstr "Ver el mensaje"
 
-#: src/ui/scenes.rs:913
+#: src/ui/scenes.rs:914
 msgid "Voice"
 msgstr "Voz"
 
-#: src/ui/scenes.rs:2435
+#: src/ui/scenes.rs:2536
 msgid "Voice catalog for {name} is refreshing automatically."
 msgstr "El catálogo de voces de {name} se está actualizando automáticamente."
 
-#: src/ui/scenes.rs:1823
+#: src/ui/scenes.rs:1858
 msgid "Voice instructions (GPT-4o mini TTS)"
 msgstr "Instrucciones de voz (GPT-4o mini TTS)"
 
-#: src/ui/scenes.rs:973
-#: src/ui/scenes.rs:2499
+#: src/ui/scenes.rs:974
+#: src/ui/scenes.rs:2600
 msgid "Voice pitch"
 msgstr "Tono de voz"
 
-#: src/ui/scenes.rs:961
+#: src/ui/scenes.rs:962
 msgid "Voice pitch (-50 to 50)"
 msgstr "Tono de voz (de -50 a 50)"
 
-#: src/ui/scenes.rs:2501
+#: src/ui/scenes.rs:2602
 msgid "Voice pitch, not supported by this engine"
 msgstr "Tono de voz, no admitido por este motor"
 
-#: src/ui/scenes.rs:928
-#: src/ui/scenes.rs:935
-#: src/ui/scenes.rs:941
+#: src/ui/scenes.rs:929
+#: src/ui/scenes.rs:936
+#: src/ui/scenes.rs:942
 msgid "Voice volume"
 msgstr "Volumen de la voz"
 
-#: src/ui/scenes.rs:2449
+#: src/ui/scenes.rs:2550
 msgid "Voice. {text}"
 msgstr "Voz. {text}"
 
@@ -3999,8 +4084,8 @@ msgstr ""
 msgid "Wednesday"
 msgstr "miércoles"
 
-#: src/ui/scenes.rs:549
 #: src/ui/scenes.rs:550
+#: src/ui/scenes.rs:551
 msgid "What kind of source?"
 msgstr "¿Qué tipo de fuente?"
 
@@ -4014,8 +4099,8 @@ msgstr "Cuándo se reproduce"
 msgid "Which application should this source capture?"
 msgstr "¿Qué aplicación debe capturar esta fuente?"
 
-#: src/ui/scenes.rs:680
-#: src/ui/scenes.rs:685
+#: src/ui/scenes.rs:681
+#: src/ui/scenes.rs:686
 msgid "Which microphone should this source use?"
 msgstr "¿Qué micrófono debe usar esta fuente?"
 
@@ -4085,7 +4170,7 @@ msgstr ""
 msgid "minute"
 msgstr "minuto"
 
-#: src/ui/scenes.rs:2386
+#: src/ui/scenes.rs:2487
 msgid "model"
 msgstr "Modelo"
 
@@ -4117,7 +4202,7 @@ msgstr "segundo"
 msgid "somebody else in the room is already using that name"
 msgstr "otra persona de la sala ya está usando ese nombre"
 
-#: src/ui/scenes.rs:2384
+#: src/ui/scenes.rs:2485
 msgid "synthesis engine"
 msgstr "Motor de síntesis"
 
@@ -4211,7 +4296,7 @@ msgstr "Nivel de envío a {bus}"
 msgid "{current} (not running)"
 msgstr "{current} (no está en ejecución)"
 
-#: src/ui/scenes.rs:3010
+#: src/ui/scenes.rs:3111
 msgid "{db} dB"
 msgstr "{db} dB"
 
@@ -4219,7 +4304,7 @@ msgstr "{db} dB"
 msgid "{display} {label}"
 msgstr "{display} {label}"
 
-#: src/ui/scenes.rs:2390
+#: src/ui/scenes.rs:2491
 msgid "{engine} {noun}"
 msgstr "{noun} de {engine}"
 
@@ -4296,7 +4381,7 @@ msgstr "{message}, {age}"
 msgid "{name} (active)"
 msgstr "{name} (activa)"
 
-#: src/ui/scenes.rs:289
+#: src/ui/scenes.rs:290
 msgid "{name} (default)"
 msgstr "{name} (predeterminada)"
 
@@ -4332,7 +4417,7 @@ msgstr "Parámetros de {name}"
 msgid "{name} playlist"
 msgstr "Lista de reproducción de {name}"
 
-#: src/ui/scenes.rs:2432
+#: src/ui/scenes.rs:2533
 msgid "{name} reported no voices."
 msgstr "{name} no devolvió ninguna voz."
 
@@ -4371,11 +4456,11 @@ msgid_plural "{n} items"
 msgstr[0] "{n} elemento"
 msgstr[1] "{n} elementos"
 
-#: src/ui/scenes.rs:2434
+#: src/ui/scenes.rs:2535
 msgid "{n} voices available for {name}."
 msgstr "{n} voces disponibles para {name}."
 
-#: src/ui/scenes.rs:863
+#: src/ui/scenes.rs:864
 msgid ""
 "{process_name} does not appear to be running. The source will stay "
 "silent until it starts, and will be picked up automatically when it "
@@ -4436,6 +4521,10 @@ msgstr ""
 #: src/ui/mod.rs:1583
 msgid "{user}: {content}"
 msgstr "{user}: {content}"
+
+#: src/tts/engines/phonon.rs:587
+msgid "{voice}, {language}"
+msgstr "{voice}, {language}"
 
 #: src/ui/home.rs:445
 msgid "{what} {remaining}"
@@ -6823,6 +6912,18 @@ msgstr ""
 "Elija un modelo de voz de OpenAI descubierto con sus credenciales "
 "validadas. Los modelos heredados guardados se pueden seguir "
 "seleccionando aunque no estén disponibles."
+
+#. Context help for the Phonon voice language filter.
+#: help.toml
+msgctxt "dialog.ttsSource.phononLanguage"
+msgid ""
+"Choose which Phonon voices the voice list shows, by language and "
+"accent. All languages lists every voice. This only filters the list: "
+"each voice reads text in its own language."
+msgstr ""
+"Elige qué voces de Phonon muestra la lista de voces, por idioma y "
+"acento. Todos los idiomas muestra todas las voces. Solo filtra la "
+"lista: cada voz lee el texto en su propio idioma."
 
 #. Context help for the TTS voice pitch slider.
 #: help.toml

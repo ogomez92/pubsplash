@@ -1,0 +1,6 @@
+# The Phonon model is committed in parts (assets/phonon/model.safetensors.001,
+# .002, ...) that build.rs joins, because it is over GitHub's 100 MB file limit
+# and GitHub refuses Git LFS uploads to a public fork. The parts and the voices
+# are binary: an end-of-line conversion would corrupt them.
+*.safetensors binary
+*.safetensors.0* binary

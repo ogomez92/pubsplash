@@ -4,6 +4,14 @@
 
 ### Additions
 
+### Fixes
+
+### Changes
+
+## 2.4.0
+
+### Additions
+
 - A media player's mixer strip has a **playlist**: every song it will play, in the order it will play them (the shuffled order when shuffle is on), with the playing one marked. Arrows, Home, End and typing a song's first letters move through it.
 - **Enter** on a playlist song stops the current song and plays that one; the playlist carries on from there.
 - **Delete** takes a song out of the playlist without asking. The file is not touched.
@@ -12,6 +20,11 @@
 - **Ctrl+1** to **Ctrl+5** go straight to the Home, Chat, Scenes and Sources, Buses and API tabs.
 - **Alt+1** to **Alt+0** read out the ten latest chat messages, Alt+1 the newest and Alt+0 the tenth newest, without moving focus.
 - F6 now stops on media player playlists too.
+- **Phonon** text-to-speech engine: natural-sounding voices that run entirely on your computer, with nothing to install and no account or internet connection needed.
+- Phonon comes with 104 voices in English, Spanish, French, German and Portuguese, including Oriol and Ricardo.
+- A **Language** list in a Phonon source's settings narrows the voice list to one language and accent.
+- Phonon's voices are files in a `voices` folder beside Pubsplash, one subfolder per language. Adding a voice is putting its `.safetensors` file there.
+- Updates, including a portable copy updating itself, install Pubsplash's own voices and leave any you added alone. A portable copy updating itself from 2.3.0 sorts its voices into their folders on first start.
 
 ### Fixes
 

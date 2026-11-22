@@ -13,3 +13,8 @@
 # Finder metadata. Created on any macOS machine that opens a folder; never
 # repo content.
 .DS_Store
+
+# The Phonon model, joined by build.rs from the model.safetensors.00N parts
+# that are committed in its place (it is over GitHub's 100 MB file limit).
+/assets/phonon/model.safetensors
+/assets/phonon/model.safetensors.joining

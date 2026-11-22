@@ -114,7 +114,11 @@ jobs:
           # siblings of itself, so a ZIP missing one breaks Tools > Sound Pack
           # Manager or the VST plugin scan. gen-help is a dev tool and is
           # deliberately left out. The default sound pack is embedded in the exe
-          # at compile time, so there are no loose assets to copy.
+          # at compile time. Phonon's model and voices ship beside the exe under
+          # the same names the installer gives them (Cargo.toml `resources`):
+          # the voices keep their voices/<locale>/ layout, since the folder is
+          # each voice's language. The model is committed in parts and joined
+          # by build.rs, which the test and package steps above have both run.
           cp target/release/pubsplash.exe bundle/
           cp target/release/pubsplash-scan.exe bundle/
           cp target/release/pubsplash-soundpack.exe bundle/
@@ -122,6 +126,17 @@ jobs:
           cp target/release/soundpack.exe bundle/
           cp readme.html bundle/
           cp changelog.html bundle/
+          cp assets/phonon/model.safetensors bundle/phonon-model.safetensors
+          cp assets/phonon/config.json bundle/phonon-config.json
+          cp assets/phonon/tokenizer.json bundle/phonon-tokenizer.json
+          cp -r assets/phonon/voices bundle/voices
+          # Every voice's path within voices/, as a top-level file. A portable
+          # copy older than 2.4.0 updates itself with its own unpacking code,
+          # which flattens folders: the voices land loose, and this list -- top
+          # level, so it survives -- is how the new build puts each one back in
+          # its language folder (tts::engines::phonon::adopt_flattened_voices).
+          (cd assets/phonon/voices && find . -type f -name '*.safetensors' | sed 's|^\./||' | sort) > bundle/phonon-voices.txt
+          test "$(wc -l < bundle/phonon-voices.txt)" -gt 0
           # How Pubsplash knows it is the portable build: it must replace its
           # own folder rather than run the installer, and keep its data in
           # user_data\ here rather than in %LOCALAPPDATA%. The installer's
