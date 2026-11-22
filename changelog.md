@@ -4,9 +4,25 @@
 
 ### Additions
 
+- A media player's mixer strip has a **playlist**: every song it will play, in the order it will play them (the shuffled order when shuffle is on), with the playing one marked. Arrows, Home, End and typing a song's first letters move through it.
+- **Enter** on a playlist song stops the current song and plays that one; the playlist carries on from there.
+- **Delete** takes a song out of the playlist without asking. The file is not touched.
+- **Shift+F10** or the applications key on the playlist opens a menu with Play, Remove, Pause or Resume, Open file and Choose folder.
+- **Alt+L** focuses the playlist from anywhere in the main window; with two media players, pressing it again moves to the next one.
+- **Ctrl+1** to **Ctrl+5** go straight to the Home, Chat, Scenes and Sources, Buses and API tabs.
+- **Alt+1** to **Alt+0** read out the ten latest chat messages, Alt+1 the newest and Alt+0 the tenth newest, without moving focus.
+- F6 now stops on media player playlists too.
+
 ### Fixes
 
 ### Changes
+
+- The media player strip's read-only **Upcoming tracks** field is gone; the playlist replaces it.
+- A media player no longer re-reads its folder every five minutes. The folder is read when the player starts or is given a new folder, and again when the playlist runs out, which brings back removed songs, adds new ones and reshuffles.
+- **Open file** still stops the current song and plays the file straight away, and the file now joins the playlist just below the song it interrupted.
+- **Previous track** now goes to the song above the playing one in the playlist.
+- A file that cannot be played is taken out of the playlist.
+- Turning shuffle on or off reorders only the songs still to come, without interrupting the one playing.
 
 ## 2.3.0
 

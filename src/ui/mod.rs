@@ -47,6 +47,7 @@ mod scheduler_ui;
 #[cfg_attr(not(windows), path = "native_acc_mac.rs")]
 mod native_acc;
 mod panes;
+mod playlist;
 #[cfg_attr(not(windows), path = "picker_acc_mac.rs")]
 mod picker_acc;
 mod preferences;
@@ -54,6 +55,7 @@ mod scan_dialog;
 mod scenes;
 mod schedule_ui;
 mod sends;
+mod shortcuts;
 /// The slider key convention, shared by both platforms.
 mod slider_keys;
 #[cfg_attr(not(windows), path = "slider_uia_mac.rs")]
@@ -1237,8 +1239,15 @@ pub(crate) fn media_transport(
                 return;
             }
         },
-        (Command::PlayFile(path), _) => {
-            format!("{label}, playing {}", crate::media::track_title(path))
+        (Command::PlayFile(path) | Command::PlayAt { path, .. }, _) => t!(
+            "{label}, playing {track}",
+            label = label,
+            track = crate::media::track_title(path)
+        ),
+        // Heard as the list itself changing; see `playlist::remove_selected`.
+        (Command::Remove { .. }, _) => {
+            app.media.send(source_name, command);
+            return;
         }
         // Settings edits do not come through here; `media::apply` sends them.
         (Command::Reload { .. }, _) => return,
@@ -2813,6 +2822,7 @@ pub fn build(app: Rc<App>) {
     // on the air.
     notebook.add_page(&api_panel, &t!("API"), false, None);
     help::tag(&notebook, "window.tabBar", "Main tab bar");
+    shortcuts::set_page_count(notebook.get_page_count());
 
     let frame_sizer = BoxSizer::builder(Orientation::Vertical).build();
     frame_sizer.add(&notebook, 1, SizerFlag::Expand | SizerFlag::All, 0);
@@ -3966,7 +3976,7 @@ fn pump_events(app: &Rc<App>) {
             run.media_generation = generation;
             labels_dirty = true;
             drop(run);
-            home::refresh_upcoming_tracks(app);
+            playlist::refresh_all(app);
         }
     }
 
@@ -4021,6 +4031,7 @@ fn pump_events(app: &Rc<App>) {
     // User keybindings ride the same hook, and their actions run here so nothing
     // touches `App` from the hook context.
     keybinds::pump(app);
+    shortcuts::pump(app);
     // Scans and plugin editors are serviced by the fast timer, which only runs
     // while one of them exists; settle that here so no transition can leave it
     // running with nothing to do (or stopped with something waiting).

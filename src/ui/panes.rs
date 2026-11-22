@@ -105,18 +105,21 @@ fn target(lists: &[usize], focus: Option<usize>, backward: bool) -> Option<Targe
 
 /// Every list in the main window. Only the ones on the current page survive the
 /// filter in [`pump`], so this needs no per-tab table: a new list on a tab needs
-/// only a `Widgets` field and a line here.
-fn all_lists(w: &Widgets) -> [&ListBox; 8] {
-    [
-        &w.overview,
-        &w.home_scene_list,
-        &w.chat_list,
-        &w.scenes_list,
-        &w.sources_list,
-        &w.bus_list,
-        &w.fx_list,
-        &w.usage_list,
-    ]
+/// only a `Widgets` field and a line here. `extra` is the lists that come and
+/// go with the mixer — the media players' playlists.
+fn all_lists(w: &Widgets, extra: &[ListBox]) -> Vec<ListBox> {
+    let mut lists = vec![
+        w.overview,
+        w.home_scene_list,
+        w.chat_list,
+        w.scenes_list,
+        w.sources_list,
+        w.bus_list,
+        w.fx_list,
+        w.usage_list,
+    ];
+    lists.extend_from_slice(extra);
+    lists
 }
 
 /// A Z-order walk of the page for the Tab positions, `GUITHREADINFO` for the
@@ -185,6 +188,7 @@ mod imp {
             return;
         }
         let backward = BACKWARD.load(Ordering::Relaxed);
+        let playlists = super::super::playlist::lists(app);
         app.widgets(|w| {
             let selected = w.notebook.selection();
             let Some(page) = usize::try_from(selected)
@@ -200,9 +204,10 @@ mod imp {
             // Focus on the tab bar (or on nothing we can place) reads as `None`,
             // which the ring treats as "outside the page".
             let at = position(focus);
-            let mut lists: Vec<usize> = all_lists(w)
+            let every = all_lists(w, &playlists);
+            let mut lists: Vec<usize> = every
                 .iter()
-                .filter_map(|list| position(hwnd_of(*list)))
+                .filter_map(|list| position(hwnd_of(list)))
                 .collect();
             lists.sort_unstable();
 
@@ -211,7 +216,7 @@ mod imp {
                 // Arriving is enough for the screen reader to read the current row.
                 Some(Target::List(i)) => {
                     if let Some(&hwnd) = order.get(i)
-                        && let Some(list) = all_lists(w).iter().find(|l| hwnd_of(**l) == hwnd)
+                        && let Some(list) = every.iter().find(|l| hwnd_of(*l) == hwnd)
                     {
                         list.set_focus();
                     }

@@ -98,184 +98,204 @@ pub fn scan_folder(root: &Path) -> Vec<PathBuf> {
     files
 }
 
-/// The order a folder's files play in, and where the player is up to.
-///
-/// Exhausting the list is not the end of anything: [`Playlist::next`] wraps,
-/// reshuffling as it goes, so a source left alone plays forever.
-pub struct Playlist {
-    files: Vec<PathBuf>,
-    /// Indices into `files`, in playing order.
-    order: Vec<usize>,
-    /// The pass after this one, already decided. Shuffling it only at the wrap
-    /// would leave every track past the end of this pass unknown, and
-    /// [`Playlist::upcoming`] is asked for several tracks ahead — the whole
-    /// point of which is presenting a song on air before it plays, so a list
-    /// that turned out wrong at the boundary would be worse than none.
-    following: Vec<usize>,
-    /// How far into `order` the player has got.
-    position: usize,
-    shuffle: bool,
-    /// What has been played, oldest first, ending with the track playing now.
-    /// Kept as paths rather than positions in `order` because a pass is thrown
-    /// away when it ends, and "previous track" across the wrap has to reach the
-    /// end of the pass before it.
-    history: Vec<PathBuf>,
-    /// Tracks stepped back over with [`Playlist::previous`], the soonest last.
-    /// [`Playlist::next`] takes from here before the pass, so going back and
-    /// then forward again lands where the user started rather than skipping
-    /// on through the pass.
-    ahead: Vec<PathBuf>,
+/// Process-wide, so two playlists — or one playlist and the one that replaced
+/// it in a new worker — can never be mistaken for each other by a revision
+/// number alone. See [`Playlist::revision`].
+static NEXT_REVISION: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+
+fn new_revision() -> u64 {
+    NEXT_REVISION.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
 }
 
-/// How far back "previous track" can reach.
-const HISTORY: usize = 100;
+/// The songs a media player will play, in the order it will play them, and
+/// where it is up to.
+///
+/// The folder is where songs come *from*: it is read when the player starts or
+/// is pointed somewhere new, and again only when this list runs out. Between
+/// those two moments the list is the user's — they can play any entry, remove
+/// entries, or add a file of their own — and nothing re-reads the folder behind
+/// their back and undoes it.
+///
+/// Shuffle decides the order when the list is filled, so the list shown is the
+/// order that will play.
+pub struct Playlist {
+    entries: Vec<PathBuf>,
+    /// The entry [`Playlist::next`] hands out next.
+    cursor: usize,
+    /// The entry playing now, if it is still in the list — removing the track
+    /// that is playing leaves it playing, but no longer listed.
+    playing: Option<usize>,
+    shuffle: bool,
+    revision: u64,
+}
 
 impl Playlist {
+    /// A list of `files`, in folder order or shuffled. Nothing is playing yet.
     pub fn new(files: Vec<PathBuf>, shuffle: bool) -> Self {
         let mut playlist = Self {
-            files,
-            order: Vec::new(),
-            following: Vec::new(),
-            position: 0,
+            entries: Vec::new(),
+            cursor: 0,
+            playing: None,
             shuffle,
-            history: Vec::new(),
-            ahead: Vec::new(),
+            revision: new_revision(),
         };
-        playlist.order = playlist.pass(None);
-        playlist.following = playlist.pass(playlist.order.last().copied());
+        playlist.refill(files, None);
         playlist
     }
 
     pub fn is_empty(&self) -> bool {
-        self.files.is_empty()
+        self.entries.is_empty()
     }
 
     pub fn len(&self) -> usize {
-        self.files.len()
+        self.entries.len()
     }
 
-    /// The files this playlist was built from, in folder order. Compared
-    /// against a fresh scan so an unchanged folder does not reshuffle a pass
-    /// that is already in progress.
-    pub fn files(&self) -> &[PathBuf] {
-        &self.files
+    /// Every entry, in playing order.
+    pub fn entries(&self) -> &[PathBuf] {
+        &self.entries
     }
 
-    /// The next file to play, wrapping (and reshuffling) at the end.
+    /// Which entry is playing, when it is still in the list.
+    pub fn playing(&self) -> Option<usize> {
+        self.playing
+    }
+
+    /// Changes whenever the *entries* change — not when the playing marker
+    /// moves — so a list on screen can tell a track starting from a list that
+    /// needs rebuilding. Unique across every playlist in the process.
+    pub fn revision(&self) -> u64 {
+        self.revision
+    }
+
+    /// Whether every entry has been handed out, which is when the folder is
+    /// read again.
+    pub fn is_exhausted(&self) -> bool {
+        self.cursor >= self.entries.len()
+    }
+
+    /// Replaces the list with a fresh pass over `files`. `last_played` is the
+    /// track that just ended: a fresh shuffle is allowed to start with it,
+    /// which is the one repeat a listener always notices, so it is moved out
+    /// of the way.
+    pub fn refill(&mut self, files: Vec<PathBuf>, last_played: Option<&Path>) {
+        let mut entries = files;
+        if self.shuffle {
+            entries.shuffle(&mut rand::thread_rng());
+            if entries.len() > 1 && last_played.is_some_and(|last| entries[0] == last) {
+                entries.swap(0, 1);
+            }
+        }
+        self.entries = entries;
+        self.cursor = 0;
+        self.playing = None;
+        self.revision = new_revision();
+    }
+
+    /// The next entry to play, or `None` once the list has run out.
     pub fn next(&mut self) -> Option<PathBuf> {
-        if let Some(picked) = self.ahead.pop() {
-            self.remember(picked.clone());
-            return Some(picked);
-        }
-        let picked = self.peek()?;
-        self.remember(picked.clone());
-        self.position += 1;
-        // Wrapped eagerly, the moment the pass runs out, rather than on the way
-        // into the next `next()`. That is what makes [`Playlist::peek`] able to
-        // answer at all: deferring the wrap leaves the first track of the next
-        // pass out of reach, and "skip to the next track" has to be able to say
-        // what it is about to play before it plays it.
-        if self.position >= self.order.len() {
-            self.order = std::mem::take(&mut self.following);
-            self.following = self.pass(self.order.last().copied());
-            self.position = 0;
-        }
+        let picked = self.entries.get(self.cursor)?.clone();
+        self.playing = Some(self.cursor);
+        self.cursor += 1;
         Some(picked)
     }
 
-    /// The file [`Playlist::next`] would return, without taking it.
-    ///
-    /// This is what the announcement on a skip is built from, so it has to be
-    /// the truth rather than a guess — see the eager wrap in `next`.
-    pub fn peek(&self) -> Option<PathBuf> {
-        self.upcoming(1).into_iter().next()
+    /// The entry [`Playlist::next`] would return, without taking it. `None` at
+    /// the end of the list, where what comes next depends on a folder that has
+    /// not been read yet.
+    pub fn peek(&self) -> Option<&PathBuf> {
+        self.entries.get(self.cursor)
     }
 
-    /// The next `count` files [`Playlist::next`] will hand back, in order —
-    /// across the end of the pass too, since the pass after it is already
-    /// shuffled.
-    ///
-    /// Never longer than the folder: a two-file folder has two tracks coming,
-    /// not a list of four that names each of them twice.
-    pub fn upcoming(&self, count: usize) -> Vec<PathBuf> {
-        let from_pass = self
-            .order
-            .get(self.position..)
-            .unwrap_or_default()
-            .iter()
-            .chain(&self.following)
-            .filter_map(|&index| self.files.get(index).cloned());
-        self.ahead
-            .iter()
-            .rev()
-            .cloned()
-            .chain(from_pass)
-            .take(count.min(self.files.len().max(self.ahead.len())))
-            .collect()
+    /// Where "previous track" goes: the entry above the one playing. From the
+    /// first entry that is the entry itself, which restarts it — what a media
+    /// key does on a player's first track, and better than a key that does
+    /// nothing. With the playing track removed, it is the entry above the gap.
+    fn previous_index(&self) -> Option<usize> {
+        let index = match self.playing {
+            Some(playing) => playing.saturating_sub(1),
+            None => self.cursor.checked_sub(1)?,
+        };
+        (index < self.entries.len()).then_some(index)
     }
 
-    /// Steps back one track and returns it, to be played from the start.
-    ///
-    /// The track playing now goes back on the front of what is coming, so a
-    /// skip afterwards returns to it. With nothing earlier to go back to — the
-    /// first track of a session — the track playing now is returned instead,
-    /// which restarts it: the same thing a media key does on a player's first
-    /// track, and better than a key that does nothing.
+    /// Steps back one entry and returns it, to be played from the start.
     pub fn previous(&mut self) -> Option<PathBuf> {
-        if self.history.len() >= 2
-            && let Some(current) = self.history.pop()
-        {
-            self.ahead.push(current);
-        }
-        self.history.last().cloned()
+        let index = self.previous_index()?;
+        self.play_at(index)
     }
 
-    /// The file [`Playlist::previous`] would return, without moving. What the
-    /// announcement on "previous track" is built from.
+    /// The entry [`Playlist::previous`] would play, without moving.
     pub fn peek_previous(&self) -> Option<&PathBuf> {
-        let len = self.history.len();
-        self.history.get(len.saturating_sub(2))
+        self.entries.get(self.previous_index()?)
     }
 
-    /// Records a file played from outside the playlist — Open file — so that
-    /// "previous track" from the track after it comes back to it, and from it
-    /// goes back to what it interrupted.
-    ///
-    /// Anything stepped back over is forgotten: the user went somewhere new,
-    /// and "next" now means the pass again, as it does after a browser's back
-    /// button and a fresh link.
-    pub fn played(&mut self, path: PathBuf) {
-        self.ahead.clear();
-        self.remember(path);
+    /// Makes `index` the playing entry, so the list carries on from the one
+    /// after it, and returns it.
+    pub fn play_at(&mut self, index: usize) -> Option<PathBuf> {
+        let picked = self.entries.get(index)?.clone();
+        self.playing = Some(index);
+        self.cursor = index + 1;
+        Some(picked)
     }
 
-    /// Carries what has been played across a rescan that changed the folder's
-    /// contents, so a file arriving mid-session does not cost the user the way
-    /// back.
-    pub fn inherit_history(&mut self, from: Playlist) {
-        self.history = from.history;
+    /// Puts a file of the user's choosing into the list just below the track
+    /// playing now, and makes it the playing entry. The file does not have to
+    /// be in the folder; it is listed for the rest of this pass only.
+    pub fn insert_and_play(&mut self, path: PathBuf) {
+        let at = self
+            .playing
+            .map_or(self.cursor, |playing| playing + 1)
+            .min(self.entries.len());
+        self.entries.insert(at, path);
+        self.playing = Some(at);
+        self.cursor = at + 1;
+        self.revision = new_revision();
     }
 
-    fn remember(&mut self, path: PathBuf) {
-        self.history.push(path);
-        if self.history.len() > HISTORY {
-            self.history.remove(0);
+    /// Takes one entry out of the list. The file on disk is untouched. Taking
+    /// out the entry that is playing leaves it playing; the list carries on
+    /// from the entry that followed it.
+    pub fn remove(&mut self, index: usize) -> Option<PathBuf> {
+        if index >= self.entries.len() {
+            return None;
         }
+        let removed = self.entries.remove(index);
+        if index < self.cursor {
+            self.cursor -= 1;
+        }
+        self.playing = match self.playing {
+            Some(playing) if playing == index => None,
+            Some(playing) if playing > index => Some(playing - 1),
+            other => other,
+        };
+        self.revision = new_revision();
+        Some(removed)
     }
 
-    /// One pass's play order. `avoid_first` is the last track of the pass
-    /// before it: a fresh shuffle is allowed to start with it, which is the one
-    /// repeat a listener always notices, so it is moved out of the way.
-    fn pass(&self, avoid_first: Option<usize>) -> Vec<usize> {
-        let mut order: Vec<usize> = (0..self.files.len()).collect();
-        if !self.shuffle {
-            return order;
+    /// Where `path` is in the list, trusting `index` when it still holds it.
+    /// The user picks an entry by its row, and the list may have moved under
+    /// them by the time the worker sees it; the path is what they meant.
+    pub fn find(&self, index: usize, path: &Path) -> Option<usize> {
+        if self.entries.get(index).is_some_and(|entry| entry == path) {
+            return Some(index);
         }
-        order.shuffle(&mut rand::thread_rng());
-        if order.len() > 1 && order.first().copied() == avoid_first {
-            order.swap(0, 1);
+        self.entries.iter().position(|entry| entry == path)
+    }
+
+    /// Turns shuffle on or off for what has not played yet. What has already
+    /// played, and the track playing now, stay where they are.
+    pub fn set_shuffle(&mut self, shuffle: bool) {
+        self.shuffle = shuffle;
+        let from = self.cursor.min(self.entries.len());
+        let rest = &mut self.entries[from..];
+        if shuffle {
+            rest.shuffle(&mut rand::thread_rng());
+        } else {
+            // Folder order: `scan_folder` sorts, so sorting puts it back.
+            rest.sort();
         }
-        order
+        self.revision = new_revision();
     }
 }
 
@@ -283,10 +303,9 @@ impl Playlist {
 mod tests {
     use super::*;
 
+    /// Zero-padded so the folder's sorted order is the numeric one.
     fn files(count: usize) -> Vec<PathBuf> {
-        (0..count)
-            .map(|n| PathBuf::from(format!("track{n}.mp3")))
-            .collect()
+        (0..count).map(track).collect()
     }
 
     #[test]
@@ -310,23 +329,19 @@ mod tests {
         assert_eq!(track_title(&path), "01 Hello");
     }
 
-    /// Without shuffle the list is the folder's own order, over and over.
+    fn track(n: usize) -> PathBuf {
+        PathBuf::from(format!("track{n:02}.mp3"))
+    }
+
+    /// Without shuffle the list is the folder's own order, and it runs out
+    /// rather than wrapping: the end of the list is when the folder is read
+    /// again, which is the worker's job.
     #[test]
-    fn in_order_playback_wraps_round() {
+    fn in_order_playback_plays_the_list_then_runs_out() {
         let mut playlist = Playlist::new(files(3), false);
-        let played: Vec<PathBuf> = (0..7).filter_map(|_| playlist.next()).collect();
-        assert_eq!(
-            played,
-            vec![
-                PathBuf::from("track0.mp3"),
-                PathBuf::from("track1.mp3"),
-                PathBuf::from("track2.mp3"),
-                PathBuf::from("track0.mp3"),
-                PathBuf::from("track1.mp3"),
-                PathBuf::from("track2.mp3"),
-                PathBuf::from("track0.mp3"),
-            ]
-        );
+        let played: Vec<PathBuf> = (0..5).filter_map(|_| playlist.next()).collect();
+        assert_eq!(played, files(3));
+        assert!(playlist.is_exhausted());
     }
 
     /// A shuffle that repeats a track before playing the others is the thing
@@ -336,151 +351,182 @@ mod tests {
         let mut playlist = Playlist::new(files(20), true);
         let mut played: Vec<PathBuf> = (0..20).filter_map(|_| playlist.next()).collect();
         played.sort();
-        let mut expected = files(20);
-        expected.sort();
-        assert_eq!(played, expected);
+        assert_eq!(played, files(20));
     }
 
-    /// The one repeat a wrap can produce: the last track of a pass coming back
-    /// as the first of the next.
+    /// The list shown is the order that plays, shuffled or not.
     #[test]
-    fn a_reshuffle_does_not_repeat_the_track_that_just_played() {
-        for _ in 0..200 {
-            let mut playlist = Playlist::new(files(4), true);
-            let played: Vec<PathBuf> = (0..8).filter_map(|_| playlist.next()).collect();
-            assert_ne!(played[3], played[4], "repeated across the wrap");
+    fn the_list_is_the_order_that_plays() {
+        for shuffle in [false, true] {
+            let mut playlist = Playlist::new(files(10), shuffle);
+            let shown = playlist.entries().to_vec();
+            let played: Vec<PathBuf> = (0..10).filter_map(|_| playlist.next()).collect();
+            assert_eq!(shown, played, "shuffle: {shuffle}");
         }
     }
 
-    /// What "skip to the next track" announces has to be what then plays,
-    /// including across the wrap where a reshuffle happens.
+    /// The one repeat a refill can produce: the last track of a pass coming
+    /// back as the first of the next.
+    #[test]
+    fn a_refill_does_not_repeat_the_track_that_just_played() {
+        for _ in 0..200 {
+            let mut playlist = Playlist::new(files(4), true);
+            let mut last = None;
+            while let Some(path) = playlist.next() {
+                last = Some(path);
+            }
+            let last = last.unwrap();
+            playlist.refill(files(4), Some(&last));
+            assert_ne!(playlist.entries()[0], last, "repeated across the refill");
+        }
+    }
+
+    /// What "skip to the next track" announces has to be what then plays.
     #[test]
     fn peek_is_what_next_hands_back() {
         for shuffle in [false, true] {
             let mut playlist = Playlist::new(files(4), shuffle);
-            for _ in 0..12 {
-                let peeked = playlist.peek();
-                assert_eq!(peeked, playlist.next(), "shuffle: {shuffle}");
+            for _ in 0..4 {
+                let peeked = playlist.peek().cloned();
                 assert!(peeked.is_some());
+                assert_eq!(peeked, playlist.next(), "shuffle: {shuffle}");
             }
+            assert_eq!(playlist.peek(), None, "nothing is known past the end");
         }
     }
 
-    /// The list shown ahead of time has to be what then plays, track for
-    /// track — across the wrap above all, where a shuffled pass used to be
-    /// decided only once the previous one ran out.
+    /// Playing an entry from the list carries on from the one after it.
     #[test]
-    fn upcoming_is_what_next_hands_back_in_turn() {
-        for shuffle in [false, true] {
-            for _ in 0..50 {
-                let mut playlist = Playlist::new(files(5), shuffle);
-                for _ in 0..13 {
-                    let ahead = playlist.upcoming(4);
-                    assert_eq!(ahead.len(), 4);
-                    let mut probe = Playlist {
-                        files: playlist.files.clone(),
-                        order: playlist.order.clone(),
-                        following: playlist.following.clone(),
-                        position: playlist.position,
-                        shuffle,
-                        history: playlist.history.clone(),
-                        ahead: playlist.ahead.clone(),
-                    };
-                    let played: Vec<PathBuf> = (0..4).filter_map(|_| probe.next()).collect();
-                    assert_eq!(ahead, played, "shuffle: {shuffle}");
-                    playlist.next();
-                }
-            }
-        }
+    fn playing_an_entry_carries_on_from_there() {
+        let mut playlist = Playlist::new(files(5), false);
+        playlist.next();
+        assert_eq!(playlist.play_at(3), Some(track(3)));
+        assert_eq!(playlist.playing(), Some(3));
+        assert_eq!(playlist.next(), Some(track(4)));
+        assert!(playlist.is_exhausted());
+        // And back up the list, too.
+        assert_eq!(playlist.play_at(0), Some(track(0)));
+        assert_eq!(playlist.next(), Some(track(1)));
+        assert_eq!(playlist.play_at(99), None);
     }
 
+    /// Back goes to the entry above, and from the top restarts it.
     #[test]
-    fn upcoming_never_names_more_tracks_than_the_folder_holds() {
-        assert_eq!(Playlist::new(files(2), true).upcoming(4).len(), 2);
-        assert_eq!(
-            Playlist::new(files(1), true).upcoming(4),
-            vec![PathBuf::from("track0.mp3")]
-        );
-        assert!(Playlist::new(Vec::new(), true).upcoming(4).is_empty());
-    }
-
-    /// Back goes to what played before, forward again returns to where the
-    /// user started, and only then does the pass carry on.
-    #[test]
-    fn previous_steps_back_and_next_retraces_the_steps() {
+    fn previous_is_the_entry_above() {
         let mut playlist = Playlist::new(files(4), false);
-        let track = |n: usize| PathBuf::from(format!("track{n}.mp3"));
+        assert_eq!(playlist.peek_previous(), None, "nothing played yet");
+        assert_eq!(playlist.previous(), None);
         for _ in 0..3 {
             playlist.next();
         }
-        // Playing track2.
         assert_eq!(playlist.peek_previous(), Some(&track(1)));
         assert_eq!(playlist.previous(), Some(track(1)));
         assert_eq!(playlist.previous(), Some(track(0)));
-        // The first track has nothing before it: previous restarts it.
-        assert_eq!(playlist.peek_previous(), Some(&track(0)));
+        assert_eq!(playlist.peek_previous(), Some(&track(0)), "the top restarts");
         assert_eq!(playlist.previous(), Some(track(0)));
-        // What is coming is the way back, then the pass where it was.
-        assert_eq!(playlist.upcoming(4), vec![track(1), track(2), track(3), track(0)]);
-        for n in [1, 2, 3, 0] {
-            assert_eq!(playlist.peek(), Some(track(n)));
-            assert_eq!(playlist.next(), Some(track(n)));
-        }
+        assert_eq!(playlist.next(), Some(track(1)));
     }
 
-    /// Previous crosses the wrap, where a shuffled pass has been thrown away.
+    /// Removing entries never changes what plays next unless it is what was
+    /// removed.
     #[test]
-    fn previous_reaches_back_across_the_wrap() {
-        for _ in 0..50 {
-            let mut playlist = Playlist::new(files(3), true);
-            let played: Vec<PathBuf> = (0..4).filter_map(|_| playlist.next()).collect();
-            assert_eq!(playlist.previous().as_ref(), Some(&played[2]));
-            assert_eq!(playlist.previous().as_ref(), Some(&played[1]));
-            assert_eq!(playlist.next().as_ref(), Some(&played[2]));
-            assert_eq!(playlist.next().as_ref(), Some(&played[3]));
-        }
-    }
-
-    /// An opened file is a track like any other to previous, and forgets the
-    /// way forward the user had stepped back over.
-    #[test]
-    fn an_opened_file_joins_the_history() {
-        let mut playlist = Playlist::new(files(3), false);
+    fn removing_entries_keeps_the_place() {
+        let mut playlist = Playlist::new(files(5), false);
         playlist.next();
+        playlist.next(); // playing track 1
+        let before = playlist.revision();
+        assert_eq!(playlist.remove(0), Some(track(0)));
+        assert_ne!(playlist.revision(), before);
+        assert_eq!(playlist.playing(), Some(0), "track 1 moved up a row");
+        assert_eq!(playlist.peek(), Some(&track(2)));
+        // An upcoming entry: the one after it plays instead.
+        assert_eq!(playlist.remove(1), Some(track(2)));
+        assert_eq!(playlist.peek(), Some(&track(3)));
+        assert_eq!(playlist.remove(99), None);
+    }
+
+    /// The playing entry can be removed: it stops being listed, and the list
+    /// carries on from the entry that followed it.
+    #[test]
+    fn removing_the_playing_entry_carries_on_below_it() {
+        let mut playlist = Playlist::new(files(4), false);
         playlist.next();
-        playlist.previous();
-        let opened = PathBuf::from("elsewhere.mp3");
-        playlist.played(opened.clone());
-        assert_eq!(playlist.peek_previous(), Some(&PathBuf::from("track0.mp3")));
-        assert_eq!(playlist.next(), Some(PathBuf::from("track2.mp3")));
-        assert_eq!(playlist.previous(), Some(opened));
+        playlist.next(); // playing track 1
+        playlist.remove(1);
+        assert_eq!(playlist.playing(), None);
+        assert_eq!(playlist.peek(), Some(&track(2)));
+        assert_eq!(playlist.peek_previous(), Some(&track(0)));
+        assert_eq!(playlist.entries(), &[track(0), track(2), track(3)]);
     }
 
     #[test]
-    fn nothing_played_has_no_previous() {
-        let mut playlist = Playlist::new(files(3), false);
+    fn removing_everything_runs_the_list_out() {
+        let mut playlist = Playlist::new(files(2), false);
+        playlist.next();
+        playlist.remove(0);
+        playlist.remove(0);
+        assert!(playlist.is_empty());
+        assert!(playlist.is_exhausted());
+        assert_eq!(playlist.next(), None);
         assert_eq!(playlist.peek_previous(), None);
-        assert_eq!(playlist.previous(), None);
-        assert_eq!(playlist.peek(), Some(PathBuf::from("track0.mp3")));
+    }
+
+    /// An opened file goes in just below what it interrupted and plays; the
+    /// list then carries on where it was.
+    #[test]
+    fn an_opened_file_joins_the_list_where_it_plays() {
+        let mut playlist = Playlist::new(files(3), false);
+        playlist.next(); // playing track 0
+        let opened = PathBuf::from("elsewhere.mp3");
+        playlist.insert_and_play(opened.clone());
+        assert_eq!(
+            playlist.entries(),
+            &[track(0), opened.clone(), track(1), track(2)]
+        );
+        assert_eq!(playlist.playing(), Some(1));
+        assert_eq!(playlist.peek_previous(), Some(&track(0)));
+        assert_eq!(playlist.next(), Some(track(1)));
+        // Before anything has played, it goes on top.
+        let mut fresh = Playlist::new(files(2), false);
+        fresh.insert_and_play(opened.clone());
+        assert_eq!(fresh.entries()[0], opened);
+        assert_eq!(fresh.next(), Some(track(0)));
+    }
+
+    /// The user's row and the worker's list can disagree for a moment; the
+    /// path is what they meant.
+    #[test]
+    fn find_trusts_the_index_then_the_path() {
+        let playlist = Playlist::new(files(4), false);
+        assert_eq!(playlist.find(2, &track(2)), Some(2));
+        assert_eq!(playlist.find(0, &track(3)), Some(3));
+        assert_eq!(playlist.find(0, Path::new("gone.mp3")), None);
+    }
+
+    /// Turning shuffle on mid-list leaves what has played, and what is
+    /// playing, alone.
+    #[test]
+    fn shuffle_reorders_only_what_is_still_to_come() {
+        let mut playlist = Playlist::new(files(30), false);
+        playlist.next();
+        playlist.next();
+        playlist.set_shuffle(true);
+        assert_eq!(&playlist.entries()[..2], &[track(0), track(1)]);
+        assert_eq!(playlist.playing(), Some(1));
+        let mut rest = playlist.entries()[2..].to_vec();
+        rest.sort();
+        assert_eq!(rest, files(30)[2..].to_vec());
+        playlist.set_shuffle(false);
+        assert_eq!(playlist.entries(), files(30).as_slice(), "back in folder order");
     }
 
     #[test]
-    fn an_empty_playlist_has_nothing_to_peek_at() {
-        assert_eq!(Playlist::new(Vec::new(), true).peek(), None);
-    }
-
-    #[test]
-    fn an_empty_folder_plays_nothing_rather_than_looping() {
+    fn an_empty_folder_plays_nothing() {
         let mut playlist = Playlist::new(Vec::new(), true);
         assert!(playlist.is_empty());
+        assert!(playlist.is_exhausted());
+        assert_eq!(playlist.peek(), None);
         assert_eq!(playlist.next(), None);
-    }
-
-    #[test]
-    fn one_file_repeats_rather_than_stopping() {
-        let mut playlist = Playlist::new(files(1), true);
-        assert_eq!(playlist.next(), Some(PathBuf::from("track0.mp3")));
-        assert_eq!(playlist.next(), Some(PathBuf::from("track0.mp3")));
     }
 
     #[test]

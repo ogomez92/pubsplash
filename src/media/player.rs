@@ -62,12 +62,15 @@ const NO_RING_WAIT: Duration = Duration::from_millis(100);
 const NO_RING_PATIENCE: Duration = Duration::from_secs(3);
 
 /// How long to wait, when there is nothing to play, before looking at the
-/// folder again — the case where the user is filling it while Pubsplash runs.
+/// folder again — the case where the user is filling it while Pubsplash runs,
+/// or a drive that went away comes back.
+///
+/// This is a poll, and the one left in the player: with a list to play, the
+/// folder is read only when the list runs out, which is an event the worker
+/// sees for itself. A watcher on the folder would answer the empty case without
+/// polling, but it would be a new dependency and a recursive watch over a whole
+/// music library for the one state where the player has nothing else to do.
 const EMPTY_RESCAN: Duration = Duration::from_secs(15);
-
-/// How often the folder is re-read while playing, so files added during a long
-/// session join the rotation. Checked between tracks, never mid-track.
-const RESCAN_INTERVAL: Duration = Duration::from_secs(300);
 
 /// How long to wait after a run of unplayable files before trying again.
 /// Without it, a folder Pubsplash cannot read would spin this thread at the
@@ -77,10 +80,10 @@ const FAILURE_BACKOFF: Duration = Duration::from_secs(5);
 /// How many files in a row may fail before that backoff.
 ///
 /// Capped well below the size of a real library on purpose. The failure this
-/// guards against is not one bad file — that is skipped and forgotten — but the
-/// whole folder becoming unreadable at once, which is what a disconnected drive
-/// looks like. Walking a thousand paths to find that out would take a thousand
-/// log lines to say it.
+/// guards against is not one bad file — that is skipped and taken out of the
+/// list — but the whole folder becoming unreadable at once, which is what a
+/// disconnected drive looks like. Walking a thousand paths to find that out
+/// would take a thousand log lines to say it.
 const FAILURE_STREAK: usize = 10;
 
 /// What a media player is doing, for the source's label in the Sources list.
@@ -95,50 +98,70 @@ pub enum PlaybackState {
     Paused,
 }
 
+/// One row of a player's list: the file, and what the user is told it is
+/// called.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct QueueEntry {
+    pub path: PathBuf,
+    pub title: String,
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Status {
     pub state: PlaybackState,
     /// The track playing (or paused), without its extension.
     pub track: Option<String>,
-    /// The next [`UPCOMING`] tracks, soonest first, without their extensions.
-    ///
-    /// Published by the worker rather than worked out by the caller because the
-    /// playlist lives here. The first is what "skip to the next track" is
-    /// announced as, so the announcement names the track the user is about to
-    /// hear instead of telling them something they already know; the whole
-    /// list is the mixer strip's Upcoming tracks field, which is there so a
-    /// song can be introduced on air before it starts.
-    pub upcoming: Vec<String>,
+    /// The whole list, in the order it plays. Shared rather than copied: a
+    /// library folder is thousands of entries, and the UI asks for the status
+    /// on every keypress that drives the player. A new `Arc` is built only
+    /// when the entries change, which is also what makes comparing two
+    /// statuses cheap — equal `Arc`s compare by pointer first.
+    pub queue: Arc<Vec<QueueEntry>>,
+    /// Which row of `queue` is playing. `None` before anything has played, and
+    /// after the playing entry has been removed from the list (it plays on).
+    pub playing: Option<usize>,
+    /// Changes whenever the entries in `queue` change, and only then — a
+    /// track starting moves `playing` without touching it. What lets the list
+    /// on screen tell "relabel two rows" from "rebuild". Unique across every
+    /// player in the process.
+    pub revision: u64,
+    /// The track "next track" would move to, for its announcement. `None` at
+    /// the end of the list, where the folder has not been read again yet.
+    pub next_track: Option<String>,
     /// The track "previous track" would move to, for its announcement. The
-    /// track playing now when nothing came before it, since that is what a
-    /// previous then does — starts it again.
+    /// track playing now when it is the first in the list, since that is what
+    /// a previous then does — starts it again.
     pub previous: Option<String>,
 }
 
 impl Status {
     /// The track a skip would move to.
     pub fn next(&self) -> Option<&str> {
-        self.upcoming.first().map(String::as_str)
+        self.next_track.as_deref()
     }
 }
-
-/// How many tracks ahead a player publishes.
-pub const UPCOMING: usize = 4;
 
 /// What the UI can ask a running player to do.
 pub enum Command {
     PlayPause,
     /// Abandon the current track and start the next one.
     Next,
-    /// Abandon the current track and go back to the one before it; from the
-    /// first track, start it again.
+    /// Abandon the current track and go back to the one above it in the list;
+    /// from the first, start it again.
     Previous,
-    /// Abandon the current track and play this file, then carry on with the
-    /// folder. The file does not have to be in the folder, or in any folder this
-    /// source knows about — it is a one-off, and nothing about it is remembered.
-    PlayFile(std::path::PathBuf),
-    /// The source's settings changed. The folder is re-read; playback continues
-    /// with the next track from the new list.
+    /// Abandon the current track and play this file, which joins the list just
+    /// below the track it interrupted. The file does not have to be in the
+    /// folder, or in any folder this source knows about.
+    PlayFile(PathBuf),
+    /// Abandon the current track and play this entry of the list, carrying on
+    /// from the one below it. `path` is what the user saw in that row, so a
+    /// list that moved under them still plays what they chose.
+    PlayAt { index: usize, path: PathBuf },
+    /// Take this entry out of the list. The file is untouched, and the folder
+    /// brings it back when the list runs out and is read again.
+    Remove { index: usize, path: PathBuf },
+    /// The source's settings changed. A new folder is read and replaces the
+    /// list; a shuffle change reorders what has not played yet.
     Reload { folder: String, shuffle: bool },
 }
 
@@ -182,7 +205,10 @@ impl Player {
                     paused: false,
                     playlist: Playlist::new(Vec::new(), shuffle),
                     pending: None,
-                    last_scan: None,
+                    last_played: None,
+                    last_count: None,
+                    queue: Arc::default(),
+                    queue_revision: 0,
                     failures: 0,
                 };
                 move || worker.run()
@@ -254,12 +280,20 @@ struct Worker {
     shuffle: bool,
     paused: bool,
     playlist: Playlist,
-    /// A file the user picked with Open file, to play before going back to the
-    /// folder. Taken by the next pass round the loop, so it survives being set
-    /// from anywhere a command is drained.
+    /// A track the playlist has already been moved to — by Open file, by
+    /// playing an entry, or by Previous — to be played by the next pass round
+    /// the loop. Taken there, so it survives being set from anywhere a command
+    /// is drained.
     pending: Option<PathBuf>,
-    /// When the folder was last read, so a long session picks up new files.
-    last_scan: Option<Instant>,
+    /// The track that played last, so a fresh shuffle does not open with it.
+    last_played: Option<PathBuf>,
+    /// How many files the last read of the folder found, so an empty folder
+    /// re-read every [`EMPTY_RESCAN`] logs once rather than four times a minute.
+    last_count: Option<usize>,
+    /// The list as last published, rebuilt only when the playlist's revision
+    /// moves. See [`Status::queue`].
+    queue: Arc<Vec<QueueEntry>>,
+    queue_revision: u64,
     /// Tracks that failed to produce any audio since the last one that did.
     failures: usize,
 }
@@ -271,33 +305,16 @@ impl Worker {
     /// [`Worker::feed`] the same shape drops the command on the floor — see the
     /// note there.
     fn run(&mut self) {
-        self.rescan();
         loop {
             if self.stopping() {
                 return;
             }
-            // A file the user opened outright is played before anything the
-            // folder has to say — including when the folder is empty, or not set
-            // at all, which is a perfectly reasonable way to use this source.
+            // A track the user chose outright is played before anything else —
+            // including when the folder is empty, or not set at all, which is a
+            // perfectly reasonable way to use this source with Open file.
             if let Some(path) = self.pending.take() {
-                self.set_status(PlaybackState::Playing, Some(track_title(&path)));
-                if self.play(&path) == Flow::Stop {
+                if self.play_track(path) == Flow::Stop {
                     return;
-                }
-                continue;
-            }
-            if self.playlist.is_empty() {
-                let state = if self.folder.trim().is_empty() {
-                    PlaybackState::NoFolder
-                } else {
-                    PlaybackState::NoFiles
-                };
-                self.set_status(state, None);
-                if self.wait(EMPTY_RESCAN) == Flow::Stop {
-                    return;
-                }
-                if self.folder_is_stale(EMPTY_RESCAN) {
-                    self.rescan();
                 }
                 continue;
             }
@@ -310,8 +327,10 @@ impl Worker {
                 continue;
             }
             // A run of files that produced no audio at all: back off rather
-            // than reopening them as fast as the disk allows, and read the
-            // folder again — the usual cause is that it is not there any more.
+            // than reopening them as fast as the disk allows. Each one has
+            // already been taken out of the list, so the list runs out and the
+            // folder is read again — the usual cause is that it is not there
+            // any more.
             if self.failures >= FAILURE_STREAK.min(self.playlist.len().max(1)) {
                 self.failures = 0;
                 log::warn!(
@@ -319,20 +338,33 @@ impl Worker {
                     self.source,
                     self.folder
                 );
-                self.last_scan = None;
                 if self.wait(FAILURE_BACKOFF) == Flow::Stop {
                     return;
                 }
                 continue;
             }
-            if self.folder_is_stale(RESCAN_INTERVAL) {
-                self.rescan();
+            // The end of the list is the one moment the folder is read again:
+            // songs added to it since join, songs removed from the list come
+            // back, and a shuffled list gets a fresh order.
+            if self.playlist.is_exhausted() {
+                self.refill();
+                if self.playlist.is_empty() {
+                    let state = if self.folder.trim().is_empty() {
+                        PlaybackState::NoFolder
+                    } else {
+                        PlaybackState::NoFiles
+                    };
+                    self.set_status(state, None);
+                    if self.wait(EMPTY_RESCAN) == Flow::Stop {
+                        return;
+                    }
+                    continue;
+                }
             }
             let Some(track) = self.playlist.next() else {
                 continue;
             };
-            self.set_status(PlaybackState::Playing, Some(track_title(&track)));
-            if self.play(&track) == Flow::Stop {
+            if self.play_track(track) == Flow::Stop {
                 return;
             }
         }
@@ -342,48 +374,59 @@ impl Worker {
         self.stop.load(Ordering::Relaxed)
     }
 
-    /// Re-reads the folder. An unchanged list keeps the current playlist, so a
-    /// rescan mid-session does not reshuffle what is already in progress.
-    fn rescan(&mut self) {
-        self.last_scan = Some(Instant::now());
+    /// Reads the folder and makes what it holds the new list.
+    fn refill(&mut self) {
         let folder = self.folder.trim();
         let files = if folder.is_empty() {
             Vec::new()
         } else {
             scan_folder(Path::new(folder))
         };
-        if files.as_slice() == self.playlist.files() {
-            return;
+        if self.last_count != Some(files.len()) {
+            log::info!(
+                "Media player {:?}: {} playable files in {:?}",
+                self.source,
+                files.len(),
+                folder
+            );
+            self.last_count = Some(files.len());
         }
-        log::info!(
-            "Media player {:?}: {} playable files in {:?}",
-            self.source,
-            files.len(),
-            folder
-        );
-        self.failures = 0;
-        let before = std::mem::replace(&mut self.playlist, Playlist::new(files, self.shuffle));
-        self.playlist.inherit_history(before);
+        let last = self.last_played.take();
+        self.playlist.refill(files, last.as_deref());
+        self.last_played = last;
     }
 
-    fn folder_is_stale(&self, after: Duration) -> bool {
-        self.last_scan.is_none_or(|at| at.elapsed() >= after)
+    /// Plays one track the playlist has already been moved to.
+    fn play_track(&mut self, path: PathBuf) -> Flow {
+        self.set_status(PlaybackState::Playing, Some(track_title(&path)));
+        self.last_played = Some(path.clone());
+        self.play(&path)
     }
 
-    /// Publishes what this player is doing. The *upcoming* track is read off
-    /// the playlist here rather than passed in, so every path that changes the
-    /// status refreshes it — a rescan or a reload moves it as surely as a track
-    /// ending does.
-    fn set_status(&self, state: PlaybackState, track: Option<String>) {
+    /// Publishes what this player is doing. The list, and the tracks next and
+    /// previous would move to, are read off the playlist here rather than
+    /// passed in, so every path that changes the status refreshes them.
+    fn set_status(&mut self, state: PlaybackState, track: Option<String>) {
+        if self.queue_revision != self.playlist.revision() {
+            self.queue = Arc::new(
+                self.playlist
+                    .entries()
+                    .iter()
+                    .map(|path| QueueEntry {
+                        path: path.clone(),
+                        title: track_title(path),
+                    })
+                    .collect(),
+            );
+            self.queue_revision = self.playlist.revision();
+        }
         let next = Status {
             state,
             track,
-            upcoming: self
-                .playlist
-                .upcoming(UPCOMING)
-                .iter()
-                .map(|path| track_title(path))
-                .collect(),
+            queue: self.queue.clone(),
+            playing: self.playlist.playing(),
+            revision: self.queue_revision,
+            next_track: self.playlist.peek().map(|path| track_title(path)),
             previous: self.playlist.peek_previous().map(|path| track_title(path)),
         };
         let mut status =
@@ -393,10 +436,17 @@ impl Worker {
         }
         *status = next;
         drop(status);
-        // The pump notices the counter moved and re-derives the source's label;
-        // see `ui::media`.
+        // The pump notices the counter moved and re-derives the source's label
+        // and the strip's list; see `ui::media`.
         self.generation.fetch_add(1, Ordering::Relaxed);
         wxdragon::wake_up_idle();
+    }
+
+    /// Republishes the current state after an edit to the list, which changes
+    /// the status without a track starting or stopping.
+    fn publish(&mut self) {
+        let current = self.status();
+        self.set_status(current.state, current.track);
     }
 
     /// Waits up to `timeout` for a command, acting on whatever arrives.
@@ -443,18 +493,36 @@ impl Worker {
                 self.paused = false;
                 Flow::NextTrack
             }
-            // The same skip, to a file of the user's choosing rather than the
-            // playlist's. Nothing is remembered: when it ends, the folder picks
-            // up exactly where it would have.
+            // The same skip, to a file of the user's choosing. It joins the
+            // list where it plays, so the list carries on below it.
             Command::PlayFile(path) => {
                 self.paused = false;
-                self.playlist.played(path.clone());
+                self.playlist.insert_and_play(path.clone());
                 self.pending = Some(path);
                 Flow::NextTrack
             }
-            // Played through `pending` like an opened file, because the
-            // playlist has already moved back: taking it from `playlist.next()`
-            // as well would move it on again.
+            Command::PlayAt { index, path } => match self.playlist.find(index, &path) {
+                Some(index) => {
+                    self.paused = false;
+                    self.playlist.play_at(index);
+                    self.pending = Some(path);
+                    Flow::NextTrack
+                }
+                // Gone from the list since the user saw it — the list ran out
+                // and was read again. Nothing they asked for is left to play.
+                None => Flow::Go,
+            },
+            // Never interrupts anything: removing the playing entry leaves it
+            // playing to its end, which on air is the only safe answer.
+            Command::Remove { index, path } => {
+                if let Some(index) = self.playlist.find(index, &path) {
+                    self.playlist.remove(index);
+                }
+                self.publish();
+                Flow::Go
+            }
+            // Played through `pending`, because the playlist has already moved
+            // back: taking it from `playlist.next()` as well would move it on.
             Command::Previous => match self.playlist.previous() {
                 Some(path) => {
                     self.paused = false;
@@ -466,13 +534,21 @@ impl Worker {
                 None => Flow::Go,
             },
             Command::Reload { folder, shuffle } => {
-                self.folder = folder;
-                self.shuffle = shuffle;
-                // Forces a real rescan even if the list is unchanged, since the
-                // shuffle setting may be what moved.
-                self.playlist = Playlist::new(Vec::new(), shuffle);
-                self.rescan();
-                Flow::Reloaded
+                if folder != self.folder {
+                    self.folder = folder;
+                    self.shuffle = shuffle;
+                    // An empty list is an exhausted one, so the loop reads the
+                    // new folder the moment the current track is abandoned.
+                    self.playlist = Playlist::new(Vec::new(), shuffle);
+                    self.last_count = None;
+                    return Flow::Reloaded;
+                }
+                if shuffle != self.shuffle {
+                    self.shuffle = shuffle;
+                    self.playlist.set_shuffle(shuffle);
+                    self.publish();
+                }
+                Flow::Go
             }
         }
     }
@@ -484,13 +560,20 @@ impl Worker {
             Ok(flow) => flow,
             Err(message) => {
                 // One line per unreadable file, then on to the next: a folder
-                // with a broken file in it is not a broken media player.
+                // with a broken file in it is not a broken media player. The
+                // file leaves the list, so the user does not keep finding it.
                 log::warn!(
                     "Media player {:?}: could not play {}: {message}",
                     self.source,
                     path.display()
                 );
                 self.failures += 1;
+                if let Some(index) = self.playlist.playing()
+                    && self.playlist.entries().get(index).is_some_and(|entry| entry == path)
+                {
+                    self.playlist.remove(index);
+                    self.publish();
+                }
                 Flow::Go
             }
         }
@@ -968,5 +1051,175 @@ mod tests {
         assert_eq!(player.status().state, PlaybackState::NoFolder);
         assert_eq!(player.status().track, None);
         player.stop();
+    }
+
+    /// A player on `folder`, with a thread draining its ring like the mixer
+    /// would. The returned closure stops the drainer and the player.
+    fn running(folder: &Path) -> (Player, impl FnOnce(Player)) {
+        let feeds = ExternalFeeds::default();
+        let mut ring =
+            feeds.park_for_test("Media Player", crate::audio::mixer::SAMPLE_RATE as usize);
+        let player = Player::start(
+            "Media Player".to_string(),
+            feeds,
+            folder.to_string_lossy().into_owned(),
+            false,
+            Arc::new(AtomicU64::new(0)),
+        );
+        let drain = Arc::new(AtomicBool::new(false));
+        let drainer = std::thread::spawn({
+            let drain = drain.clone();
+            move || {
+                while !drain.load(Ordering::Relaxed) {
+                    let slots = ring.slots();
+                    if slots > 0 && let Ok(chunk) = ring.read_chunk(slots) {
+                        chunk.commit_all();
+                    }
+                    std::thread::sleep(Duration::from_millis(10));
+                }
+            }
+        });
+        let finish = move |player: Player| {
+            drain.store(true, Ordering::Relaxed);
+            let _ = drainer.join();
+            player.stop();
+        };
+        (player, finish)
+    }
+
+    fn wait_until(player: &Player, done: impl Fn(&Status) -> bool) -> Status {
+        let deadline = Instant::now() + Duration::from_secs(10);
+        loop {
+            let status = player.status();
+            if done(&status) || Instant::now() >= deadline {
+                return status;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+    }
+
+    fn titles(status: &Status) -> Vec<&str> {
+        status.queue.iter().map(|entry| entry.title.as_str()).collect()
+    }
+
+    /// The whole list is published in playing order, with the playing row.
+    #[test]
+    fn the_whole_list_is_published() {
+        let folder = folder_of_tracks("list", &["a", "b", "c"]);
+        let (player, finish) = running(&folder);
+        let status = wait_until(&player, |s| s.track.as_deref() == Some("a"));
+        finish(player);
+        let _ = std::fs::remove_dir_all(&folder);
+
+        assert_eq!(titles(&status), vec!["a", "b", "c"]);
+        assert_eq!(status.playing, Some(0));
+        assert_eq!(status.next(), Some("b"));
+    }
+
+    /// Enter on a row: that entry plays, and the list carries on below it.
+    #[test]
+    fn an_entry_chosen_from_the_list_plays() {
+        let folder = folder_of_tracks("play-at", &["a", "b", "c"]);
+        let (player, finish) = running(&folder);
+        wait_until(&player, |s| s.track.as_deref() == Some("a"));
+
+        player.send(Command::PlayAt {
+            index: 2,
+            path: folder.join("c.wav"),
+        });
+        let chosen = wait_until(&player, |s| s.track.as_deref() == Some("c"));
+        // A row whose index has gone stale is found by its path.
+        player.send(Command::PlayAt {
+            index: 0,
+            path: folder.join("b.wav"),
+        });
+        let found = wait_until(&player, |s| s.track.as_deref() == Some("b"));
+        finish(player);
+        let _ = std::fs::remove_dir_all(&folder);
+
+        assert_eq!(chosen.track.as_deref(), Some("c"));
+        assert_eq!(chosen.playing, Some(2));
+        assert_eq!(found.playing, Some(1));
+        assert_eq!(found.next(), Some("c"));
+    }
+
+    /// Delete takes an entry out of the list without touching the file or
+    /// interrupting what is playing; when the list runs out the folder is read
+    /// again and the entry is back.
+    #[test]
+    fn a_removed_entry_comes_back_when_the_list_is_read_again() {
+        let folder = folder_of_tracks("remove", &["a", "b", "c"]);
+        let (player, finish) = running(&folder);
+        let first = wait_until(&player, |s| s.track.as_deref() == Some("a"));
+
+        player.send(Command::Remove {
+            index: 1,
+            path: folder.join("b.wav"),
+        });
+        let removed = wait_until(&player, |s| s.revision != first.revision);
+        assert!(folder.join("b.wav").exists(), "the file itself was deleted");
+        assert_eq!(titles(&removed), vec!["a", "c"]);
+        assert_eq!(removed.track.as_deref(), Some("a"), "playback was interrupted");
+        assert_eq!(removed.next(), Some("c"));
+
+        // Take the rest out too, then skip: the list has run out, so the
+        // folder is read again and everything is back.
+        player.send(Command::Remove {
+            index: 1,
+            path: folder.join("c.wav"),
+        });
+        player.send(Command::Remove {
+            index: 0,
+            path: folder.join("a.wav"),
+        });
+        let emptied = wait_until(&player, |s| s.queue.is_empty());
+        assert_eq!(emptied.track.as_deref(), Some("a"), "the playing track plays on");
+        assert_eq!(emptied.next(), None);
+        player.send(Command::Next);
+        let refilled = wait_until(&player, |s| s.queue.len() == 3);
+        finish(player);
+        let _ = std::fs::remove_dir_all(&folder);
+
+        assert_eq!(titles(&refilled), vec!["a", "b", "c"]);
+        assert_eq!(refilled.state, PlaybackState::Playing);
+    }
+
+    /// A file that cannot be played leaves the list rather than being offered
+    /// again, and the player moves on to the next one.
+    #[test]
+    fn an_unplayable_file_leaves_the_list() {
+        let folder = folder_of_tracks("broken", &["a", "c"]);
+        std::fs::write(folder.join("b.wav"), b"this is not a wav file").unwrap();
+        let (player, finish) = running(&folder);
+        wait_until(&player, |s| s.track.as_deref() == Some("a"));
+        player.send(Command::Next);
+        let after = wait_until(&player, |s| s.track.as_deref() == Some("c"));
+        finish(player);
+        let _ = std::fs::remove_dir_all(&folder);
+
+        assert_eq!(after.track.as_deref(), Some("c"));
+        assert_eq!(titles(&after), vec!["a", "c"]);
+    }
+
+    /// Turning shuffle on mid-list keeps the music playing.
+    #[test]
+    fn a_shuffle_change_does_not_interrupt_the_track() {
+        let folder = folder_of_tracks("shuffle", &["a", "b", "c", "d"]);
+        let (player, finish) = running(&folder);
+        let first = wait_until(&player, |s| s.track.as_deref() == Some("a"));
+        player.send(Command::Reload {
+            folder: folder.to_string_lossy().into_owned(),
+            shuffle: true,
+        });
+        let after = wait_until(&player, |s| s.revision != first.revision);
+        finish(player);
+        let _ = std::fs::remove_dir_all(&folder);
+
+        assert_eq!(after.track.as_deref(), Some("a"));
+        assert_eq!(after.playing, Some(0));
+        assert_eq!(after.queue[0].title, "a");
+        let mut rest: Vec<&str> = titles(&after)[1..].to_vec();
+        rest.sort();
+        assert_eq!(rest, vec!["b", "c", "d"]);
     }
 }

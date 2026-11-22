@@ -1324,13 +1324,13 @@ message = ""
 id = "tab.home.mixer.strip.openFile"
 label = "Mixer strip open file button"
 file = "src/ui/home.rs"
-message = "Plays one file of your choosing on this media player. The file can be anywhere on your computer and does not have to be in the source's folder. It interrupts whatever is playing, exactly as skipping to the next track does, and when it finishes the folder carries on with the track it was going to play next. Nothing about the file is remembered. This button only appears on a media player's strip."
+message = "Plays one file of your choosing on this media player. The file can be anywhere on your computer and does not have to be in the source's folder. It stops whatever is playing and starts straight away, and joins the playlist just below the song it interrupted, so when it finishes the playlist carries on with the song that was going to play next. It stays in the playlist until the playlist runs out and the folder is read again. This button only appears on a media player's strip."
 
 [[control]]
-id = "tab.home.mixer.strip.upcoming"
-label = "Mixer strip upcoming tracks field"
-file = "src/ui/home.rs"
-message = "The next four tracks this media player will play, one per line and numbered, with the very next one first, so you can introduce a song on air before it starts. Use the arrow keys to read it. With shuffle on, the order shown is the order they will really play in, even past the end of the folder. It updates by itself whenever a track changes, and skipping moves it on just as a track ending does. A file you open yourself plays straight away, and when it ends the folder carries on with the first track shown. This field only appears on a media player's strip."
+id = "tab.home.mixer.strip.playlist"
+label = "Mixer strip playlist"
+file = "src/ui/playlist.rs"
+message = "Every song this media player will play, in the order it will play them, with the one playing now marked as playing. With shuffle on, the order shown is the shuffled order. Move with the arrow keys, Home and End, or type the first letters of a song's name to jump to it. Press Enter to stop the current song and play the selected one; the playlist then carries on from there. Press Delete to take the selected song out of the playlist. That only removes it from the list: the file stays in the folder, so there is no confirmation. Shift plus F10 or the applications key opens a menu with the same choices and the player's own controls. The folder is read when the player starts or you choose a new one, and again only when the playlist runs out, which brings back anything you removed and adds anything new. Alt plus L brings you here from anywhere in the main window. This list only appears on a media player's strip."
 
 [[control]]
 id = "tab.home.mixer.strip.volume"
@@ -1535,3 +1535,9 @@ id = "dialog.ttsSource.fetchVoices"
 label = "Get available voices button"
 file = "src/ui/scenes.rs"
 message = "Voice and model lists refresh automatically at startup and after successful credential validation. Pubsplash keeps the last successful cached list if a provider cannot be reached."
+
+[[stale]]
+id = "tab.home.mixer.strip.upcoming"
+label = "Mixer strip upcoming tracks field"
+file = "src/ui/home.rs"
+message = "The next four tracks this media player will play, one per line and numbered, with the very next one first, so you can introduce a song on air before it starts. Use the arrow keys to read it. With shuffle on, the order shown is the order they will really play in, even past the end of the folder. It updates by itself whenever a track changes, and skipping moves it on just as a track ending does. A file you open yourself plays straight away, and when it ends the folder carries on with the first track shown. This field only appears on a media player's strip."

@@ -136,68 +136,95 @@ impl MediaPlayers {
     }
 }
 
-/// What a media player strip's Upcoming tracks field says: the tracks coming
-/// next, one per line and numbered, soonest first.
+/// The rows of a media player strip's playlist: every entry, in the order it
+/// plays, with the playing one marked.
 ///
-/// Numbered rather than bare so a screen reader arrowing down the field says
-/// how far ahead each one is, and the first line is the next track because that
-/// is what the field is opened for — what is playing *now* is already in the
-/// strip's and the Sources list's labels. `None` is a player with no worker,
-/// which a strip in the active scene only has for the instant before it starts.
-pub fn upcoming_text(status: Option<&Status>) -> String {
-    use crate::media::player::PlaybackState;
+/// The title comes first and the marker after it, so the list's own type-ahead
+/// still finds a song by its first letters — a number or a "now playing" in
+/// front would make every row start with the same thing. Empty when there is
+/// nothing to list; [`playlist_placeholder`] says why.
+pub fn playlist_rows(status: Option<&Status>) -> Vec<String> {
     let Some(status) = status else {
-        return t!("Nothing queued");
+        return Vec::new();
     };
-    if !status.upcoming.is_empty() {
-        return status
-            .upcoming
-            .iter()
-            .enumerate()
-            .map(|(index, track)| format!("{}. {track}", index + 1))
-            .collect::<Vec<_>>()
-            .join("
-");
-    }
-    match status.state {
-        PlaybackState::NoFolder => t!("No folder is set"),
-        PlaybackState::NoFiles => t!("The folder has no audio files Pubsplash can play"),
-        PlaybackState::Playing | PlaybackState::Paused => t!("Nothing queued"),
+    status
+        .queue
+        .iter()
+        .enumerate()
+        .map(|(index, entry)| {
+            if status.playing == Some(index) {
+                t!("{track} (playing)", track = entry.title)
+            } else {
+                entry.title.clone()
+            }
+        })
+        .collect()
+}
+
+/// What an empty playlist says instead, which is why it is empty. `None` is a
+/// player with no worker, which a strip in the active scene only has for the
+/// instant before it starts.
+pub fn playlist_placeholder(status: Option<&Status>) -> String {
+    use crate::media::player::PlaybackState;
+    match status.map(|status| &status.state) {
+        Some(PlaybackState::NoFolder) => t!("No folder is set"),
+        Some(PlaybackState::NoFiles) => t!("The folder has no audio files Pubsplash can play"),
+        _ => t!("The playlist is empty"),
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::media::player::{PlaybackState, QueueEntry};
+    use std::path::PathBuf;
 
-    #[test]
-    fn the_upcoming_field_numbers_the_tracks_soonest_first() {
-        let status = Status {
-            state: crate::media::player::PlaybackState::Playing,
-            track: Some("So What".into()),
-            upcoming: vec!["Blue in Green".into(), "Freddie Freeloader".into()],
-            previous: None,
-        };
-        assert_eq!(
-            upcoming_text(Some(&status)),
-            "1. Blue in Green
-2. Freddie Freeloader"
-        );
+    fn status(titles: &[&str], playing: Option<usize>) -> Status {
+        Status {
+            state: PlaybackState::Playing,
+            track: playing.map(|index| titles[index].to_string()),
+            queue: Arc::new(
+                titles
+                    .iter()
+                    .map(|title| QueueEntry {
+                        path: PathBuf::from(format!("{title}.mp3")),
+                        title: title.to_string(),
+                    })
+                    .collect(),
+            ),
+            playing,
+            ..Status::default()
+        }
     }
 
     #[test]
-    fn an_empty_upcoming_field_says_why() {
+    fn the_playlist_lists_every_track_and_marks_the_playing_one() {
+        assert_eq!(
+            playlist_rows(Some(&status(&["So What", "Blue in Green", "All Blues"], Some(1)))),
+            vec!["So What", "Blue in Green (playing)", "All Blues"]
+        );
+        // Removing the playing entry leaves nothing marked.
+        assert_eq!(
+            playlist_rows(Some(&status(&["So What", "All Blues"], None))),
+            vec!["So What", "All Blues"]
+        );
+        assert!(playlist_rows(None).is_empty());
+    }
+
+    #[test]
+    fn an_empty_playlist_says_why() {
         let no_folder = Status::default();
-        assert_eq!(upcoming_text(Some(&no_folder)), "No folder is set");
+        assert_eq!(playlist_placeholder(Some(&no_folder)), "No folder is set");
         let no_files = Status {
-            state: crate::media::player::PlaybackState::NoFiles,
+            state: PlaybackState::NoFiles,
             ..Status::default()
         };
         assert_eq!(
-            upcoming_text(Some(&no_files)),
+            playlist_placeholder(Some(&no_files)),
             "The folder has no audio files Pubsplash can play"
         );
-        assert_eq!(upcoming_text(None), "Nothing queued");
+        assert_eq!(playlist_placeholder(Some(&status(&[], None))), "The playlist is empty");
+        assert_eq!(playlist_placeholder(None), "The playlist is empty");
     }
     use crate::config::MediaPlayerSourceConfig;
 

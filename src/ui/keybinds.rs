@@ -233,7 +233,17 @@ pub fn hook_key(vk: u32) -> bool {
     }
     let (ctrl, alt, shift) = modifiers();
     let pressed = Chord::new(vk, ctrl, alt, shift);
+    // The user's bindings first, then the built-in conveniences, so a chord the
+    // user bound to something else stays theirs. See `shortcuts`.
+    let claimed = user_binding(pressed) || super::shortcuts::hook_chord(pressed);
+    if claimed && alt {
+        imp::cancel_menu_activation();
+    }
+    claimed
+}
 
+/// Queues the user binding for `pressed`, if there is one that may fire now.
+fn user_binding(pressed: Chord) -> bool {
     let action = {
         let binds = snapshot().lock().unwrap_or_else(|e| e.into_inner());
         let Some((_, global, action)) = binds.iter().find(|(chord, _, _)| *chord == pressed) else {
@@ -439,6 +449,39 @@ mod imp {
         (down(VK_CONTROL.0), down(VK_MENU.0), down(VK_SHIFT.0))
     }
 
+    /// Keeps the ALT of a swallowed ALT chord from opening the menu bar.
+    ///
+    /// Windows opens the menu bar when ALT goes down and comes back up with no
+    /// other key in between *as far as the window can see* — and the hook
+    /// swallowing the chord's key is exactly a key the window never sees. So
+    /// ALT+L would focus the playlist and then, on releasing ALT, put the user
+    /// in the menu bar. Injecting a key-press of `0xE8`, a virtual-key code
+    /// Windows leaves unassigned, gives the window its "other key" without
+    /// meaning anything to any control.
+    pub fn cancel_menu_activation() {
+        use windows::Win32::UI::Input::KeyboardAndMouse::{
+            INPUT, INPUT_0, INPUT_KEYBOARD, KEYBD_EVENT_FLAGS, KEYBDINPUT, KEYEVENTF_KEYUP,
+            SendInput, VIRTUAL_KEY,
+        };
+        let key = |flags: KEYBD_EVENT_FLAGS| INPUT {
+            r#type: INPUT_KEYBOARD,
+            Anonymous: INPUT_0 {
+                ki: KEYBDINPUT {
+                    wVk: VIRTUAL_KEY(0xE8),
+                    wScan: 0,
+                    dwFlags: flags,
+                    time: 0,
+                    dwExtraInfo: 0,
+                },
+            },
+        };
+        let inputs = [key(KEYBD_EVENT_FLAGS(0)), key(KEYEVENTF_KEYUP)];
+        let sent = unsafe { SendInput(&inputs, std::mem::size_of::<INPUT>() as i32) };
+        if sent as usize != inputs.len() {
+            log::debug!("Could not cancel the menu bar's ALT activation");
+        }
+    }
+
     pub fn focus_is_text_entry() -> bool {
         let mut info = GUITHREADINFO {
             cbSize: std::mem::size_of::<GUITHREADINFO>() as u32,
@@ -501,6 +544,11 @@ mod imp {
             flags.contains(NSEventModifierFlags::Shift),
         )
     }
+
+    /// Nothing to do: Option never opens the menu bar on macOS, so swallowing
+    /// an Option chord leaves nothing behind. The Windows half documents why
+    /// ALT does there.
+    pub fn cancel_menu_activation() {}
 
     /// Whether the user is typing into a text field.
     ///
