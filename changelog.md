@@ -36,6 +36,7 @@
 - **Previous track** now goes to the song above the playing one in the playlist.
 - A file that cannot be played is taken out of the playlist.
 - Turning shuffle on or off reorders only the songs still to come, without interrupting the one playing.
+- Pubsplash now checks for updates at github.com/ogomez92/pubsplash, and Help opens the readme and changelog there.
 
 ## 2.3.0
 

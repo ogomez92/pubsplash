@@ -25,7 +25,7 @@ use std::time::{Duration, Instant};
 
 /// The repository every URL is built from. One constant so a fork needs one
 /// edit, and so nothing can drift into pointing at a different repo.
-pub const REPO: &str = "cha0t1cnu3tral/pubsplash";
+pub const REPO: &str = "ogomez92/pubsplash";
 
 /// The manifest asset name. Must match what the release workflow writes.
 pub const MANIFEST_ASSET: &str = "latest.json";
@@ -241,11 +241,11 @@ mod tests {
     fn asset_urls_are_the_stable_latest_form() {
         assert_eq!(
             asset_url("pubsplash-setup.exe"),
-            "https://github.com/cha0t1cnu3tral/pubsplash/releases/latest/download/pubsplash-setup.exe"
+            "https://github.com/ogomez92/pubsplash/releases/latest/download/pubsplash-setup.exe"
         );
         assert_eq!(
             asset_url(MANIFEST_ASSET),
-            "https://github.com/cha0t1cnu3tral/pubsplash/releases/latest/download/latest.json"
+            "https://github.com/ogomez92/pubsplash/releases/latest/download/latest.json"
         );
     }
 
