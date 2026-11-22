@@ -43,6 +43,12 @@ use wxdragon::widgets::{CheckListBox, ListBox, RadioBox};
 /// Rows are announced natively. See the module header for why the name is not.
 pub fn install(_list: &ListBox, _name: &str) {}
 
+/// As [`install`], for a list that acts on Enter. The Windows twin claims the
+/// key from `IsDialogMessage`, which has no Cocoa counterpart, so there is
+/// nothing to claim here. Not yet measured with VoiceOver: if Enter turns out
+/// not to reach a list's key handler on macOS, this is where to fix it.
+pub fn install_wants_enter(_list: &ListBox, _name: &str) {}
+
 /// As [`install`], for a checkable list.
 pub fn install_check_list(_list: &CheckListBox, _name: &str) {}
 

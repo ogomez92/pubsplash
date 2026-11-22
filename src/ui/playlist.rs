@@ -102,7 +102,8 @@ pub fn build(
     let list = ListBox::builder(parent)
         .with_size(Size::new(-1, 120))
         .build();
-    super::native_acc::install(&list, &label_text(name));
+    // Claims Enter as well, or the key handler below never sees it.
+    super::native_acc::install_wants_enter(&list, &label_text(name));
     super::help::tag(&list, "tab.home.mixer.strip.playlist", "Mixer strip playlist");
     row.add(&label, 0, SizerFlag::All, 4);
     row.add(&list, 0, SizerFlag::Expand | SizerFlag::All, 4);

@@ -61,8 +61,9 @@ use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, WPARAM};
 use windows::Win32::UI::Accessibility::NotifyWinEvent;
 use windows::Win32::UI::Shell::{DefSubclassProc, SUBCLASSPROC, SetWindowSubclass};
 use windows::Win32::UI::WindowsAndMessaging::{
-    DefWindowProcW, EVENT_OBJECT_FOCUS, GW_CHILD, GW_HWNDNEXT, GetClassNameW, GetWindow,
-    LB_GETCARETINDEX, LB_GETCOUNT, SendMessageW, WM_GETOBJECT, WM_SETFOCUS,
+    DLGC_WANTMESSAGE, DefWindowProcW, EVENT_OBJECT_FOCUS, GW_CHILD, GW_HWNDNEXT, GetClassNameW,
+    GetWindow, LB_GETCARETINDEX, LB_GETCOUNT, SendMessageW, WM_GETDLGCODE, WM_GETOBJECT,
+    WM_SETFOCUS,
 };
 use wxdragon::prelude::*;
 
@@ -111,6 +112,31 @@ unsafe extern "system" fn list_subclass_proc(
     unsafe { passthrough_proc(hwnd, msg, wparam, lparam, id, refdata) }
 }
 
+/// [`list_subclass_proc`] for a list that acts on Enter itself.
+///
+/// A list box does not ask for Enter, so `wxWindowMSW::MSWProcessMessage`
+/// passes the key to `::IsDialogMessage`, which consumes it: the list's
+/// `wxEVT_KEY_DOWN` never fires and Enter does nothing at all. Claiming
+/// `DLGC_WANTMESSAGE` is what makes wx return early and deliver it, and is
+/// exactly what wx's own `wxTE_PROCESS_ENTER` text and spin controls answer.
+/// Tab is unaffected — wx moves focus for any control without `DLGC_WANTTAB`
+/// before it gets this far — and so are the arrows, which a list already asks
+/// for. Opt-in, because in a dialog Enter on a list must still press OK.
+unsafe extern "system" fn enter_list_subclass_proc(
+    hwnd: HWND,
+    msg: u32,
+    wparam: WPARAM,
+    lparam: LPARAM,
+    id: usize,
+    refdata: usize,
+) -> LRESULT {
+    let result = unsafe { list_subclass_proc(hwnd, msg, wparam, lparam, id, refdata) };
+    if msg == WM_GETDLGCODE {
+        return LRESULT(result.0 | DLGC_WANTMESSAGE as isize);
+    }
+    result
+}
+
 /// Raises the focus event for the row the caret is on, right now.
 ///
 /// Windows has already raised `EVENT_OBJECT_FOCUS` for the list itself by the
@@ -151,6 +177,13 @@ fn announce_caret_row(hwnd: HWND) {
 /// exactly this.
 pub fn install(list: &ListBox, name: &str) {
     install_hwnd(HWND(list.get_handle()), Some(list_subclass_proc), name);
+}
+
+/// [`install`] for a list whose `on_key_down` acts on Enter, such as a media
+/// player's playlist. Without it Enter never reaches the handler; see
+/// [`enter_list_subclass_proc`].
+pub fn install_wants_enter(list: &ListBox, name: &str) {
+    install_hwnd(HWND(list.get_handle()), Some(enter_list_subclass_proc), name);
 }
 
 /// The same for a check list box, which has the same disease for the same
