@@ -109,6 +109,10 @@ pub struct Status {
     /// list is the mixer strip's Upcoming tracks field, which is there so a
     /// song can be introduced on air before it starts.
     pub upcoming: Vec<String>,
+    /// The track "previous track" would move to, for its announcement. The
+    /// track playing now when nothing came before it, since that is what a
+    /// previous then does — starts it again.
+    pub previous: Option<String>,
 }
 
 impl Status {
@@ -126,6 +130,9 @@ pub enum Command {
     PlayPause,
     /// Abandon the current track and start the next one.
     Next,
+    /// Abandon the current track and go back to the one before it; from the
+    /// first track, start it again.
+    Previous,
     /// Abandon the current track and play this file, then carry on with the
     /// folder. The file does not have to be in the folder, or in any folder this
     /// source knows about — it is a one-off, and nothing about it is remembered.
@@ -355,7 +362,8 @@ impl Worker {
             folder
         );
         self.failures = 0;
-        self.playlist = Playlist::new(files, self.shuffle);
+        let before = std::mem::replace(&mut self.playlist, Playlist::new(files, self.shuffle));
+        self.playlist.inherit_history(before);
     }
 
     fn folder_is_stale(&self, after: Duration) -> bool {
@@ -376,6 +384,7 @@ impl Worker {
                 .iter()
                 .map(|path| track_title(path))
                 .collect(),
+            previous: self.playlist.peek_previous().map(|path| track_title(path)),
         };
         let mut status =
             crate::audio::device::lock_recovering(&self.status, "Media player status");
@@ -439,9 +448,23 @@ impl Worker {
             // up exactly where it would have.
             Command::PlayFile(path) => {
                 self.paused = false;
+                self.playlist.played(path.clone());
                 self.pending = Some(path);
                 Flow::NextTrack
             }
+            // Played through `pending` like an opened file, because the
+            // playlist has already moved back: taking it from `playlist.next()`
+            // as well would move it on again.
+            Command::Previous => match self.playlist.previous() {
+                Some(path) => {
+                    self.paused = false;
+                    self.pending = Some(path);
+                    Flow::NextTrack
+                }
+                // Nothing has played yet, so there is nothing to go back to,
+                // and the track that is about to start is left to start.
+                None => Flow::Go,
+            },
             Command::Reload { folder, shuffle } => {
                 self.folder = folder;
                 self.shuffle = shuffle;
@@ -716,6 +739,63 @@ mod tests {
 
         assert_eq!(after.state, PlaybackState::Playing);
         assert_eq!(after.track.as_deref(), Some("b"), "skip stayed put");
+    }
+
+    /// Previous goes back to the track before, and says so ahead of time.
+    #[test]
+    fn previous_track_goes_back() {
+        let folder = folder_of_tracks("previous", &["a", "b", "c"]);
+        let feeds = ExternalFeeds::default();
+        let mut ring =
+            feeds.park_for_test("Media Player", crate::audio::mixer::SAMPLE_RATE as usize);
+        let player = Player::start(
+            "Media Player".to_string(),
+            feeds,
+            folder.to_string_lossy().into_owned(),
+            false,
+            Arc::new(AtomicU64::new(0)),
+        );
+        let drain = Arc::new(AtomicBool::new(false));
+        let drainer = std::thread::spawn({
+            let drain = drain.clone();
+            move || {
+                while !drain.load(Ordering::Relaxed) {
+                    let slots = ring.slots();
+                    if slots > 0 && let Ok(chunk) = ring.read_chunk(slots) {
+                        chunk.commit_all();
+                    }
+                    std::thread::sleep(Duration::from_millis(10));
+                }
+            }
+        });
+        let wait_for = |what: &str| {
+            let deadline = Instant::now() + Duration::from_secs(10);
+            while player.status().track.as_deref() != Some(what) && Instant::now() < deadline {
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            player.status()
+        };
+
+        let first = wait_for("a");
+        player.send(Command::Next);
+        let second = wait_for("b");
+        player.send(Command::Previous);
+        let back = wait_for("a");
+        player.send(Command::Next);
+        let forward = wait_for("b");
+
+        drain.store(true, Ordering::Relaxed);
+        let _ = drainer.join();
+        player.stop();
+        let _ = std::fs::remove_dir_all(&folder);
+
+        // On the first track, previous would restart it.
+        assert_eq!(first.previous.as_deref(), Some("a"));
+        assert_eq!(second.previous.as_deref(), Some("a"));
+        assert_eq!(back.track.as_deref(), Some("a"), "previous stayed put");
+        assert_eq!(back.next(), Some("b"), "the way forward is where it came from");
+        assert_eq!(forward.track.as_deref(), Some("b"));
+        assert_eq!(forward.next(), Some("c"));
     }
 
     /// Open file: the chosen track interrupts what was playing, and the folder

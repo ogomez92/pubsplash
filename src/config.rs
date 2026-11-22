@@ -1431,6 +1431,7 @@ pub fn load_from(path: &Path) -> Config {
             config.fix_up_tts_profiles();
             config.speech.fix_up();
             config.keybinds.fix_up();
+            crate::keybind::migrate_media_defaults(&mut config);
             // Before the repair below, so a block that has just arrived from an
             // older file is repaired on the same load it moves in.
             config.migrate_mastodon();

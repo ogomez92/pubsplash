@@ -123,9 +123,13 @@ If the music stays turned down when nobody is talking, something in the scene is
 
 ### Playing, pausing and skipping
 
-The transport is on the media player's mixer strip. Open the volume slider's context menu and choose **Play** / **Pause**, **Next track**, or **Open file**. All three can be bound to shortcuts of your own on **Preferences > Keybinds**, which is what you want mid-broadcast, since a shortcut works from any tab. Skipping announces the track it moved to rather than the fact that you pressed it.
+The transport is on the media player's mixer strip. Open the volume slider's context menu and choose **Play** / **Pause**, **Previous track**, **Next track**, **Open file**, or **Choose folder**. All of them can be bound to shortcuts of your own on **Preferences > Keybinds**, which is what you want mid-broadcast, since a shortcut works from any tab. Skipping either way announces the track it moved to rather than the fact that you pressed it.
 
-**Open file** plays one file of your choosing from anywhere on your computer; it does not have to be in the source's folder, and nothing about it is remembered. It interrupts what is playing exactly as a skip does, and when it ends the folder carries on with the track it was going to play next. There is a button for it on the strip beside the mute box, and the first media player you add is given `Ctrl+O` for it.
+**Previous track** goes back to the track that played before, and going back and then forward again returns you to where you were. On the first track it starts that track again. **Choose folder** changes the folder the source plays, exactly as its settings dialog would, and starts on the new folder at once.
+
+**Open file** plays one file of your choosing from anywhere on your computer; it does not have to be in the source's folder, and nothing about it is remembered. It interrupts what is playing exactly as a skip does, and when it ends the folder carries on with the track it was going to play next. There is a button for it on the strip beside the mute box.
+
+The first media player is given shortcuts out of the box, wherever the keys are free: `Ctrl+Left` and `Ctrl+Right` for the previous and next track, `Ctrl+O` to open a file, and `Ctrl+Shift+O` to choose its folder. In a text box, such as the chat field, `Ctrl+Left` and `Ctrl+Right` keep moving by word.
 ## Chat and text-to-speech
 
 The **Chat** tab shows incoming messages and lets you send replies - from Audiopub, from a YouTube broadcast, or from the Pubsplash Chat room an Icecast service is pointed at. The feed reconnects automatically if it drops. **Reconnect chat** forces an immediate reconnect without interrupting your stream.
@@ -147,7 +151,9 @@ Speech is played locally by default. Enable **Send speech to the stream** if lis
 | F9 / F10 | Start or stop streaming / recording |
 | Ctrl+, | Open Preferences |
 | Ctrl+M | Toggle monitoring for the focused mixer strip |
+| Ctrl+Left / Ctrl+Right | Previous / next track on your first media player |
 | Ctrl+O | Open a file on your first media player |
+| Ctrl+Shift+O | Choose the folder of your first media player |
 
 Use **Preferences > Keybinds** to add, change, or remove shortcuts. Global shortcuts can work while another application is focused; they must include Ctrl, Alt, or Shift, or be a function key. On a Mac they additionally need the Accessibility permission, which Pubsplash asks for the first time you mark a shortcut global. A shortcut is stored the same way on both systems, so a settings file carries your shortcuts from one machine to the other.
 

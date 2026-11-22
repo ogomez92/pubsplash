@@ -74,8 +74,11 @@ use std::sync::{Mutex, OnceLock};
 /// - **modifiers** is the *physical* state, not this thread's queued state.
 /// - **focus_is_text_entry** keeps a binding on a bare character key (`K`, `7`)
 ///   from making that key untypable in the chat box — the hook swallows it
-///   before the control ever sees it. Anything with a modifier, and every
-///   non-character key, still fires.
+///   before the control ever sees it. The same goes for a binding on caret
+///   movement (CTRL+Left, SHIFT+End: [`Chord::is_text_navigation`]), which is
+///   how CTRL+Left can be the previous track and still move by word in the
+///   chat box. Anything else with a modifier, and every other non-character
+///   key, still fires.
 use imp::{focus_is_text_entry, modifiers};
 
 use super::App;
@@ -248,7 +251,7 @@ pub fn hook_key(vk: u32) -> bool {
         if !allowed {
             return false;
         }
-        if pressed.is_plain_character() && focus_is_text_entry() {
+        if (pressed.is_plain_character() || pressed.is_text_navigation()) && focus_is_text_entry() {
             return false;
         }
         action.clone()
@@ -379,10 +382,14 @@ fn run(app: &Rc<App>, action: &BindAction) {
         BindAction::ToggleMediaPlayback { source } => {
             super::media_transport(app, source, crate::media::player::Command::PlayPause);
         }
+        BindAction::PreviousTrack { source } => {
+            super::media_transport(app, source, crate::media::player::Command::Previous);
+        }
         BindAction::NextTrack { source } => {
             super::media_transport(app, source, crate::media::player::Command::Next);
         }
         BindAction::OpenTrack { source } => super::media_open_file(app, source),
+        BindAction::ChooseFolder { source } => super::media_choose_folder(app, source),
     }
 }
 

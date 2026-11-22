@@ -63,6 +63,19 @@ impl Chord {
         !self.has_modifier() && produces_character(self.vk)
     }
 
+    /// Whether this chord moves the caret or selects in a text box: CTRL
+    /// and/or SHIFT with an arrow, Home or End. A binding on one gives the key
+    /// back to a focused text box, or CTRL+Left would stop moving by word in
+    /// the chat field the moment it went back a track.
+    pub fn is_text_navigation(&self) -> bool {
+        !self.alt
+            && (self.ctrl || self.shift)
+            && matches!(
+                self.vk,
+                VK_LEFT | VK_RIGHT | VK_UP | VK_DOWN | VK_HOME | VK_END
+            )
+    }
+
     /// `"CTRL+SHIFT+F9"`. Modifier order is fixed so two equal chords always
     /// render the same string.
     pub fn label(&self) -> String {
@@ -186,11 +199,16 @@ pub enum BindAction {
     ToggleMuteBus { bus: String },
     /// Play or pause one Media Player source.
     ToggleMediaPlayback { source: String },
+    /// Abandon the track a Media Player source is on and go back to the one
+    /// it played before.
+    PreviousTrack { source: String },
     /// Abandon the track a Media Player source is on and start the next one.
     NextTrack { source: String },
     /// Pick a file and play it on a Media Player source, in place of whatever it
     /// is on now.
     OpenTrack { source: String },
+    /// Pick the folder a Media Player source plays, and start playing it.
+    ChooseFolder { source: String },
 }
 
 /// Which extra dropdown the Add-binding dialog must show for an action.
@@ -279,10 +297,16 @@ impl Category {
                 BindAction::ToggleMediaPlayback {
                     source: String::new(),
                 },
+                BindAction::PreviousTrack {
+                    source: String::new(),
+                },
                 BindAction::NextTrack {
                     source: String::new(),
                 },
                 BindAction::OpenTrack {
+                    source: String::new(),
+                },
+                BindAction::ChooseFolder {
                     source: String::new(),
                 },
             ],
@@ -304,8 +328,10 @@ impl BindAction {
             | BindAction::ToggleMuteSource { .. }
             | BindAction::ToggleMuteBus { .. } => Category::Muting,
             BindAction::ToggleMediaPlayback { .. }
+            | BindAction::PreviousTrack { .. }
             | BindAction::NextTrack { .. }
-            | BindAction::OpenTrack { .. } => Category::MediaPlayer,
+            | BindAction::OpenTrack { .. }
+            | BindAction::ChooseFolder { .. } => Category::MediaPlayer,
         }
     }
 
@@ -319,8 +345,10 @@ impl BindAction {
                 Specifier::Bus
             }
             BindAction::ToggleMediaPlayback { .. }
+            | BindAction::PreviousTrack { .. }
             | BindAction::NextTrack { .. }
-            | BindAction::OpenTrack { .. } => Specifier::MediaSource,
+            | BindAction::OpenTrack { .. }
+            | BindAction::ChooseFolder { .. } => Specifier::MediaSource,
             _ => Specifier::None,
         }
     }
@@ -332,8 +360,10 @@ impl BindAction {
             BindAction::ToggleMonitorSource { source }
             | BindAction::ToggleMuteSource { source }
             | BindAction::ToggleMediaPlayback { source }
+            | BindAction::PreviousTrack { source }
             | BindAction::NextTrack { source }
-            | BindAction::OpenTrack { source } => Some(source),
+            | BindAction::OpenTrack { source }
+            | BindAction::ChooseFolder { source } => Some(source),
             BindAction::ToggleMonitorBus { bus } | BindAction::ToggleMuteBus { bus } => Some(bus),
             _ => None,
         }
@@ -354,8 +384,10 @@ impl BindAction {
             BindAction::ToggleMediaPlayback { .. } => {
                 BindAction::ToggleMediaPlayback { source: name }
             }
+            BindAction::PreviousTrack { .. } => BindAction::PreviousTrack { source: name },
             BindAction::NextTrack { .. } => BindAction::NextTrack { source: name },
             BindAction::OpenTrack { .. } => BindAction::OpenTrack { source: name },
+            BindAction::ChooseFolder { .. } => BindAction::ChooseFolder { source: name },
             other => other.clone(),
         }
     }
@@ -376,8 +408,10 @@ impl BindAction {
             BindAction::ToggleMuteSource { .. } => t!("Mute or unmute a source"),
             BindAction::ToggleMuteBus { .. } => t!("Mute or unmute a bus"),
             BindAction::ToggleMediaPlayback { .. } => t!("Play or pause a media player"),
+            BindAction::PreviousTrack { .. } => t!("Go back to the previous track"),
             BindAction::NextTrack { .. } => t!("Skip to the next track"),
             BindAction::OpenTrack { .. } => t!("Open a file and play it"),
+            BindAction::ChooseFolder { .. } => t!("Choose the music folder"),
         }
     }
 
@@ -398,11 +432,17 @@ impl BindAction {
             BindAction::ToggleMediaPlayback { source } => {
                 t!("Play or pause {source}", source = source)
             }
+            BindAction::PreviousTrack { source } => {
+                t!("Go back to the previous track on {source}", source = source)
+            }
             BindAction::NextTrack { source } => {
                 t!("Skip to the next track on {source}", source = source)
             }
             BindAction::OpenTrack { source } => {
                 t!("Open a file and play it on {source}", source = source)
+            }
+            BindAction::ChooseFolder { source } => {
+                t!("Choose the music folder for {source}", source = source)
             }
             other => other.template_label(),
         }
@@ -519,6 +559,10 @@ impl Default for KeyBind {
 #[serde(default)]
 pub struct KeybindsConfig {
     pub binds: Vec<KeyBind>,
+    /// Which set of media-player defaults this file has been offered, so the
+    /// defaults added after it was written reach it exactly once. See
+    /// [`migrate_media_defaults`].
+    pub media_defaults: u32,
 }
 
 /// F9 and F10 out of the box. App-scoped rather than global: both are common
@@ -539,6 +583,7 @@ impl Default for KeybindsConfig {
                     global: false,
                 },
             ],
+            media_defaults: 0,
         }
     }
 }
@@ -548,6 +593,12 @@ pub const VK_F6: u32 = 0x75;
 pub const VK_F9: u32 = 0x78;
 pub const VK_F10: u32 = 0x79;
 pub const VK_O: u32 = b'O' as u32;
+pub const VK_LEFT: u32 = 0x25;
+pub const VK_UP: u32 = 0x26;
+pub const VK_RIGHT: u32 = 0x27;
+pub const VK_DOWN: u32 = 0x28;
+pub const VK_HOME: u32 = 0x24;
+pub const VK_END: u32 = 0x23;
 
 /// The chord a new Media Player source is given for Open file, if it is free.
 ///
@@ -562,22 +613,102 @@ pub const DEFAULT_OPEN_TRACK: Chord = Chord {
     shift: false,
 };
 
+/// CTRL+Left for the previous track and CTRL+Right for the next: the arrows
+/// say which way they go. Both are word movement in a text box, which
+/// [`Chord::is_text_navigation`] hands back to the box while one has focus, so
+/// the chat field keeps them.
+pub const DEFAULT_PREVIOUS_TRACK: Chord = Chord {
+    vk: VK_LEFT,
+    ctrl: true,
+    alt: false,
+    shift: false,
+};
+
+pub const DEFAULT_NEXT_TRACK: Chord = Chord {
+    vk: VK_RIGHT,
+    ctrl: true,
+    alt: false,
+    shift: false,
+};
+
+/// CTRL+SHIFT+O, beside Open file's CTRL+O: the same kind of picker, for the
+/// folder rather than one file.
+pub const DEFAULT_CHOOSE_FOLDER: Chord = Chord {
+    vk: VK_O,
+    ctrl: true,
+    alt: false,
+    shift: true,
+};
+
+/// The current set of media-player defaults. Raise it when a default is added
+/// to [`KeybindsConfig::seed_media_defaults`], so files written before it are
+/// offered the new one on their next load.
+pub const MEDIA_DEFAULTS_VERSION: u32 = 1;
+
 impl KeybindsConfig {
-    /// Gives `source` the default Open-file chord, unless something already
-    /// holds that chord — including an earlier media player, since two sources
-    /// cannot share one key and the first one to be added keeps it.
+    /// Gives `source` the default media-player chords, each unless the action
+    /// already has a chord or something already holds that chord — including
+    /// an earlier media player, since two sources cannot share one key and the
+    /// first one to be added keeps it.
     ///
     /// Returns whether anything was added, so the caller knows to save.
     pub fn seed_media_defaults(&mut self, source: &str) -> bool {
-        let action = BindAction::OpenTrack {
-            source: source.to_string(),
-        };
-        if self.find(&action).is_some() || self.conflict(DEFAULT_OPEN_TRACK, None).is_some() {
-            return false;
+        self.media_defaults = MEDIA_DEFAULTS_VERSION;
+        let source = source.to_string();
+        let mut added = false;
+        for (action, chord) in [
+            (
+                BindAction::OpenTrack {
+                    source: source.clone(),
+                },
+                DEFAULT_OPEN_TRACK,
+            ),
+            (
+                BindAction::PreviousTrack {
+                    source: source.clone(),
+                },
+                DEFAULT_PREVIOUS_TRACK,
+            ),
+            (
+                BindAction::NextTrack {
+                    source: source.clone(),
+                },
+                DEFAULT_NEXT_TRACK,
+            ),
+            (
+                BindAction::ChooseFolder {
+                    source: source.clone(),
+                },
+                DEFAULT_CHOOSE_FOLDER,
+            ),
+        ] {
+            if self.find(&action).is_some() || self.conflict(chord, None).is_some() {
+                continue;
+            }
+            self.set(action, chord, false);
+            added = true;
         }
-        self.set(action, DEFAULT_OPEN_TRACK, false);
-        true
+        added
     }
+}
+
+/// Offers a settings file the media-player defaults it was written before, on
+/// its first media player, once.
+///
+/// Seeding normally happens when a media player is added, which a user who
+/// already has one may never do again. The version is what makes this once
+/// rather than every load: a default the user then unbinds stays unbound. A
+/// file with no media player is left at its version, since adding one seeds
+/// it anyway.
+pub fn migrate_media_defaults(config: &mut Config) -> bool {
+    if config.keybinds.media_defaults >= MEDIA_DEFAULTS_VERSION {
+        return false;
+    }
+    let Some(first) = Targets::from_config(config).media_sources.first().cloned() else {
+        return false;
+    };
+    config.keybinds.seed_media_defaults(&first);
+    true
 }
 
 impl KeybindsConfig {
@@ -740,8 +871,8 @@ mod tests {
     fn the_catalogue_expands_one_row_per_target() {
         let all = catalogue(&targets());
         // Streaming 2, Scenes 2 + 2 scenes, Monitoring 1 + 2 sources + 1 bus,
-        // Muting the same 4, Media player 3 actions on the one media source.
-        assert_eq!(all.len(), 2 + 2 + 2 + 4 + 4 + 3);
+        // Muting the same 4, Media player 5 actions on the one media source.
+        assert_eq!(all.len(), 2 + 2 + 2 + 4 + 4 + 5);
         assert!(all.contains(&BindAction::SwitchScene {
             scene: "Live".into()
         }));
@@ -779,6 +910,7 @@ mod tests {
                     global: false,
                 },
             ],
+            ..Default::default()
         };
         config.fix_up();
         assert_eq!(config.binds.len(), 1);
@@ -797,6 +929,7 @@ mod tests {
                 key: Chord::plain(VK_F10),
                 global: false,
             }],
+            ..Default::default()
         };
         config.fix_up();
         assert_eq!(config.binds.len(), 1);
@@ -863,7 +996,75 @@ mod tests {
 
         let mut taken = KeybindsConfig::default();
         taken.set(BindAction::NextScene, DEFAULT_OPEN_TRACK, false);
-        assert!(!taken.seed_media_defaults("Media Player 1"));
+        taken.seed_media_defaults("Media Player 1");
+        assert!(
+            taken
+                .find(&BindAction::OpenTrack {
+                    source: "Media Player 1".into()
+                })
+                .is_none()
+        );
+    }
+
+    /// Previous, next and choose folder come with the first media player too.
+    #[test]
+    fn the_first_media_player_gets_its_transport_defaults() {
+        let mut config = KeybindsConfig::default();
+        config.seed_media_defaults("Media Player 1");
+        let chord = |action: BindAction| config.find(&action).map(|b| b.key.label());
+        let source = || "Media Player 1".to_string();
+        assert_eq!(
+            chord(BindAction::PreviousTrack { source: source() }).as_deref(),
+            Some("CTRL+Left Arrow")
+        );
+        assert_eq!(
+            chord(BindAction::NextTrack { source: source() }).as_deref(),
+            Some("CTRL+Right Arrow")
+        );
+        assert_eq!(
+            chord(BindAction::ChooseFolder { source: source() }).as_deref(),
+            Some("CTRL+SHIFT+O")
+        );
+    }
+
+    /// A file written before these defaults existed gets them once, on its
+    /// first media player, and a default unbound afterwards stays unbound.
+    #[test]
+    fn an_older_file_is_offered_the_new_defaults_once() {
+        use crate::config::{MediaPlayerSourceConfig, SourceConfig, SourceKindConfig};
+        let mut config = Config::default();
+        config.scenes.scenes[0].sources.push(SourceConfig {
+            name: "Media Player 1".into(),
+            kind: SourceKindConfig::MediaPlayer(MediaPlayerSourceConfig::default()),
+            ..Default::default()
+        });
+        let previous = BindAction::PreviousTrack {
+            source: "Media Player 1".into(),
+        };
+        assert!(migrate_media_defaults(&mut config));
+        assert!(config.keybinds.find(&previous).is_some());
+
+        config.keybinds.set(previous.clone(), Chord::default(), false);
+        assert!(!migrate_media_defaults(&mut config));
+        assert!(config.keybinds.find(&previous).is_none());
+    }
+
+    #[test]
+    fn a_file_with_no_media_player_waits_for_one() {
+        let mut config = Config::default();
+        assert!(!migrate_media_defaults(&mut config));
+        assert_eq!(config.keybinds.media_defaults, 0);
+    }
+
+    #[test]
+    fn caret_movement_is_text_navigation() {
+        assert!(DEFAULT_PREVIOUS_TRACK.is_text_navigation());
+        assert!(DEFAULT_NEXT_TRACK.is_text_navigation());
+        assert!(Chord::new(VK_END, false, false, true).is_text_navigation());
+        // A bare arrow is the box's anyway; a binding on one is the user's call.
+        assert!(!Chord::plain(VK_LEFT).is_text_navigation());
+        assert!(!Chord::new(VK_LEFT, true, true, false).is_text_navigation());
+        assert!(!DEFAULT_CHOOSE_FOLDER.is_text_navigation());
     }
 
     #[test]
@@ -901,6 +1102,7 @@ mod tests {
                 key: Chord::new(b'M' as u32, true, false, true),
                 global: true,
             }],
+            media_defaults: MEDIA_DEFAULTS_VERSION,
         };
         let text = serde_json::to_string(&config).unwrap();
         assert_eq!(

@@ -186,7 +186,7 @@ pub fn build_tab(app: &Rc<App>, dialog: &Dialog, panel: &Panel) {
                 &dialog,
                 &match &media {
                     Some(_) => t!(
-                        "Discard every keybinding and restore the defaults: F9 for streaming, F10 for recording, and CONTROL plus O to open a file on your first media player?"
+                        "Discard every keybinding and restore the defaults: F9 for streaming, F10 for recording, and on your first media player CONTROL plus O to open a file, CONTROL plus SHIFT plus O to choose its folder, and CONTROL plus Left and Right Arrow for the previous and next track?"
                     ),
                     None => t!(
                         "Discard every keybinding and restore the defaults, F9 for streaming and F10 for recording?"

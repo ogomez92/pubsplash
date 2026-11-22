@@ -8,6 +8,20 @@
 
 ### Changes
 
+## 2.3.0
+
+### Additions
+
+- **Previous track** for the media player, beside Next track: on the strip's context menu and as a keybinding. It goes back to the track that played before, across the end of a shuffled folder too, and a file you opened counts as a track. Going back and then forward again returns you to where you were rather than skipping on, and on the first track it starts that track again. Like a skip, it announces the track it moved to.
+
+- **Choose folder** for the media player: picks the folder it plays without opening the source's settings, and starts playing it straight away. On the strip's context menu and as a keybinding.
+
+- The first media player now comes with shortcuts for its whole transport: **Ctrl+Left** for the previous track, **Ctrl+Right** for the next, and **Ctrl+Shift+O** to choose its folder, beside the existing **Ctrl+O** to open a file. A settings file that already has a media player is given them once, on its first one, wherever the keys are free; unbind any of them and they stay unbound. In a text box, such as the chat field, Ctrl+Left and Ctrl+Right still move by word.
+
+### Fixes
+
+### Changes
+
 ## 2.2.0
 
 ### Additions

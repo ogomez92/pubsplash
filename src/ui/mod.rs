@@ -116,6 +116,8 @@ pub const ID_MIXER_MONITOR: i32 = 2202;
 pub const ID_MIXER_MEDIA_PLAY: i32 = 2203;
 pub const ID_MIXER_MEDIA_NEXT: i32 = 2204;
 pub const ID_MIXER_MEDIA_OPEN: i32 = 2205;
+pub const ID_MIXER_MEDIA_PREVIOUS: i32 = 2206;
+pub const ID_MIXER_MEDIA_FOLDER: i32 = 2207;
 /// Id worn by every dialog's confirm button, so that ENTER can reach it. See
 /// `ok_button`, which is the only thing that should ever use it — and which
 /// documents why it is this private id rather than `ID_OK`.
@@ -1223,6 +1225,18 @@ pub(crate) fn media_transport(
             Some(next) => t!("{label}, playing {next}", label = label, next = next),
             None => t!("{label}, next track", label = label),
         },
+        // Named the same way, and for the same reason. `None` is a player
+        // that has not played anything yet, which has nowhere to go back to
+        // and is not sent the command at all.
+        (Command::Previous, _) => match &status.previous {
+            Some(previous) => {
+                t!("{label}, playing {previous}", label = label, previous = previous)
+            }
+            None => {
+                help::announce(&t!("{label}, no previous track", label = label));
+                return;
+            }
+        },
         (Command::PlayFile(path), _) => {
             format!("{label}, playing {}", crate::media::track_title(path))
         }
@@ -1275,6 +1289,78 @@ pub(crate) fn media_open_file(app: &Rc<App>, source_name: &str) {
         source_name,
         crate::media::player::Command::PlayFile(std::path::PathBuf::from(path)),
     );
+}
+
+/// Asks for a folder and makes it the one a media player plays.
+///
+/// The folder is the source's setting — the same field its dialog edits — so
+/// this saves it and goes through `set_source_kind`, and the running player
+/// hears about it the way it hears about any settings edit: `media::apply`
+/// sees the folder move and sends a reload, which abandons the current track
+/// and starts on the new folder. A modal for the same reason Open file is one.
+pub(crate) fn media_choose_folder(app: &Rc<App>, source_name: &str) {
+    let found = {
+        let config = app.config.borrow();
+        config
+            .scenes
+            .scenes
+            .iter()
+            .position(|scene| scene.name == config.scenes.active_scene)
+            .and_then(|scene_index| {
+                let sources = &config.scenes.scenes[scene_index].sources;
+                let source_index = sources.iter().position(|s| s.name == source_name)?;
+                match &sources[source_index].kind {
+                    SourceKindConfig::MediaPlayer(media) => {
+                        Some((scene_index, source_index, media.clone()))
+                    }
+                    _ => None,
+                }
+            })
+    };
+    let Some((scene_index, source_index, media)) = found else {
+        help::announce(&t!("There is no media player called {source_name} in this scene", source_name = source_name));
+        return;
+    };
+    let Some(frame) = app.widgets(|w| w.frame) else {
+        return;
+    };
+    let picker = DirDialog::builder(
+        &frame,
+        &t!("Choose a folder of music for this source"),
+        &media.folder,
+    )
+    .with_style(DirDialogStyle::MustExist.bits())
+    .build();
+    let chosen = if picker.show_modal() == ID_OK {
+        picker.get_path()
+    } else {
+        None
+    };
+    picker.destroy();
+    let Some(folder) = chosen.map(|path| path.trim().to_string()) else {
+        return;
+    };
+    if folder.is_empty() {
+        return;
+    }
+    if folder == media.folder {
+        let label = media_label(app, source_name);
+        help::announce(&t!("{label}, folder unchanged", label = label));
+        return;
+    }
+    scenes::set_source_kind(
+        app,
+        scene_index,
+        source_index,
+        SourceKindConfig::MediaPlayer(crate::config::MediaPlayerSourceConfig {
+            folder: folder.clone(),
+            ..media
+        }),
+    );
+    // The label is the folder's name, so it is read after the edit: what is
+    // spoken is what the strip is now called.
+    let label = media_label(app, source_name);
+    help::announce(&t!("{label}, playing the folder", label = label));
 }
 
 /// The folder one media player source is configured with, for the file picker

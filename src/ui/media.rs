@@ -176,6 +176,7 @@ mod tests {
             state: crate::media::player::PlaybackState::Playing,
             track: Some("So What".into()),
             upcoming: vec!["Blue in Green".into(), "Freddie Freeloader".into()],
+            previous: None,
         };
         assert_eq!(
             upcoming_text(Some(&status)),

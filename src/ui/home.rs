@@ -3,7 +3,8 @@
 use crate::t;
 use super::slider_uia;
 use super::{
-    App, ID_MIXER_BOOST, ID_MIXER_MEDIA_NEXT, ID_MIXER_MEDIA_OPEN, ID_MIXER_MEDIA_PLAY,
+    App, ID_MIXER_BOOST, ID_MIXER_MEDIA_FOLDER, ID_MIXER_MEDIA_NEXT, ID_MIXER_MEDIA_OPEN,
+    ID_MIXER_MEDIA_PLAY, ID_MIXER_MEDIA_PREVIOUS,
     ID_MIXER_MONITOR, Monitors,
     StreamState, WXK_DOWN, WXK_END, WXK_HOME,
     WXK_LEFT, WXK_PAGEDOWN, WXK_PAGEUP, WXK_RIGHT, WXK_UP,
@@ -1174,6 +1175,11 @@ fn add_strip(
                         &t!("Start or stop this media player"),
                     )
                     .append_item(
+                        ID_MIXER_MEDIA_PREVIOUS,
+                        &t!("Previous track"),
+                        &t!("Go back to the track that played before this one"),
+                    )
+                    .append_item(
                         ID_MIXER_MEDIA_NEXT,
                         &t!("&Next track"),
                         &t!("Skip to the next track in the folder"),
@@ -1182,6 +1188,11 @@ fn add_strip(
                         ID_MIXER_MEDIA_OPEN,
                         &t!("&Open file..."),
                         &t!("Play a file of your choosing, then carry on with the folder"),
+                    )
+                    .append_item(
+                        ID_MIXER_MEDIA_FOLDER,
+                        &t!("Choose folder..."),
+                        &t!("Choose the folder this media player plays"),
                     );
             }
             let mut menu = builder.build();
@@ -1238,8 +1249,22 @@ fn add_strip(
         {
             let app = app.clone();
             let name = name.clone();
+            slider.bind_with_id_internal(EventType::MENU, ID_MIXER_MEDIA_PREVIOUS, move |_| {
+                super::media_transport(&app, &name, crate::media::player::Command::Previous);
+            });
+        }
+        {
+            let app = app.clone();
+            let name = name.clone();
             slider.bind_with_id_internal(EventType::MENU, ID_MIXER_MEDIA_NEXT, move |_| {
                 super::media_transport(&app, &name, crate::media::player::Command::Next);
+            });
+        }
+        {
+            let app = app.clone();
+            let name = name.clone();
+            slider.bind_with_id_internal(EventType::MENU, ID_MIXER_MEDIA_FOLDER, move |_| {
+                super::media_choose_folder(&app, &name);
             });
         }
         {
