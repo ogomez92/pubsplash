@@ -1218,6 +1218,11 @@ pub(crate) fn media_transport(
             Some(track) => t!("{label}, playing {track}", label = label, track = track),
             None => t!("{label}, playing", label = label),
         },
+        // Nothing open yet: play starts the entry the list is up to.
+        (Command::PlayPause, PlaybackState::Stopped) => match status.next() {
+            Some(next) => t!("{label}, playing {next}", label = label, next = next),
+            None => t!("{label}, playing", label = label),
+        },
         (Command::PlayPause, _) => t!("{label}, paused", label = label),
         // The track being skipped *to*, which the player publishes for exactly
         // this — "next track" told the user only what they had just pressed.

@@ -1104,9 +1104,10 @@ fn add_strip(
             // every time the menu opens, so the item says what pressing it will
             // do rather than what it did last time.
             if let Some(name) = &media_source {
-                let paused = app.media.status(name).is_some_and(|status| {
-                    status.state == crate::media::player::PlaybackState::Paused
-                });
+                let paused = app
+                    .media
+                    .status(name)
+                    .is_some_and(|status| status.state.is_waiting());
                 builder = builder
                     .append_separator()
                     .append_item(

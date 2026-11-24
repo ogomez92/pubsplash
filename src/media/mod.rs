@@ -12,6 +12,7 @@
 //! in the same block (see [`crate::audio::mixer::Ducker`]).
 
 pub mod decode;
+pub mod fade;
 pub mod player;
 pub mod schedule;
 pub mod scheduler;

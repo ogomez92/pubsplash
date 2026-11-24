@@ -8,6 +8,19 @@
 
 ### Changes
 
+## 2.5.0
+
+### Additions
+
+- The media player fades a song out when you skip it, choose another from the playlist, or open a file.
+- The media player fades a song out at its end, where the music stops rather than after its trailing silence, and goes straight to the next song.
+
+### Fixes
+
+### Changes
+
+- The media player no longer starts playing on its own; it waits, stopped, until you press Play, skip, or choose a song from the playlist.
+
 ## 2.4.0
 
 ### Additions

@@ -24,7 +24,26 @@
 //! however long the timeout is. The timeouts themselves exist only for the one
 //! thing that has no event behind it: the ring filling up, which drains at the
 //! mixer's own pace.
+//!
+//! ## Starting stopped
+//!
+//! A player never starts playing on its own — not when the app opens, and not
+//! when its scene becomes active. It reads its folder, publishes the list, and
+//! waits in [`PlaybackState::Stopped`] for play, a skip, or Enter on an entry.
+//!
+//! ## Fades
+//!
+//! Abandoning a track fades it out, and so does reaching the end of one; both
+//! are [`super::fade`], applied here on this thread to what is about to be
+//! pushed. **A fade is pushed to its end without answering commands**: they
+//! wait in the channel and are acted on, in order, once the fade is over. That
+//! is what keeps every keypress — a second Next during the first one's fade
+//! skips a second track, exactly as it would have without fades — and it is
+//! why the fade's own waits are plain sleeps, the one place in here that does
+//! not wait on the command channel. A fade is a second and a half, every wait
+//! in it checks for shutdown, and none of it ever reaches the UI thread.
 
+use super::fade::Tail;
 use crate::audio::{ExternalFeeds, FeedResult};
 use crossbeam_channel::{Receiver, RecvTimeoutError, Sender};
 use std::ops::ControlFlow;
@@ -94,8 +113,19 @@ pub enum PlaybackState {
     NoFolder,
     /// The folder holds no file this build can decode.
     NoFiles,
+    /// The list is ready and nothing is playing: how every player starts.
+    /// Play starts the entry [`Status::next`] names.
+    Stopped,
     Playing,
     Paused,
+}
+
+impl PlaybackState {
+    /// Whether pressing play would start the music, which is what the menus
+    /// ask when they choose between "Play" and "Pause".
+    pub fn is_waiting(&self) -> bool {
+        matches!(self, Self::Stopped | Self::Paused)
+    }
 }
 
 /// One row of a player's list: the file, and what the user is told it is
@@ -202,7 +232,10 @@ impl Player {
                     stop: stop.clone(),
                     folder: folder.clone(),
                     shuffle,
-                    paused: false,
+                    // Stopped until the user asks for music; see the header.
+                    paused: true,
+                    tail: Tail::default(),
+                    heard: false,
                     playlist: Playlist::new(Vec::new(), shuffle),
                     pending: None,
                     last_played: None,
@@ -279,6 +312,13 @@ struct Worker {
     folder: String,
     shuffle: bool,
     paused: bool,
+    /// Decoded audio not yet pushed, which is what a fade is made of.
+    tail: Tail,
+    /// Whether the current track is being heard right now: something of it has
+    /// gone into the ring since it started or was last paused. A skip fades
+    /// only a track that is being heard — fading a paused one would play a
+    /// second and a half of it into the silence the user paused for.
+    heard: bool,
     playlist: Playlist,
     /// A track the playlist has already been moved to — by Open file, by
     /// playing an entry, or by Previous — to be played by the next pass round
@@ -318,14 +358,6 @@ impl Worker {
                 }
                 continue;
             }
-            if self.paused {
-                // Paused with nothing to do: the wait ends the moment a command
-                // arrives, so this costs one wakeup a second.
-                if self.wait(Duration::from_secs(1)) == Flow::Stop {
-                    return;
-                }
-                continue;
-            }
             // A run of files that produced no audio at all: back off rather
             // than reopening them as fast as the disk allows. Each one has
             // already been taken out of the list, so the list runs out and the
@@ -360,6 +392,18 @@ impl Worker {
                     }
                     continue;
                 }
+            }
+            // Paused between tracks: a player that has not been started yet,
+            // or a pause that arrived while no track was open. After the folder
+            // is read, so the list is there to choose from while it waits. The
+            // wait ends the moment a command arrives, so this costs one wakeup
+            // a second.
+            if self.paused {
+                self.set_status(PlaybackState::Stopped, None);
+                if self.wait(Duration::from_secs(1)) == Flow::Stop {
+                    return;
+                }
+                continue;
             }
             let Some(track) = self.playlist.next() else {
                 continue;
@@ -587,8 +631,10 @@ impl Worker {
     /// command drain and the pause check between packets, and the [`Flow`] a
     /// skip produces travelling back out through the sink.
     fn decode(&mut self, path: &Path) -> Result<Flow, String> {
+        self.tail.clear();
+        self.heard = false;
         // The sink borrows `self` for as long as it lives, so it is scoped to
-        // the call rather than left in scope for the `self.failures` write below.
+        // the call rather than left in scope for the writes below.
         let interrupted = {
             let mut sink = |samples: &[f32]| {
                 // Commands first, so skip and pause are answered between packets
@@ -603,18 +649,70 @@ impl Worker {
                         other => return ControlFlow::Break(other),
                     }
                 }
-                match self.feed(samples) {
+                self.tail.push(samples);
+                match self.feed() {
                     Flow::Go => ControlFlow::Continue(()),
                     other => ControlFlow::Break(other),
                 }
             };
-            decode::stream_file(path, &mut sink)?
+            decode::stream_file(path, &mut sink)
+        };
+        let interrupted = match interrupted {
+            Ok(interrupted) => interrupted,
+            Err(message) => {
+                self.tail.clear();
+                return Err(message);
+            }
         };
         match interrupted {
-            Some(flow) => Ok(flow),
+            // Shutting down: the ring is about to go, so there is nobody to
+            // fade for.
+            Some(Flow::Stop) => {
+                self.tail.clear();
+                Ok(Flow::Stop)
+            }
+            Some(flow) => {
+                if self.heard {
+                    let fade = self.tail.fade_out_now();
+                    self.push_fade(&fade);
+                }
+                self.tail.clear();
+                Ok(flow)
+            }
             None => {
                 self.failures = 0;
+                let fade = self.tail.fade_out_ending();
+                self.push_fade(&fade);
                 Ok(Flow::Go)
+            }
+        }
+    }
+
+    /// Pushes a fade-out to its end, in step with the mixer, **without
+    /// answering commands** — see the header for why. The waits are sleeps
+    /// because a wait on the channel would take a command off it; each is a
+    /// fraction of [`MAX_QUEUED`] and checks for shutdown, so `Player::stop`
+    /// is still answered within one.
+    fn push_fade(&mut self, samples: &[f32]) {
+        let mut offset = 0;
+        while offset < samples.len() && !self.stopping() {
+            let Some(queued) = self.feeds.queued(&self.source) else {
+                // The source left the mixer mid-fade: nothing to fade into.
+                return;
+            };
+            let room = MAX_QUEUED.saturating_sub(queued);
+            if room == 0 {
+                std::thread::sleep(RING_WAIT);
+                continue;
+            }
+            let end = samples.len().min(offset + room);
+            match self.feeds.push(&self.source, &samples[offset..end]) {
+                FeedResult::Done => offset = end,
+                FeedResult::Full { accepted } => {
+                    offset += accepted;
+                    std::thread::sleep(RING_WAIT);
+                }
+                FeedResult::Gone => return,
             }
         }
     }
@@ -622,6 +720,9 @@ impl Worker {
     /// Holds the current track where it is until play resumes. The ring drains
     /// into silence on its own, which is what makes pause immediate.
     fn wait_while_paused(&mut self) -> Flow {
+        // The ring drains into silence, so nothing of this track is being
+        // heard until the next push — a skip from here must not fade.
+        self.heard = false;
         let track = self.status().track;
         self.set_status(PlaybackState::Paused, track.clone());
         while self.paused {
@@ -638,7 +739,10 @@ impl Worker {
         crate::audio::device::lock_recovering(&self.status, "Media player status").clone()
     }
 
-    /// Pushes a decoded chunk into the source's ring, pacing to the mixer.
+    /// Pushes what the delay line will let go of into the source's ring,
+    /// pacing to the mixer. What it holds back — a fade's worth, plus any
+    /// trailing silence — stays in [`Worker::tail`] for the next packet, or
+    /// for the fade.
     ///
     /// **Every wait in here must return what it was handed.** [`Worker::wait`]
     /// takes a command off the channel and acts on it, so a flow it produces is
@@ -648,10 +752,13 @@ impl Worker {
     /// life (it keeps a quarter of a second queued and waits out the rest), so
     /// nearly every skip the user presses is answered here, and testing only
     /// for [`Flow::Stop`] is what made next track do nothing at all.
-    fn feed(&mut self, samples: &[f32]) -> Flow {
-        let mut offset = 0;
+    fn feed(&mut self) -> Flow {
         let mut missing_since: Option<Instant> = None;
-        while offset < samples.len() {
+        loop {
+            let ready = self.tail.ready();
+            if ready == 0 {
+                return Flow::Go;
+            }
             match self.drain_commands() {
                 Flow::Go => {}
                 other => return other,
@@ -663,34 +770,33 @@ impl Worker {
                 }
             }
             // Stay only just ahead of the mixer. See `MAX_QUEUED`.
-            if self
-                .feeds
-                .queued(&self.source)
-                .is_some_and(|queued| queued >= MAX_QUEUED)
-            {
-                match self.wait(RING_WAIT) {
+            let pushed = match self.feeds.queued(&self.source) {
+                Some(queued) if queued >= MAX_QUEUED => Some(0),
+                Some(queued) => {
+                    let chunk = self.tail.front(ready.min(MAX_QUEUED - queued));
+                    match self.feeds.push(&self.source, chunk) {
+                        FeedResult::Done => Some(chunk.len()),
+                        FeedResult::Full { accepted } => Some(accepted),
+                        FeedResult::Gone => None,
+                    }
+                }
+                None => None,
+            };
+            match pushed {
+                Some(0) => match self.wait(RING_WAIT) {
                     Flow::Go => {}
                     other => return other,
-                }
-                continue;
-            }
-            match self.feeds.push(&self.source, &samples[offset..]) {
-                FeedResult::Done => return Flow::Go,
-                FeedResult::Full { accepted } => {
-                    offset += accepted;
+                },
+                Some(count) => {
+                    self.tail.consume(count);
+                    self.heard = true;
                     missing_since = None;
-                    if offset < samples.len() {
-                        match self.wait(RING_WAIT) {
-                            Flow::Go => {}
-                            other => return other,
-                        }
-                    }
                 }
                 // The source is not in the mixer right now. Waiting rather than
                 // dropping the audio: this is the ordinary state for the block
                 // or two between a scene switch and the engine applying it, and
                 // a worker whose source is really gone is stopped and joined.
-                FeedResult::Gone => {
+                None => {
                     let since = missing_since.get_or_insert_with(Instant::now);
                     if since.elapsed() >= NO_RING_PATIENCE {
                         log::debug!(
@@ -706,7 +812,6 @@ impl Worker {
                 }
             }
         }
-        Flow::Go
     }
 }
 
@@ -783,6 +888,8 @@ mod tests {
             false,
             Arc::new(AtomicU64::new(0)),
         );
+        // Every player starts stopped; see the module header.
+        player.send(Command::PlayPause);
 
         // Drain like the mixer would, so the worker is doing real work rather
         // than parked against a full ring.
@@ -838,6 +945,8 @@ mod tests {
             false,
             Arc::new(AtomicU64::new(0)),
         );
+        // Every player starts stopped; see the module header.
+        player.send(Command::PlayPause);
         let drain = Arc::new(AtomicBool::new(false));
         let drainer = std::thread::spawn({
             let drain = drain.clone();
@@ -899,6 +1008,8 @@ mod tests {
             false,
             Arc::new(AtomicU64::new(0)),
         );
+        // Every player starts stopped; see the module header.
+        player.send(Command::PlayPause);
 
         let drain = Arc::new(AtomicBool::new(false));
         let drainer = std::thread::spawn({
@@ -958,6 +1069,8 @@ mod tests {
             true,
             Arc::new(AtomicU64::new(0)),
         );
+        // Every player starts stopped; see the module header.
+        player.send(Command::PlayPause);
 
         let deadline = Instant::now() + Duration::from_secs(10);
         while ring.slots() < 4_800 && Instant::now() < deadline {
@@ -990,6 +1103,8 @@ mod tests {
             true,
             Arc::new(AtomicU64::new(0)),
         );
+        // Every player starts stopped; see the module header.
+        player.send(Command::PlayPause);
 
         let deadline = Instant::now() + Duration::from_secs(10);
         while ring.slots() < 4_800 && Instant::now() < deadline {
@@ -1066,6 +1181,8 @@ mod tests {
             false,
             Arc::new(AtomicU64::new(0)),
         );
+        // Every player starts stopped; see the module header.
+        player.send(Command::PlayPause);
         let drain = Arc::new(AtomicBool::new(false));
         let drainer = std::thread::spawn({
             let drain = drain.clone();
@@ -1221,5 +1338,132 @@ mod tests {
         let mut rest: Vec<&str> = titles(&after)[1..].to_vec();
         rest.sort();
         assert_eq!(rest, vec!["b", "c", "d"]);
+    }
+
+    /// A new player reads its folder and lists it, but plays nothing until it
+    /// is told to — and then plays the first entry.
+    #[test]
+    fn a_player_starts_stopped_with_its_list_ready() {
+        let folder = folder_of_tracks("stopped", &["a", "b", "c"]);
+        let feeds = ExternalFeeds::default();
+        let ring =
+            feeds.park_for_test("Media Player", crate::audio::mixer::SAMPLE_RATE as usize);
+        let player = Player::start(
+            "Media Player".to_string(),
+            feeds,
+            folder.to_string_lossy().into_owned(),
+            false,
+            Arc::new(AtomicU64::new(0)),
+        );
+        let stopped = wait_until(&player, |s| s.queue.len() == 3);
+        std::thread::sleep(Duration::from_millis(300));
+        let fed_while_stopped = ring.slots();
+
+        player.send(Command::PlayPause);
+        let started = wait_until(&player, |s| s.state == PlaybackState::Playing);
+        player.stop();
+        let _ = std::fs::remove_dir_all(&folder);
+
+        assert_eq!(stopped.state, PlaybackState::Stopped);
+        assert_eq!(stopped.track, None);
+        assert_eq!(stopped.next(), Some("a"), "play is announced as the first entry");
+        assert_eq!(fed_while_stopped, 0, "a stopped player fed the mixer");
+        assert_eq!(started.track.as_deref(), Some("a"));
+    }
+
+    /// Next from a stopped player starts the first entry rather than skipping
+    /// it, which is what its announcement promised.
+    #[test]
+    fn next_from_stopped_plays_the_first_entry() {
+        let folder = folder_of_tracks("stopped-next", &["a", "b"]);
+        let feeds = ExternalFeeds::default();
+        let _ring =
+            feeds.park_for_test("Media Player", crate::audio::mixer::SAMPLE_RATE as usize);
+        let player = Player::start(
+            "Media Player".to_string(),
+            feeds,
+            folder.to_string_lossy().into_owned(),
+            false,
+            Arc::new(AtomicU64::new(0)),
+        );
+        wait_until(&player, |s| s.state == PlaybackState::Stopped);
+        player.send(Command::Next);
+        let after = wait_until(&player, |s| s.state == PlaybackState::Playing);
+        player.stop();
+        let _ = std::fs::remove_dir_all(&folder);
+
+        assert_eq!(after.track.as_deref(), Some("a"));
+    }
+
+    /// A skip fades the track out rather than cutting it: between the two
+    /// tracks the mixer receives a stretch that dies away to silence, where a
+    /// hard cut from one tone to the next would never drop below full level.
+    #[test]
+    fn a_skip_fades_the_track_out() {
+        let folder = folder_of_tracks("fade", &["a", "b"]);
+        let feeds = ExternalFeeds::default();
+        let mut ring =
+            feeds.park_for_test("Media Player", crate::audio::mixer::SAMPLE_RATE as usize);
+        let player = Player::start(
+            "Media Player".to_string(),
+            feeds,
+            folder.to_string_lossy().into_owned(),
+            false,
+            Arc::new(AtomicU64::new(0)),
+        );
+        player.send(Command::PlayPause);
+        let heard = Arc::new(Mutex::new(Vec::<f32>::new()));
+        let drain = Arc::new(AtomicBool::new(false));
+        let drainer = std::thread::spawn({
+            let drain = drain.clone();
+            let heard = heard.clone();
+            move || {
+                while !drain.load(Ordering::Relaxed) {
+                    let slots = ring.slots();
+                    if slots > 0 && let Ok(chunk) = ring.read_chunk(slots) {
+                        let (first, second) = chunk.as_slices();
+                        let mut heard = heard.lock().unwrap();
+                        heard.extend_from_slice(first);
+                        heard.extend_from_slice(second);
+                        chunk.commit_all();
+                    }
+                    std::thread::sleep(Duration::from_millis(10));
+                }
+            }
+        });
+
+        wait_until(&player, |s| s.track.as_deref() == Some("a"));
+        // Let some of it be heard first, so there is something to fade.
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while heard.lock().unwrap().len() < 48_000 && Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        player.send(Command::Next);
+        wait_until(&player, |s| s.track.as_deref() == Some("b"));
+        // And some of the next track, so the fade is behind us.
+        let wanted = heard.lock().unwrap().len() + 48_000;
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while heard.lock().unwrap().len() < wanted && Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        drain.store(true, Ordering::Relaxed);
+        let _ = drainer.join();
+        player.stop();
+        let _ = std::fs::remove_dir_all(&folder);
+
+        // Peak per 10 ms window, which spans four cycles of the 440 Hz tone.
+        let heard = heard.lock().unwrap();
+        let peaks: Vec<f32> = heard
+            .chunks(960)
+            .map(|window| window.iter().fold(0f32, |max, s| max.max(s.abs())))
+            .collect();
+        let quiet = peaks.iter().position(|&peak| peak < 0.02);
+        assert!(quiet.is_some(), "the track was cut, not faded");
+        let quiet = quiet.unwrap();
+        assert!(
+            peaks[..quiet].iter().any(|&peak| peak > 0.1 && peak < 0.4),
+            "the level dropped without passing through the middle"
+        );
+        assert!(peaks[quiet..].iter().any(|&peak| peak > 0.4), "the next track never started");
     }
 }

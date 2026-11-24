@@ -25,13 +25,13 @@ msgstr ""
 "Language: en\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-#: src/ui/mod.rs:2717
+#: src/ui/mod.rs:2722
 msgid ""
 "\n\n"
 "Details: {detail}"
 msgstr ""
 
-#: src/ui/mod.rs:2715
+#: src/ui/mod.rs:2720
 msgid ""
 "\n\n"
 "The stream itself is unaffected and is still live."
@@ -77,19 +77,19 @@ msgstr ""
 msgid "&Folder"
 msgstr ""
 
-#: src/ui/home.rs:1124
+#: src/ui/home.rs:1125
 msgid "&Next track"
 msgstr ""
 
-#: src/ui/home.rs:1129
+#: src/ui/home.rs:1130
 msgid "&Open file..."
 msgstr ""
 
-#: src/ui/home.rs:1114
+#: src/ui/home.rs:1115
 msgid "&Pause"
 msgstr ""
 
-#: src/ui/home.rs:1114
+#: src/ui/home.rs:1115
 msgid "&Play"
 msgstr ""
 
@@ -151,7 +151,7 @@ msgid ""
 "scheduling another."
 msgstr ""
 
-#: src/ui/mod.rs:2955
+#: src/ui/mod.rs:2960
 msgid "A stream is scheduled to go live later. Exit and discard it?"
 msgstr ""
 
@@ -159,7 +159,7 @@ msgstr ""
 msgid "AM or PM"
 msgstr ""
 
-#: src/ui/mod.rs:2823
+#: src/ui/mod.rs:2828
 msgid "API"
 msgstr ""
 
@@ -184,8 +184,8 @@ msgstr ""
 msgid "AWS secret access key"
 msgstr ""
 
-#: src/ui/mod.rs:3231
-#: src/ui/mod.rs:3298
+#: src/ui/mod.rs:3236
+#: src/ui/mod.rs:3303
 msgid "About Pubsplash"
 msgstr ""
 
@@ -310,7 +310,7 @@ msgstr ""
 msgid "Application"
 msgstr ""
 
-#: src/ui/mod.rs:3206
+#: src/ui/mod.rs:3211
 msgid "Application preferences"
 msgstr ""
 
@@ -368,7 +368,7 @@ msgstr ""
 msgid "Audio effects profile"
 msgstr ""
 
-#: src/ui/mod.rs:1285
+#: src/ui/mod.rs:1290
 #: src/ui/scheduler_ui.rs:448
 msgid "Audio files ({patterns})|{patterns}|All files (*.*)|*.*"
 msgstr ""
@@ -482,7 +482,7 @@ msgstr ""
 
 #: src/ui/buses.rs:30
 #: src/ui/buses.rs:32
-#: src/ui/mod.rs:2820
+#: src/ui/mod.rs:2825
 #: src/ui/sends.rs:322
 msgid "Buses"
 msgstr ""
@@ -533,7 +533,7 @@ msgstr ""
 msgid "Cancel scan"
 msgstr ""
 
-#: src/ui/mod.rs:2225
+#: src/ui/mod.rs:2230
 msgid "Cancel scheduled stream"
 msgstr ""
 
@@ -592,8 +592,8 @@ msgstr ""
 
 #: src/ui/chat.rs:197
 #: src/ui/chat.rs:214
-#: src/ui/mod.rs:2818
-#: src/ui/mod.rs:3853
+#: src/ui/mod.rs:2823
+#: src/ui/mod.rs:3858
 msgid "Chat"
 msgstr ""
 
@@ -639,7 +639,7 @@ msgstr ""
 msgid "Choose a file for this item to play."
 msgstr ""
 
-#: src/ui/mod.rs:1281
+#: src/ui/mod.rs:1286
 msgid "Choose a file to play"
 msgstr ""
 
@@ -655,7 +655,7 @@ msgstr ""
 msgid "Choose a folder for stream recordings"
 msgstr ""
 
-#: src/ui/mod.rs:1338
+#: src/ui/mod.rs:1343
 #: src/ui/scenes.rs:2990
 msgid "Choose a folder of music for this source"
 msgstr ""
@@ -682,8 +682,8 @@ msgstr ""
 msgid "Choose ffmpeg.exe"
 msgstr ""
 
-#: src/ui/home.rs:1134
-#: src/ui/playlist.rs:360
+#: src/ui/home.rs:1135
+#: src/ui/playlist.rs:363
 msgid "Choose folder..."
 msgstr ""
 
@@ -695,8 +695,8 @@ msgstr ""
 msgid "Choose or type the path of a sound file to test."
 msgstr ""
 
-#: src/ui/home.rs:1135
-#: src/ui/playlist.rs:361
+#: src/ui/home.rs:1136
+#: src/ui/playlist.rs:364
 msgid "Choose the folder this media player plays"
 msgstr ""
 
@@ -783,16 +783,16 @@ msgstr ""
 msgid "Connect"
 msgstr ""
 
-#: src/ui/mod.rs:2578
+#: src/ui/mod.rs:2583
 #: src/ui/schedule_ui.rs:88
 msgid "Connect to a streaming service first (File > Setup streaming services)."
 msgstr ""
 
-#: src/ui/mod.rs:3636
+#: src/ui/mod.rs:3641
 msgid "Connected"
 msgstr ""
 
-#: src/ui/mod.rs:3637
+#: src/ui/mod.rs:3642
 msgid "Connected to {display_name}."
 msgstr ""
 
@@ -812,8 +812,8 @@ msgstr ""
 msgid "Connecting to the stream"
 msgstr ""
 
-#: src/ui/mod.rs:3648
-#: src/ui/mod.rs:3656
+#: src/ui/mod.rs:3653
+#: src/ui/mod.rs:3661
 msgid "Connection failed"
 msgstr ""
 
@@ -823,12 +823,12 @@ msgid ""
 "approve Pubsplash."
 msgstr ""
 
-#: src/ui/mod.rs:3645
+#: src/ui/mod.rs:3650
 msgid "Could not connect: {message}"
 msgstr ""
 
 #: src/ui/logging_ui.rs:112
-#: src/ui/mod.rs:3369
+#: src/ui/mod.rs:3374
 #: src/ui/update.rs:443
 msgid "Could not create {path}: {e}"
 msgstr ""
@@ -841,15 +841,15 @@ msgid ""
 msgstr ""
 
 #: src/ui/logging_ui.rs:120
-#: src/ui/mod.rs:3371
+#: src/ui/mod.rs:3376
 msgid "Could not open {path}: {e}"
 msgstr ""
 
-#: src/ui/mod.rs:3357
+#: src/ui/mod.rs:3362
 msgid "Could not open {url}: {e}"
 msgstr ""
 
-#: src/ui/mod.rs:3277
+#: src/ui/mod.rs:3282
 msgid "Could not open {url}: {message}"
 msgstr ""
 
@@ -861,7 +861,7 @@ msgstr ""
 msgid "Could not start the updater ({path}): {e}. Nothing has been changed."
 msgstr ""
 
-#: src/ui/mod.rs:3338
+#: src/ui/mod.rs:3343
 msgid "Could not start {path}: {e}"
 msgstr ""
 
@@ -869,7 +869,7 @@ msgstr ""
 msgid "Could not work out where Pubsplash is installed, so nothing was changed."
 msgstr ""
 
-#: src/ui/mod.rs:3215
+#: src/ui/mod.rs:3220
 msgid "Create and compile Pubsplash sound packs"
 msgstr ""
 
@@ -960,15 +960,15 @@ msgid ""
 "CONTROL plus Left and Right Arrow for the previous and next track?"
 msgstr ""
 
-#: src/ui/mod.rs:3683
+#: src/ui/mod.rs:3688
 msgid "Disconnected"
 msgstr ""
 
-#: src/ui/mod.rs:3685
+#: src/ui/mod.rs:3690
 msgid "Disconnected from {name}."
 msgstr ""
 
-#: src/ui/mod.rs:3686
+#: src/ui/mod.rs:3691
 msgid "Disconnected."
 msgstr ""
 
@@ -1135,7 +1135,7 @@ msgstr ""
 msgid "Enter"
 msgstr ""
 
-#: src/ui/mod.rs:2329
+#: src/ui/mod.rs:2334
 msgid "Enter a full Audiopub URL starting with https://"
 msgstr ""
 
@@ -1144,23 +1144,23 @@ msgstr ""
 msgid "Enter a nickname."
 msgstr ""
 
-#: src/ui/mod.rs:2468
+#: src/ui/mod.rs:2473
 msgid "Enter a valid Icecast port."
 msgstr ""
 
-#: src/ui/mod.rs:2471
+#: src/ui/mod.rs:2476
 msgid "Enter the Icecast mount point."
 msgstr ""
 
-#: src/ui/mod.rs:2474
+#: src/ui/mod.rs:2479
 msgid "Enter the Icecast password."
 msgstr ""
 
-#: src/ui/mod.rs:2503
+#: src/ui/mod.rs:2508
 msgid "Enter the RTMP ingest URL."
 msgstr ""
 
-#: src/ui/mod.rs:2396
+#: src/ui/mod.rs:2401
 msgid "Enter the chat room name, or clear the chat server to turn chat off."
 msgstr ""
 
@@ -1168,7 +1168,7 @@ msgstr ""
 msgid "Enter the chat room name."
 msgstr ""
 
-#: src/ui/mod.rs:2391
+#: src/ui/mod.rs:2396
 msgid "Enter the chat server address, or clear the chat room to turn chat off."
 msgstr ""
 
@@ -1176,13 +1176,13 @@ msgstr ""
 msgid "Enter the chat server address."
 msgstr ""
 
-#: src/ui/mod.rs:2514
+#: src/ui/mod.rs:2519
 msgid ""
 "Enter the stream key. YouTube shows it in Studio, under Go live, beside "
 "the stream URL."
 msgstr ""
 
-#: src/ui/mod.rs:2439
+#: src/ui/mod.rs:2444
 msgid "Enter your email and password first."
 msgstr ""
 
@@ -1236,13 +1236,13 @@ msgid ""
 "sources, text-to-speech, and sound cues. It is not what listeners hear."
 msgstr ""
 
-#: src/ui/mod.rs:3209
+#: src/ui/mod.rs:3214
 msgid "Exit\tAlt+F4"
 msgstr ""
 
-#: src/ui/mod.rs:2936
-#: src/ui/mod.rs:2956
-#: src/ui/mod.rs:3209
+#: src/ui/mod.rs:2941
+#: src/ui/mod.rs:2961
+#: src/ui/mod.rs:3214
 msgid "Exit Pubsplash"
 msgstr ""
 
@@ -1297,7 +1297,7 @@ msgstr ""
 msgid "February"
 msgstr ""
 
-#: src/ui/mod.rs:3244
+#: src/ui/mod.rs:3249
 #: src/ui/scheduler_ui.rs:287
 #: src/ui/scheduler_ui.rs:291
 msgid "File"
@@ -1356,26 +1356,26 @@ msgstr ""
 msgid "Go back to the previous track on {source}"
 msgstr ""
 
-#: src/ui/home.rs:1120
+#: src/ui/home.rs:1121
 msgid "Go back to the track that played before this one"
 msgstr ""
 
-#: src/ui/mod.rs:3201
+#: src/ui/mod.rs:3206
 msgid "Go live automatically at a set time"
 msgstr ""
 
-#: src/ui/mod.rs:3246
+#: src/ui/mod.rs:3251
 msgid "Go to"
 msgstr ""
 
-#: src/ui/mod.rs:3226
-#: src/ui/mod.rs:3292
+#: src/ui/mod.rs:3231
+#: src/ui/mod.rs:3297
 msgid "Go to Pubsplash data directory"
 msgstr ""
 
-#: src/ui/mod.rs:3221
-#: src/ui/mod.rs:3276
-#: src/ui/mod.rs:3286
+#: src/ui/mod.rs:3226
+#: src/ui/mod.rs:3281
+#: src/ui/mod.rs:3291
 msgid "Go to stream page"
 msgstr ""
 
@@ -1409,12 +1409,12 @@ msgstr ""
 
 #: src/ui/mastodon_templates.rs:91
 #: src/ui/mastodon_templates.rs:221
-#: src/ui/mod.rs:3247
+#: src/ui/mod.rs:3252
 msgid "Help"
 msgstr ""
 
 #: src/keybind.rs:141
-#: src/ui/mod.rs:2817
+#: src/ui/mod.rs:2822
 msgid "Home"
 msgstr ""
 
@@ -1657,7 +1657,7 @@ msgstr ""
 msgid "Make periodic still-streaming Mastodon posts"
 msgstr ""
 
-#: src/ui/mod.rs:3191
+#: src/ui/mod.rs:3196
 msgid "Manage Audiopub and Icecast streaming services"
 msgstr ""
 
@@ -1709,11 +1709,11 @@ msgid "Media Player: no folder set"
 msgstr ""
 
 #: src/source_name.rs:349
-#: src/source_name.rs:373
+#: src/source_name.rs:376
 msgid "Media Player: {folder}"
 msgstr ""
 
-#: src/source_name.rs:365
+#: src/source_name.rs:368
 msgid "Media Player: {folder} has no audio files Pubsplash can play"
 msgstr ""
 
@@ -1729,6 +1729,10 @@ msgstr ""
 msgid "Media Player: {folder}, playing {track}"
 msgstr ""
 
+#: src/source_name.rs:366
+msgid "Media Player: {folder}, stopped"
+msgstr ""
+
 #: src/source_name.rs:262
 #: src/ui/scenes.rs:546
 msgid "Media Scheduler"
@@ -1738,23 +1742,23 @@ msgstr ""
 msgid "Media Scheduler source"
 msgstr ""
 
-#: src/source_name.rs:393
+#: src/source_name.rs:396
 msgid "Media Scheduler: nothing scheduled"
 msgstr ""
 
-#: src/source_name.rs:400
+#: src/source_name.rs:403
 msgid "Media Scheduler: {items}"
 msgstr ""
 
-#: src/source_name.rs:408
+#: src/source_name.rs:411
 msgid "Media Scheduler: {items}, next {file} at {time}"
 msgstr ""
 
-#: src/source_name.rs:416
+#: src/source_name.rs:419
 msgid "Media Scheduler: {items}, nothing due"
 msgstr ""
 
-#: src/source_name.rs:403
+#: src/source_name.rs:406
 msgid "Media Scheduler: {items}, playing {file}"
 msgstr ""
 
@@ -1767,7 +1771,7 @@ msgstr ""
 msgid "Message from {user}"
 msgstr ""
 
-#: src/ui/mod.rs:3853
+#: src/ui/mod.rs:3858
 msgid "Message not sent: {message}"
 msgstr ""
 
@@ -1987,7 +1991,7 @@ msgstr ""
 msgid "No file"
 msgstr ""
 
-#: src/ui/media.rs:170
+#: src/ui/media.rs:172
 msgid "No folder is set"
 msgstr ""
 
@@ -2057,7 +2061,7 @@ msgstr ""
 msgid "None of the chain's plugins are available, so it cannot be applied."
 msgstr ""
 
-#: src/ui/mod.rs:2577
+#: src/ui/mod.rs:2582
 msgid "Not connected"
 msgstr ""
 
@@ -2138,8 +2142,8 @@ msgstr ""
 msgid "Open &interface"
 msgstr ""
 
-#: src/ui/mod.rs:3234
-#: src/ui/mod.rs:3307
+#: src/ui/mod.rs:3239
+#: src/ui/mod.rs:3312
 msgid "Open Readme"
 msgstr ""
 
@@ -2160,7 +2164,7 @@ msgid "Open a sound pack project folder"
 msgstr ""
 
 #: src/ui/home.rs:957
-#: src/ui/playlist.rs:355
+#: src/ui/playlist.rs:358
 msgid "Open file..."
 msgstr ""
 
@@ -2181,19 +2185,19 @@ msgstr ""
 msgid "Open or create a sound pack project first."
 msgstr ""
 
-#: src/ui/mod.rs:3222
+#: src/ui/mod.rs:3227
 msgid "Open the current stream's page in your browser"
 msgstr ""
 
-#: src/ui/mod.rs:3235
+#: src/ui/mod.rs:3240
 msgid "Open the documentation in your browser"
 msgstr ""
 
-#: src/ui/mod.rs:3227
+#: src/ui/mod.rs:3232
 msgid "Open the folder holding settings, logs, and crash dumps"
 msgstr ""
 
-#: src/ui/mod.rs:3240
+#: src/ui/mod.rs:3245
 msgid "Open the list of changes in your browser"
 msgstr ""
 
@@ -2280,7 +2284,7 @@ msgid "Paste the authorization code your browser is showing."
 msgstr ""
 
 #: src/keybind.rs:134
-#: src/ui/playlist.rs:350
+#: src/ui/playlist.rs:352
 msgid "Pause"
 msgstr ""
 
@@ -2296,17 +2300,18 @@ msgstr ""
 msgid "Phonon voice settings"
 msgstr ""
 
+#: src/ui/playlist.rs:351
 #: src/ui/sound_preview.rs:59
 #: src/ui/sound_preview.rs:60
 #: src/ui/sound_preview.rs:104
 msgid "Play"
 msgstr ""
 
-#: src/ui/home.rs:1130
+#: src/ui/home.rs:1131
 msgid "Play a file of your choosing, then carry on with the folder"
 msgstr ""
 
-#: src/ui/playlist.rs:356
+#: src/ui/playlist.rs:359
 msgid "Play a file of your choosing, then carry on with the playlist"
 msgstr ""
 
@@ -2338,7 +2343,7 @@ msgstr ""
 msgid "Play this item"
 msgstr ""
 
-#: src/ui/playlist.rs:339
+#: src/ui/playlist.rs:338
 msgid "Play this song\tEnter"
 msgstr ""
 
@@ -2368,7 +2373,7 @@ msgstr ""
 msgid "Plugin parameters"
 msgstr ""
 
-#: src/ui/mod.rs:2916
+#: src/ui/mod.rs:2921
 msgid "Plugins skipped"
 msgstr ""
 
@@ -2422,7 +2427,7 @@ msgstr ""
 msgid "Preferences"
 msgstr ""
 
-#: src/ui/mod.rs:3205
+#: src/ui/mod.rs:3210
 msgid "Preferences...\tCtrl+,"
 msgstr ""
 
@@ -2457,7 +2462,7 @@ msgstr ""
 msgid "Previous Track"
 msgstr ""
 
-#: src/ui/home.rs:1119
+#: src/ui/home.rs:1120
 msgid "Previous track"
 msgstr ""
 
@@ -2479,7 +2484,7 @@ msgstr ""
 msgid "Provider default"
 msgstr ""
 
-#: src/ui/mod.rs:2807
+#: src/ui/mod.rs:2812
 msgid "Pubsplash"
 msgstr ""
 
@@ -2502,7 +2507,7 @@ msgid ""
 "streaming to."
 msgstr ""
 
-#: src/ui/mod.rs:3327
+#: src/ui/mod.rs:3332
 #: src/ui/update.rs:433
 msgid "Pubsplash could not find its own program file: {e}"
 msgstr ""
@@ -2531,7 +2536,7 @@ msgstr ""
 msgid "Pubsplash is no longer connected to a streaming service"
 msgstr ""
 
-#: src/ui/mod.rs:2703
+#: src/ui/mod.rs:2708
 msgid ""
 "Pubsplash is not allowed to write to {folder}.\n\n"
 "Choose a different folder under Recording folder in Preferences."
@@ -2575,7 +2580,7 @@ msgid ""
 "start again."
 msgstr ""
 
-#: src/ui/mod.rs:3299
+#: src/ui/mod.rs:3304
 msgid ""
 "Pubsplash {version}\n\n"
 "An accessibility-first streaming app for Audio Pub."
@@ -2632,7 +2637,7 @@ msgid "Record this stream"
 msgstr ""
 
 #: src/ui/home.rs:372
-#: src/ui/mod.rs:4049
+#: src/ui/mod.rs:4054
 #: src/ui/preferences.rs:277
 msgid "Recording"
 msgstr ""
@@ -2642,11 +2647,11 @@ msgstr ""
 msgid "Recording folder"
 msgstr ""
 
-#: src/ui/mod.rs:2293
+#: src/ui/mod.rs:2298
 msgid "Recording started"
 msgstr ""
 
-#: src/ui/mod.rs:2295
+#: src/ui/mod.rs:2300
 msgid "Recording stopped"
 msgstr ""
 
@@ -2676,7 +2681,7 @@ msgstr ""
 msgid "Remove folder"
 msgstr ""
 
-#: src/ui/playlist.rs:344
+#: src/ui/playlist.rs:343
 msgid "Remove from playlist\tDelete"
 msgstr ""
 
@@ -2699,7 +2704,7 @@ msgstr ""
 msgid "Remove source"
 msgstr ""
 
-#: src/ui/mod.rs:2358
+#: src/ui/mod.rs:2363
 msgid "Remove the '#' and everything after it from the URL."
 msgstr ""
 
@@ -2713,7 +2718,7 @@ msgstr ""
 msgid "Remove the sound pack {name}?"
 msgstr ""
 
-#: src/ui/mod.rs:2353
+#: src/ui/mod.rs:2358
 msgid ""
 "Remove the user name and password from the URL; enter them in the "
 "fields below."
@@ -2804,15 +2809,15 @@ msgid_plural "Saved {n} sounds to the project."
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/ui/mod.rs:4143
+#: src/ui/mod.rs:4148
 msgid "Scan cancelled"
 msgstr ""
 
-#: src/ui/mod.rs:4133
+#: src/ui/mod.rs:4138
 msgid "Scan complete"
 msgstr ""
 
-#: src/ui/mod.rs:4119
+#: src/ui/mod.rs:4124
 msgid "Scan complete. {found} new plugins found ({total_known} known in total)."
 msgstr ""
 
@@ -2859,7 +2864,7 @@ msgstr ""
 msgid "Scenes"
 msgstr ""
 
-#: src/ui/mod.rs:2819
+#: src/ui/mod.rs:2824
 msgid "Scenes and Sources"
 msgstr ""
 
@@ -2867,7 +2872,7 @@ msgstr ""
 msgid "Schedule stream"
 msgstr ""
 
-#: src/ui/mod.rs:3200
+#: src/ui/mod.rs:3205
 msgid "Schedule stream..."
 msgstr ""
 
@@ -2980,7 +2985,7 @@ msgstr ""
 msgid "Set stream info"
 msgstr ""
 
-#: src/ui/mod.rs:3195
+#: src/ui/mod.rs:3200
 msgid "Set stream info..."
 msgstr ""
 
@@ -3012,11 +3017,11 @@ msgstr ""
 msgid "Setup streaming services"
 msgstr ""
 
-#: src/ui/mod.rs:3190
+#: src/ui/mod.rs:3195
 msgid "Setup streaming services..."
 msgstr ""
 
-#: src/ui/mod.rs:3439
+#: src/ui/mod.rs:3444
 msgid "ShellExecute failed with code {code}"
 msgstr ""
 
@@ -3070,7 +3075,7 @@ msgstr ""
 msgid "Skip to the next track"
 msgstr ""
 
-#: src/ui/home.rs:1125
+#: src/ui/home.rs:1126
 msgid "Skip to the next track in the folder"
 msgstr ""
 
@@ -3086,7 +3091,7 @@ msgstr ""
 msgid "Slash"
 msgstr ""
 
-#: src/ui/mod.rs:2898
+#: src/ui/mod.rs:2903
 msgid ""
 "Some plugins used by your sources and buses are not installed on this "
 "machine and will be skipped until you install them and rescan:\n"
@@ -3104,11 +3109,11 @@ msgstr ""
 
 #: src/bin/soundpack_manager.rs:688
 #: src/bin/soundpack_manager.rs:695
-#: src/ui/mod.rs:3267
+#: src/ui/mod.rs:3272
 msgid "Sound Pack Manager"
 msgstr ""
 
-#: src/ui/mod.rs:3214
+#: src/ui/mod.rs:3219
 msgid "Sound Pack Manager..."
 msgstr ""
 
@@ -3222,18 +3227,18 @@ msgstr ""
 msgid "Start or stop streaming"
 msgstr ""
 
-#: src/ui/home.rs:1115
-#: src/ui/playlist.rs:351
+#: src/ui/home.rs:1116
+#: src/ui/playlist.rs:354
 msgid "Start or stop this media player"
 msgstr ""
 
 #: src/ui/home.rs:85
-#: src/ui/mod.rs:2242
+#: src/ui/mod.rs:2247
 msgid "Start recording"
 msgstr ""
 
 #: src/ui/home.rs:76
-#: src/ui/mod.rs:2226
+#: src/ui/mod.rs:2231
 msgid "Start streaming"
 msgstr ""
 
@@ -3288,11 +3293,11 @@ msgstr ""
 msgid "Stop Media"
 msgstr ""
 
-#: src/ui/mod.rs:2240
+#: src/ui/mod.rs:2245
 msgid "Stop recording"
 msgstr ""
 
-#: src/ui/mod.rs:2227
+#: src/ui/mod.rs:2232
 msgid "Stop streaming"
 msgstr ""
 
@@ -3300,7 +3305,7 @@ msgstr ""
 msgid "Stop the recording first: Pubsplash cannot stream while one is running."
 msgstr ""
 
-#: src/ui/playlist.rs:340
+#: src/ui/playlist.rs:339
 msgid "Stop the song that is playing and play this one"
 msgstr ""
 
@@ -3353,7 +3358,7 @@ msgstr ""
 msgid "Streaming"
 msgstr ""
 
-#: src/ui/mod.rs:3746
+#: src/ui/mod.rs:3751
 msgid "Streaming problem"
 msgstr ""
 
@@ -3414,7 +3419,7 @@ msgstr ""
 msgid "Tab"
 msgstr ""
 
-#: src/ui/playlist.rs:345
+#: src/ui/playlist.rs:344
 msgid "Take this song out of the playlist. The file is not deleted"
 msgstr ""
 
@@ -3467,7 +3472,7 @@ msgstr ""
 msgid "Text-to-Speech: {engine}, {voice}"
 msgstr ""
 
-#: src/ui/mod.rs:2348
+#: src/ui/mod.rs:2353
 msgid ""
 "That URL has no site name in it. It should look like "
 "https://audiopub.site"
@@ -3491,12 +3496,12 @@ msgstr ""
 msgid "That sound pack could not be loaded: {e}"
 msgstr ""
 
-#: src/ui/home.rs:1300
-#: src/ui/home.rs:1320
+#: src/ui/home.rs:1301
+#: src/ui/home.rs:1321
 msgid "That strip is not in the mixer right now"
 msgstr ""
 
-#: src/ui/mod.rs:2708
+#: src/ui/mod.rs:2713
 msgid ""
 "The MP3 encoder for the recording could not be created, so nothing "
 "could be written."
@@ -3526,7 +3531,7 @@ msgstr ""
 msgid "The Phonon voice {voice} is not installed."
 msgstr ""
 
-#: src/ui/mod.rs:3330
+#: src/ui/mod.rs:3335
 msgid ""
 "The Sound Pack Manager ({path}) is missing. Reinstall Pubsplash to "
 "restore it."
@@ -3552,11 +3557,11 @@ msgstr ""
 msgid "The engine returned no audio."
 msgstr ""
 
-#: src/ui/media.rs:171
+#: src/ui/media.rs:173
 msgid "The folder has no audio files Pubsplash can play"
 msgstr ""
 
-#: src/ui/mod.rs:2700
+#: src/ui/mod.rs:2705
 msgid ""
 "The folder {folder} does not exist.\n\n"
 "Choose a folder that does exist under Recording folder in Preferences, "
@@ -3581,24 +3586,24 @@ msgstr ""
 msgid "The parent folder does not exist."
 msgstr ""
 
-#: src/ui/media.rs:172
+#: src/ui/media.rs:174
 msgid "The playlist is empty"
 msgstr ""
 
-#: src/ui/mod.rs:2713
+#: src/ui/mod.rs:2718
 msgid ""
 "The recording did not start.\n\n"
 "{cause}"
 msgstr ""
 
-#: src/ui/mod.rs:2705
+#: src/ui/mod.rs:2710
 msgid ""
 "The recording file could not be created in {folder}.\n\n"
 "Check that the folder exists and can be written to, or choose another "
 "one under Recording folder in Preferences."
 msgstr ""
 
-#: src/ui/mod.rs:4144
+#: src/ui/mod.rs:4149
 msgid "The scan was cancelled. Nothing was saved."
 msgstr ""
 
@@ -3606,7 +3611,7 @@ msgstr ""
 msgid "The sound pack could not be loaded."
 msgstr ""
 
-#: src/ui/mod.rs:2532
+#: src/ui/mod.rs:2537
 msgid ""
 "The still image {path} could not be found. Choose another, or clear the "
 "box to send a plain frame instead."
@@ -3637,12 +3642,12 @@ msgid "There is no bus called {name}"
 msgstr ""
 
 #: src/ui/mod.rs:1212
-#: src/ui/mod.rs:1269
-#: src/ui/mod.rs:1330
+#: src/ui/mod.rs:1274
+#: src/ui/mod.rs:1335
 msgid "There is no media player called {source_name} in this scene"
 msgstr ""
 
-#: src/ui/playlist.rs:419
+#: src/ui/playlist.rs:422
 msgid "There is no media player in this scene"
 msgstr ""
 
@@ -3652,7 +3657,7 @@ msgid_plural "There are only {n} chat messages"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/ui/mod.rs:2909
+#: src/ui/mod.rs:2914
 msgid ""
 "These plugins are installed but could not be loaded, so they will be "
 "skipped:\n"
@@ -3734,11 +3739,11 @@ msgstr ""
 msgid "Title"
 msgstr ""
 
-#: src/ui/mod.rs:3196
+#: src/ui/mod.rs:3201
 msgid "Title, description, and archiving for the stream"
 msgstr ""
 
-#: src/ui/mod.rs:3245
+#: src/ui/mod.rs:3250
 msgid "Tools"
 msgstr ""
 
@@ -3822,12 +3827,12 @@ msgstr ""
 msgid "Value entry"
 msgstr ""
 
-#: src/ui/mod.rs:3231
+#: src/ui/mod.rs:3236
 msgid "Version information"
 msgstr ""
 
-#: src/ui/mod.rs:3239
-#: src/ui/mod.rs:3312
+#: src/ui/mod.rs:3244
+#: src/ui/mod.rs:3317
 msgid "View Changelog"
 msgstr ""
 
@@ -3912,7 +3917,7 @@ msgstr ""
 msgid "Which microphone should this source use?"
 msgstr ""
 
-#: src/ui/mod.rs:2935
+#: src/ui/mod.rs:2940
 msgid "You are currently streaming. Stop the stream and exit?"
 msgstr ""
 
@@ -4128,40 +4133,42 @@ msgstr ""
 msgid "{label} (unavailable)"
 msgstr ""
 
-#: src/ui/mod.rs:1357
+#: src/ui/mod.rs:1362
 msgid "{label}, folder unchanged"
 msgstr ""
 
-#: src/ui/mod.rs:1228
+#: src/ui/mod.rs:1233
 msgid "{label}, next track"
 msgstr ""
 
-#: src/ui/mod.rs:1238
+#: src/ui/mod.rs:1243
 msgid "{label}, no previous track"
 msgstr ""
 
-#: src/ui/mod.rs:1221
+#: src/ui/mod.rs:1226
 msgid "{label}, paused"
 msgstr ""
 
 #: src/ui/mod.rs:1219
+#: src/ui/mod.rs:1224
 msgid "{label}, playing"
 msgstr ""
 
-#: src/ui/mod.rs:1372
+#: src/ui/mod.rs:1377
 msgid "{label}, playing the folder"
 msgstr ""
 
-#: src/ui/mod.rs:1227
+#: src/ui/mod.rs:1223
+#: src/ui/mod.rs:1232
 msgid "{label}, playing {next}"
 msgstr ""
 
-#: src/ui/mod.rs:1235
+#: src/ui/mod.rs:1240
 msgid "{label}, playing {previous}"
 msgstr ""
 
 #: src/ui/mod.rs:1218
-#: src/ui/mod.rs:1242
+#: src/ui/mod.rs:1247
 msgid "{label}, playing {track}"
 msgstr ""
 
@@ -4195,15 +4202,15 @@ msgstr ""
 msgid "{name} is not in the current scene"
 msgstr ""
 
-#: src/ui/home.rs:1365
+#: src/ui/home.rs:1366
 msgid "{name} monitoring off"
 msgstr ""
 
-#: src/ui/home.rs:1363
+#: src/ui/home.rs:1364
 msgid "{name} monitoring on"
 msgstr ""
 
-#: src/ui/home.rs:1310
+#: src/ui/home.rs:1311
 msgid "{name} muted"
 msgstr ""
 
@@ -4211,7 +4218,7 @@ msgstr ""
 msgid "{name} parameters"
 msgstr ""
 
-#: src/ui/playlist.rs:170
+#: src/ui/playlist.rs:171
 msgid "{name} playlist"
 msgstr ""
 
@@ -4219,7 +4226,7 @@ msgstr ""
 msgid "{name} reported no voices."
 msgstr ""
 
-#: src/ui/home.rs:1312
+#: src/ui/home.rs:1313
 msgid "{name} unmuted"
 msgstr ""
 
@@ -4246,7 +4253,7 @@ msgstr ""
 msgid "{nick} (broadcaster)"
 msgstr ""
 
-#: src/source_name.rs:398
+#: src/source_name.rs:401
 msgid "{n} item"
 msgid_plural "{n} items"
 msgstr[0] ""
@@ -4263,7 +4270,7 @@ msgid ""
 "does."
 msgstr ""
 
-#: src/ui/mod.rs:2341
+#: src/ui/mod.rs:2346
 msgid "{scheme} is not a web address scheme. The URL should start with https://"
 msgstr ""
 
@@ -4284,22 +4291,22 @@ msgstr ""
 msgid "{source} ({scene})"
 msgstr ""
 
-#: src/ui/media.rs:156
+#: src/ui/media.rs:158
 msgid "{track} (playing)"
 msgstr ""
 
-#: src/ui/mod.rs:2332
+#: src/ui/mod.rs:2337
 msgid "{url} is not a valid URL. It should look like https://audiopub.site"
 msgstr ""
 
-#: src/ui/mod.rs:2506
+#: src/ui/mod.rs:2511
 msgid ""
 "{url} is not an RTMP address. It should begin with rtmp:// or rtmps://; "
 "YouTube's is {youtube}."
 msgstr ""
 
 #: src/ui/chat.rs:248
-#: src/ui/mod.rs:1583
+#: src/ui/mod.rs:1588
 msgid "{user}: {content}"
 msgstr ""
 

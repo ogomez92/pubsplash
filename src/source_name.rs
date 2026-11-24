@@ -362,6 +362,9 @@ fn media_list_label(
         (PlaybackState::Paused, None) => {
             t!("Media Player: {folder}, paused", folder = folder)
         }
+        (PlaybackState::Stopped, _) => {
+            t!("Media Player: {folder}, stopped", folder = folder)
+        }
         (PlaybackState::NoFiles, _) => t!(
             "Media Player: {folder} has no audio files Pubsplash can play",
             folder = folder

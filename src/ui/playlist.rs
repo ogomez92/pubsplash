@@ -331,9 +331,7 @@ fn bind_menu(app: &Rc<App>, field: &PlaylistField) {
         let field = field.clone();
         list.bind_internal(EventType::CONTEXT_MENU, move |_| {
             let on_entry = selected_entry(&field).is_some();
-            let paused = app.media.status(&field.source).is_some_and(|status| {
-                status.state == crate::media::player::PlaybackState::Paused
-            });
+            let state = app.media.status(&field.source).map(|status| status.state);
             let mut menu = Menu::builder()
                 .append_item(
                     ID_PLAYLIST_PLAY,
@@ -348,7 +346,11 @@ fn bind_menu(app: &Rc<App>, field: &PlaylistField) {
                 .append_separator()
                 .append_item(
                     ID_PLAYLIST_PAUSE,
-                    &if paused { t!("Resume") } else { t!("Pause") },
+                    &match state {
+                        Some(crate::media::player::PlaybackState::Paused) => t!("Resume"),
+                        Some(crate::media::player::PlaybackState::Stopped) => t!("Play"),
+                        _ => t!("Pause"),
+                    },
                     &t!("Start or stop this media player"),
                 )
                 .append_item(

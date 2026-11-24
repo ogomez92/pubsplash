@@ -9,9 +9,11 @@
 //! nobody is on has no ring to feed, and would be reading a folder off disk for
 //! nothing.
 //!
-//! Playback state is session state, like monitoring. A player starts playing
-//! when its scene becomes active and forgets it was paused when the scene
-//! changes, which is the same rule the mixer's monitor toggles follow.
+//! Playback state is session state, like monitoring. A player starts stopped
+//! when its scene becomes active — at app startup as on a scene switch, it
+//! waits for play, a skip or Enter on an entry — and forgets what it was doing
+//! when the scene changes, which is the same rule the mixer's monitor toggles
+//! follow.
 //!
 //! Everything here runs on the UI thread except the worker bodies, which never
 //! touch `App`: they report what they are doing through their own `Status` and
