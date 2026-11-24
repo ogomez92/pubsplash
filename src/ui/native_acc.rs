@@ -59,6 +59,7 @@
 
 use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, WPARAM};
 use windows::Win32::UI::Accessibility::NotifyWinEvent;
+use windows::Win32::UI::Input::KeyboardAndMouse::{GetKeyState, VK_RETURN};
 use windows::Win32::UI::Shell::{DefSubclassProc, SUBCLASSPROC, SetWindowSubclass};
 use windows::Win32::UI::WindowsAndMessaging::{
     DLGC_WANTMESSAGE, DefWindowProcW, EVENT_OBJECT_FOCUS, GW_CHILD, GW_HWNDNEXT, GetClassNameW,
@@ -119,9 +120,17 @@ unsafe extern "system" fn list_subclass_proc(
 /// `wxEVT_KEY_DOWN` never fires and Enter does nothing at all. Claiming
 /// `DLGC_WANTMESSAGE` is what makes wx return early and deliver it, and is
 /// exactly what wx's own `wxTE_PROCESS_ENTER` text and spin controls answer.
-/// Tab is unaffected — wx moves focus for any control without `DLGC_WANTTAB`
-/// before it gets this far — and so are the arrows, which a list already asks
-/// for. Opt-in, because in a dialog Enter on a list must still press OK.
+///
+/// **It is claimed only while Enter is the key being handled**, because
+/// `DLGC_WANTMESSAGE` is the same bit as `DLGC_WANTALLKEYS`, and
+/// `MSWProcessMessage` reads that as implying `DLGC_WANTTAB` too: claimed
+/// unconditionally, Tab is handed to the list box, which ignores it, and focus
+/// is trapped on the playlist. wx asks with `lParam` 0, so the query does not
+/// say which key prompted it; `GetKeyState` does, being the thread's input
+/// state as of the message now being processed rather than the keyboard's
+/// physical state. A text control can afford the unconditional claim only
+/// because `wxTextCtrl::OnChar` navigates on Tab itself, which a list does not.
+/// Opt-in, because in a dialog Enter on a list must still press OK.
 unsafe extern "system" fn enter_list_subclass_proc(
     hwnd: HWND,
     msg: u32,
@@ -131,7 +140,8 @@ unsafe extern "system" fn enter_list_subclass_proc(
     refdata: usize,
 ) -> LRESULT {
     let result = unsafe { list_subclass_proc(hwnd, msg, wparam, lparam, id, refdata) };
-    if msg == WM_GETDLGCODE {
+    // The high bit of `GetKeyState` is "down".
+    if msg == WM_GETDLGCODE && unsafe { GetKeyState(VK_RETURN.0 as i32) } < 0 {
         return LRESULT(result.0 | DLGC_WANTMESSAGE as isize);
     }
     result

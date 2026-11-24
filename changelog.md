@@ -17,6 +17,8 @@
 
 ### Fixes
 
+- Enter on a playlist song plays it, and Tab still moves out of the playlist.
+
 ### Changes
 
 - The media player no longer starts playing on its own; it waits, stopped, until you press Play, skip, or choose a song from the playlist.
